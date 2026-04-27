@@ -1,0 +1,52 @@
+{
+  "version": "v1.0.0",
+  "entity": {
+    "type": "group",
+    "role": "owner",
+    "name": "class-consciousness contributors",
+    "email": "maintainers@class-consciousness.org",
+    "phone": "",
+    "description": "Mainteneurs du projet class-consciousness, archive open-source AGPL de la théorie marxiste avec moteur RAG sourcé.",
+    "webpageUrl": {
+      "url": "https://class-consciousness.org"
+    }
+  },
+  "projects": [
+    {
+      "guid": "class-consciousness",
+      "name": "class-consciousness",
+      "description": "Archive open-source AGPL de la théorie marxiste — textes primaires en TEI-XML, taxonomies SKOS, identifiants ARK pérennes, moteur Q&A RAG dont chaque réponse est littéralement sourcée.",
+      "webpageUrl": {
+        "url": "https://github.com/Consansclasse/class-consciousness"
+      },
+      "repositoryUrl": {
+        "url": "https://github.com/Consansclasse/class-consciousness"
+      },
+      "licenses": ["spdx:AGPL-3.0-or-later", "spdx:CC-BY-SA-4.0"],
+      "tags": ["archive", "marxism", "digital-humanities", "TEI", "RAG", "open-source", "AGPL"]
+    }
+  ],
+  "funding": {
+    "channels": [
+      {
+        "guid": "opencollective",
+        "type": "payment-provider",
+        "address": "https://opencollective.com/class-consciousness",
+        "description": "Donations via OpenCollective Europe (à activer en phase 0)."
+      }
+    ],
+    "plans": [
+      {
+        "guid": "infra-monthly",
+        "status": "active",
+        "name": "Infrastructure mensuelle",
+        "description": "Couvre VPS UE, backups, domaine, et budget LLM API à charge modérée.",
+        "amount": 600,
+        "currency": "EUR",
+        "frequency": "monthly",
+        "channels": ["opencollective"]
+      }
+    ],
+    "history": []
+  }
+}

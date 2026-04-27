@@ -12,14 +12,14 @@ Greenfield. Stack à figer pour la phase 0. Critères : qualité absolue du mote
 
 - **Backend** : Python 3.12 + FastAPI + asyncpg + uvloop
 - **Workers** : Python + arq (Redis-based)
-- **Relationnel** : PostgreSQL 16 (uniquement, pas de FTS, pas de vecteurs)
+- **Relationnel** : PostgreSQL 17 (uniquement, pas de FTS, pas de vecteurs)
 - **Recherche hybride dense + sparse BM25** : Qdrant (Apache 2.0, Rust)
 - **Cache & queues** : Redis 7
 - **Frontend** : Astro 5 + îlots React/Preact (chat `/demander` seul)
 - **UI** : Tailwind + shadcn/ui (Radix)
 - **LLM** : Claude Opus 4.7 via Anthropic SDK + prompt caching ; Claude Haiku 4.5 pour pré-traitement
-- **Embeddings** : Voyage AI `voyage-3-large` (multilingue)
-- **Reranking** : Voyage `rerank-2`
+- **Embeddings** : Voyage AI `voyage-4` (multilingue, supersede `voyage-3-large` depuis Jan 2026)
+- **Reranking** : Voyage `rerank-2.5` (supersede `rerank-2`, contexte 32K, instruction-following)
 - **Format texte** : TEI P5 + ODD `cc.odd`
 - **Bibliographie** : CSL-JSON 1.0
 - **Identifiants** : ARK (NAAN n2t.net) + Wikidata + VIAF + IdRef
@@ -60,7 +60,7 @@ Coûts :
 
 ## Hypothèses à vérifier avant figeage final
 
-- Voyage `voyage-3-large` toujours SOTA français avril 2026
+- Voyage `voyage-4` confirmé courant avril 2026 (succède à `voyage-3-large`)
 - Anthropic Citations API disponible
 - ARK NAAN attribuable gratuitement à projet indépendant (n2t.net)
 - DTS API spec stable

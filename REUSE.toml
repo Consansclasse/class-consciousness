@@ -1,0 +1,43 @@
+version = 1
+SPDX-PackageName = "class-consciousness"
+SPDX-PackageSupplier = "class-consciousness contributors <maintainers@class-consciousness.org>"
+SPDX-PackageDownloadLocation = "https://github.com/Consansclasse/class-consciousness"
+
+[[annotations]]
+path = [
+  "**.md",
+  "**.toml",
+  "**.yaml",
+  "**.yml",
+  "**.json",
+  "**.jsonc",
+  "**.editorconfig",
+  "**.gitkeep",
+  "**.gitignore",
+  "**.gitattributes",
+  "**.env.example",
+  "Makefile",
+  "apps/**",
+  "packages/**",
+  "infra/**",
+  "ops/**",
+  "scripts/**",
+  "docs/**",
+  "tests/**",
+  ".github/**",
+]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026 class-consciousness contributors"
+SPDX-License-Identifier = "AGPL-3.0-or-later"
+
+[[annotations]]
+path = ["corpus/**"]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026 class-consciousness contributors"
+SPDX-License-Identifier = "CC-BY-SA-4.0"
+
+[[annotations]]
+path = ["LICENSE", "LICENSE-CORPUS"]
+precedence = "override"
+SPDX-FileCopyrightText = ["Free Software Foundation", "Creative Commons"]
+SPDX-License-Identifier = "CC0-1.0"

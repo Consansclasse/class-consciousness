@@ -13,7 +13,7 @@ Pipeline déterministe en 7 étapes, écrit en ~400 lignes Python lisibles, **sa
 
 1. **Pré-traitement** (Claude Haiku 4.5) : réécriture, extraction d'entités, décomposition multi-questions, détection hors-périmètre.
 2. **Recherche hybride Qdrant** : Query API avec `prefetch` (sparse BM25 top 50) + (dense top 50) + fusion RRF in-engine → top 30. Filtres payload (auteur, œuvre, langue, période, concept) appliqués in-engine.
-3. **Reranking** (Voyage `rerank-2`) : top 30 → top 8.
+3. **Reranking** (Voyage `rerank-2.5`) : top 30 → top 8.
 4. **Génération** (Claude Opus 4.7) :
    - Prompt système cacheable : règles de citation strictes, format JSON imposé.
    - Contexte cacheable : taxonomie SKOS, glossaire mainteneur.

@@ -19,7 +19,7 @@
 | Couche | Choix |
 |---|---|
 | Backend | Python 3.12 + FastAPI |
-| Relationnel | PostgreSQL 16 |
+| Relationnel | PostgreSQL 17 |
 | Recherche hybride (dense + BM25 sparse) | Qdrant (Apache 2.0) |
 | LLM | Claude Opus 4.7 + prompt caching |
 | Embeddings + reranking | Voyage AI |
@@ -71,7 +71,7 @@ tests/rag-eval/     # test set red-team RAG
 ## Gouvernance & financement
 
 - Gouvernance : [`GOVERNANCE.md`](./GOVERNANCE.md). BDFL → conseil mainteneurs (an 1+).
-- Code de conduite : [`CODE_OF_CONDUCT.md`](./CODE_OF_CONDUCT.md) (Contributor Covenant 2.1).
+- Code de conduite : [`CODE_OF_CONDUCT.md`](./CODE_OF_CONDUCT.md) (Contributor Covenant 3.0).
 - Financement : OpenCollective (à créer en phase 0). Pas d'ads, pas de tier payant, pas de tracking.
 
 ## Licences
