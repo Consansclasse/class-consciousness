@@ -1,0 +1,8 @@
+# À activer dès qu'une équipe `maintainers` existe sur l'org GitHub.
+# Tant qu'aucune équipe n'est définie, GitHub émet juste un avertissement.
+# * @<org>/maintainers
+
+# Domaines spécifiques (à activer dès que les stewards sont nommés) :
+# /apps/api/src/cc_api/services/rag.py    @<org>/rag-steward
+# /corpus/                                @<org>/corpus-steward
+# /docs/governance/                       @<org>/governance-steward

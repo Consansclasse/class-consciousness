@@ -1,0 +1,102 @@
+name: class-consciousness-dev
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-cc}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+      POSTGRES_DB: ${POSTGRES_DB:-class_consciousness}
+    ports: ["5432:5432"]
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-cc}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    restart: unless-stopped
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant_data:/qdrant/storage
+    environment:
+      QDRANT__LOG_LEVEL: INFO
+    healthcheck:
+      test: ["CMD-SHELL", "exit 0"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--save", "60", "1"]
+    ports: ["6379:6379"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.api
+      target: dev
+    restart: unless-stopped
+    env_file:
+      - path: ../.env
+        required: false
+    ports: ["8000:8000"]
+    depends_on:
+      postgres: { condition: service_healthy }
+      qdrant: { condition: service_started }
+      redis: { condition: service_healthy }
+    volumes:
+      - ../apps/api:/app/apps/api
+      - ../packages/corpus-tools:/app/packages/corpus-tools
+
+  web:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.web
+      target: dev
+    restart: unless-stopped
+    env_file:
+      - path: ../.env
+        required: false
+    ports: ["3000:3000"]
+    depends_on:
+      - api
+    volumes:
+      - ../apps/web:/app/apps/web
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - api
+      - web
+
+volumes:
+  postgres_data:
+  qdrant_data:
+  redis_data:
+  caddy_data:
+  caddy_config:

@@ -1,0 +1,34 @@
+name: Contribution corpus
+description: Proposer l'ajout d'un texte au corpus.
+labels: [corpus]
+body:
+  - type: input
+    id: author
+    attributes:
+      label: Auteur
+      placeholder: Marx, Karl
+    validations: { required: true }
+  - type: input
+    id: work
+    attributes:
+      label: Œuvre
+      placeholder: Le Capital, Livre I
+    validations: { required: true }
+  - type: input
+    id: edition
+    attributes:
+      label: Édition (éditeur, année, traducteur·rice)
+      placeholder: Éditions sociales, 1972, trad. Joseph Roy révisée
+    validations: { required: true }
+  - type: textarea
+    id: source
+    attributes:
+      label: Source numérique
+      description: URL Gallica, MIA, Wikisource, etc.
+    validations: { required: true }
+  - type: textarea
+    id: license
+    attributes:
+      label: Statut juridique
+      description: Domaine public, CC, autorisation explicite ? Joindre la preuve.
+    validations: { required: true }

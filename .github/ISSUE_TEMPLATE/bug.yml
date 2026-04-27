@@ -1,0 +1,27 @@
+name: Bug
+description: Un comportement inattendu ou un défaut.
+labels: [bug]
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: Que s'est-il passé ? Que devait-il se passer ?
+    validations: { required: true }
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction
+      description: Étapes minimales pour reproduire.
+    validations: { required: true }
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Tag git ou commit hash.
+    validations: { required: true }
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environnement
+      description: OS, version Python/Node, Docker, etc.

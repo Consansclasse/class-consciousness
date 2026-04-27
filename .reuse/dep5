@@ -1,0 +1,37 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: class-consciousness
+Upstream-Contact: <maintainers@class-consciousness.org>
+Source: https://github.com/<org>/class-consciousness
+
+Files:
+  *.md
+  *.txt
+  *.toml
+  *.yaml
+  *.yml
+  *.json
+  *.jsonc
+  *.editorconfig
+  Makefile
+  apps/api/**
+  apps/web/**
+  packages/**
+  infra/**
+  ops/**
+  docs/**
+  tests/**
+  .github/**
+  .pre-commit-config.yaml
+  .gitignore
+  .gitattributes
+  .env.example
+Copyright: 2026 class-consciousness contributors
+License: AGPL-3.0-or-later
+
+Files: corpus/**
+Copyright: 2026 class-consciousness contributors
+License: CC-BY-SA-4.0
+
+Files: LICENSE LICENSE-CORPUS
+Copyright: Free Software Foundation; Creative Commons
+License: CC0-1.0

@@ -1,0 +1,25 @@
+# syntax=docker/dockerfile:1.7
+
+FROM node:20-alpine AS base
+WORKDIR /app
+RUN corepack enable && corepack prepare pnpm@9.0.0 --activate
+
+FROM base AS deps
+COPY package.json pnpm-workspace.yaml pnpm-lock.yaml* /app/
+COPY apps/web/package.json /app/apps/web/
+RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store \
+    pnpm install --frozen-lockfile || pnpm install
+
+FROM deps AS dev
+COPY apps/web /app/apps/web
+EXPOSE 3000
+WORKDIR /app/apps/web
+CMD ["pnpm", "dev", "--host", "0.0.0.0"]
+
+FROM deps AS build
+COPY apps/web /app/apps/web
+RUN pnpm --filter web build
+
+FROM nginx:1.27-alpine AS prod
+COPY --from=build /app/apps/web/dist /usr/share/nginx/html
+EXPOSE 80

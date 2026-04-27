@@ -1,0 +1,28 @@
+name: Feature
+description: Proposition de nouvelle fonctionnalité.
+labels: [feature]
+body:
+  - type: textarea
+    id: motivation
+    attributes:
+      label: Motivation
+      description: Quel problème cela résout-il ? Pour qui ?
+    validations: { required: true }
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposition
+      description: Décrivez la solution envisagée.
+    validations: { required: true }
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considérées
+  - type: checkboxes
+    id: principles
+    attributes:
+      label: Cohérence avec les principes
+      options:
+        - { label: "Compatible aucune-réponse-sans-source (si touche RAG)" }
+        - { label: "Compatible permanence des références (si touche identifiants)" }
+        - { label: "Compatible discipline de code (pas d'abstraction prématurée)" }

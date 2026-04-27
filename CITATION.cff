@@ -1,0 +1,17 @@
+cff-version: 1.2.0
+message: "Si vous utilisez cette archive dans un travail académique, merci de la citer."
+title: "class-consciousness — archive open-source de la théorie marxiste"
+abstract: "Archive open-source AGPL de textes marxistes en TEI-XML, avec moteur de questions-réponses RAG dont chaque réponse est littéralement sourcée."
+type: software
+license: AGPL-3.0-or-later
+repository-code: "https://github.com/<org>/class-consciousness"
+url: "https://class-consciousness.org"
+authors:
+  - name: "Mainteneurs class-consciousness"
+keywords:
+  - marxism
+  - digital-humanities
+  - TEI
+  - RAG
+  - open-archive
+  - AGPL

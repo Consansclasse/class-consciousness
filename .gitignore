@@ -1,0 +1,52 @@
+# Secrets
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+dist/
+build/
+
+# Node / Astro
+node_modules/
+.astro/
+.vite/
+dist/
+.turbo/
+*.log
+
+# Editors
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# OS
+Thumbs.db
+
+# Local data
+/data/
+*.sqlite
+*.db
+*.dump
+
+# Qdrant local volumes
+infra/qdrant/storage/
+
+# Logs
+logs/
+*.log
+
+# Backups
+backups/

@@ -1,0 +1,11 @@
+* text=auto eol=lf
+
+# Git LFS pour gros fichiers TEI et facsimilés
+corpus/**/*.tei.xml filter=lfs diff=lfs merge=lfs -text
+corpus/**/facsimiles/** filter=lfs diff=lfs merge=lfs -text
+*.pdf filter=lfs diff=lfs merge=lfs -text
+
+# Linguist : ne pas compter les fichiers générés ni le corpus dans les stats GitHub
+corpus/** linguist-vendored
+packages/tei-schema/cc.rng linguist-generated
+packages/tei-schema/cc.xsd linguist-generated

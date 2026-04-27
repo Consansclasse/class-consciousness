@@ -1,0 +1,33 @@
+[project]
+name = "class-consciousness"
+version = "0.0.1"
+description = "Open-source archive of Marxist theory with literally-sourced RAG."
+requires-python = ">=3.12"
+license = { text = "AGPL-3.0-or-later" }
+
+[tool.uv.workspace]
+members = ["apps/api", "packages/corpus-tools"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "B", "UP", "S", "ASYNC", "RUF"]
+ignore = ["S101"]
+
+[tool.ruff.lint.per-file-ignores]
+"**/tests/**" = ["S"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_return_any = true
+warn_unused_ignores = true
+disallow_untyped_decorators = true
+no_implicit_reexport = true
+
+[tool.pytest.ini_options]
+testpaths = ["apps/api/tests", "packages/corpus-tools/tests"]
+addopts = "-ra --strict-markers --strict-config"
+asyncio_mode = "auto"

@@ -1,0 +1,26 @@
+{
+	# Dev local : pas d'auto-TLS
+	auto_https off
+	admin off
+}
+
+:80 {
+	encode gzip zstd
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "interest-cohort=()"
+		-Server
+	}
+
+	@api path /api/* /ark/* /oai* /health
+	handle @api {
+		reverse_proxy api:8000
+	}
+
+	handle {
+		reverse_proxy web:3000
+	}
+}
