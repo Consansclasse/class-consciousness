@@ -52,7 +52,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: osv-scanner
-        uses: google/osv-scanner-action@v1.9.1
+        uses: google/osv-scanner-action@v2.3.5
         with:
           scan-args: |-
             --recursive
