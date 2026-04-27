@@ -54,7 +54,7 @@ api PUT "/repos/$OWNER/$REPO/branches/$BRANCH/protection" "$(cat <<JSON
 {
   "required_status_checks": {
     "strict": true,
-    "contexts": ["python", "node", "security", "docker-build"]
+    "contexts": ["python", "node", "security", "docker-build", "dco"]
   },
   "enforce_admins": false,
   "required_pull_request_reviews": null,
