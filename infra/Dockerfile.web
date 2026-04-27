@@ -20,6 +20,6 @@ FROM deps AS build
 COPY apps/web /app/apps/web
 RUN pnpm --filter web build
 
-FROM nginx:1.27-alpine AS prod
+FROM nginx:1.29-alpine AS prod
 COPY --from=build /app/apps/web/dist /usr/share/nginx/html
 EXPOSE 80
