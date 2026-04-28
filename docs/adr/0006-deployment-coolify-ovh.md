@@ -19,11 +19,12 @@ Critères :
 
 ## Décision
 
-- **Hébergeur** : OVH Public Cloud, instances Compute (B3-8 phase 0+1, B3-32 dès phase 3 quand Qdrant chargera). Région primaire `GRA` (Gravelines, FR), secondaire `SBG` (Strasbourg, FR).
+- **Hébergeur** : OVH **Kimsufi** dédié `KS-1-B` (32 Go RAM ECC, Xeon D-2123IT, 2× 4 To HDD RAID), datacenter Limburg (DE). Migration SSD obligatoire avant phase 3 (cf. dette n° 1).
 - **Orchestrateur** : Coolify v4 self-hosted (Apache-2.0), build pack Docker Compose pointant vers `infra/docker-compose.prod.yml`.
 - **Reverse proxy + TLS** : Traefik intégré à Coolify, Let's Encrypt automatique. Le service `caddy` du compose dev n'est pas dupliqué en prod.
 - **Auto-deploy** : webhook GitHub via App Coolify dédiée, branche `main`.
 - **Bases de données** : déclarées dans le compose pour la phase plomberie ; migration vers ressources Coolify gérées (avec backups intégrés) prévue en phase 5 hardening.
+- **Co-hébergement** : matomo et class-consciousness tournent sur la même machine, ressources Coolify séparées.
 
 ## Conséquences
 
@@ -39,6 +40,17 @@ Coûts :
 - OVH Public Cloud plus cher que Hetzner pour la même perf brute (~+30 % à specs égales).
 - OVH a connu un incendie de datacenter (SBG2, 2021) ayant détruit des données client → **backups hors-site obligatoires** (Annexe C runbook).
 - Coolify est jeune (v4 stable) ; bus factor du projet à surveiller. Mitigation : compose standard portable.
+
+## Dettes techniques acceptées (Kimsufi KS-1-B)
+
+Les compromis suivants sont assumés explicitement pour démarrer économique en phase 0-2 ; chacun a une date d'échéance.
+
+| # | Dette | Risque | Mitigation | Échéance |
+|---|---|---|---|---|
+| 1 | **Stockage HDD** (2× 4 To SATA) au lieu de SSD/NVMe | Qdrant en random-read sur HDD = latence ×100. RAG inutilisable au-delà de l'index qui ne tient plus en RAM. | Maintenir l'index Qdrant en RAM (mmap). Surveiller `qdrant_memory_pressure` Prometheus. | **Phase 3 (corpus dépasse 5 Go)** : migrer vers serveur SSD (SoYouStart SYS-…-SSD ou Public Cloud B3-32). |
+| 2 | **Pas de SLA Kimsufi** (best-effort) | Crash hardware = downtime indéterminé en attente intervention OVH. | Snapshots hors-site quotidiens + monitoring uptime externe (Uptime Kuma sur autre hôte ou service tiers). | Dès semaine 1 : `restic` vers OVH Object Storage opérationnel. |
+| 3 | **Backups non inclus** | Perte de données si crash disque RAID + erreur humaine. | `restic` cron quotidien des volumes Docker (postgres_data, qdrant_data, redis_data) vers OVH Object Storage S3 chiffré. | Dès semaine 1 : runbook `ops/runbooks/backup-restic.md` à écrire et activer. |
+| 4 | **Région DE** (Limburg) au lieu de FR | Souveraineté FR → souveraineté UE. RGPD préservé, juridiction DE pour les données. | Acceptable phase 0-2. Migration FR si bascule SSD vers Public Cloud GRA en phase 3. | Phase 3 (couplée à dette n° 1). |
 
 ## Alternatives rejetées
 

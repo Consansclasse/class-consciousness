@@ -20,14 +20,15 @@ Décisions d'architecture (voir [`docs/adr/0006-deployment-coolify-ovh.md`](../.
 | Champ | Valeur |
 |---|---|
 | Domaine | `consciencedeclasse.com` |
-| VPS | OVH VPS classique `vps-89695400.vps.ovh.net` |
-| Modèle | VPS-3 (8 vCores, 24 Go RAM, 200 Go SSD) |
-| Région | Frankfurt (DE) — OS-DE2 |
-| OS | Ubuntu 25.04 (non-LTS, hors-support depuis 2026-01) ⚠️ — *à réinstaller en 24.04 LTS avant phase 1* |
-| IPv4 | `51.75.73.13` |
-| IPv6 | `2001:41d0:701:1100::cbef` |
+| Serveur | OVH **Kimsufi KS-1-B** (dédié) |
+| Spécs | Intel Xeon D-2123IT, 32 Go RAM ECC DDR4 2400, 2× 4 To HDD SATA Soft RAID, 500 Mbit/s unmetered |
+| Région | Limburg (DE) |
+| OS cible | **Ubuntu 24.04 LTS** (à choisir au moment de l'install Kimsufi) |
+| IPv4 | *à recevoir à la livraison Kimsufi* |
+| Statut commande | en cours |
 | Statut Coolify | non installé |
-| Dette acceptée | OS non-LTS (Annexe H), région DE au lieu de FR (note ADR-0006) |
+| Dettes acceptées (ADR-0006) | n° 1 HDD, n° 2 pas de SLA, n° 3 backups manuels, n° 4 DC en DE |
+| **VPS-3 ancien** (`51.75.73.13`) | orphelin → décision à prendre : résilier ou garder en staging |
 
 **FQDN attribués dans Coolify :**
 
