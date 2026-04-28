@@ -1,0 +1,114 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Compose production pour Coolify. Voir ops/runbooks/coolify-deploy.md.
+# Différences vs docker-compose.yml (dev) :
+#   - pas de bind mount du code source (build target prod, image immuable)
+#   - pas de service caddy (Traefik de Coolify gère TLS)
+#   - pas de ports: à plat (Coolify expose via labels Traefik)
+#   - pas de réseau custom (cause des coupures HTTPS sur Coolify)
+#   - secrets via magic vars Coolify : SERVICE_PASSWORD_*, SERVICE_FQDN_*
+
+name: class-consciousness
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: cc
+      POSTGRES_PASSWORD: ${SERVICE_PASSWORD_POSTGRES}
+      POSTGRES_DB: class_consciousness
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cc -d class_consciousness"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    restart: unless-stopped
+    volumes:
+      - qdrant_data:/qdrant/storage
+    environment:
+      QDRANT__LOG_LEVEL: INFO
+      QDRANT__SERVICE__API_KEY: ${SERVICE_PASSWORD_QDRANT}
+    healthcheck:
+      test: ["CMD-SHELL", "exit 0"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--save", "60", "1", "--requirepass", "${SERVICE_PASSWORD_REDIS}"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${SERVICE_PASSWORD_REDIS}", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.api
+      target: prod
+    restart: unless-stopped
+    environment:
+      SERVICE_FQDN_API_8000: /
+      CC_API_HOST: 0.0.0.0
+      CC_API_PORT: 8000
+      CC_API_LOG_LEVEL: INFO
+      CC_API_ENV: prod
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: class_consciousness
+      POSTGRES_USER: cc
+      POSTGRES_PASSWORD: ${SERVICE_PASSWORD_POSTGRES}
+      QDRANT_URL: http://qdrant:6333
+      QDRANT_API_KEY: ${SERVICE_PASSWORD_QDRANT}
+      REDIS_URL: redis://:${SERVICE_PASSWORD_REDIS}@redis:6379/0
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-opus-4-7}
+      ANTHROPIC_MODEL_PREPROCESS: ${ANTHROPIC_MODEL_PREPROCESS:-claude-haiku-4-5}
+      VOYAGE_API_KEY: ${VOYAGE_API_KEY}
+      VOYAGE_EMBED_MODEL: ${VOYAGE_EMBED_MODEL:-voyage-4}
+      VOYAGE_RERANK_MODEL: ${VOYAGE_RERANK_MODEL:-rerank-2.5}
+      ARK_NAAN: ${ARK_NAAN:-99999}
+      ARK_RESOLVER: ${ARK_RESOLVER:-https://n2t.net}
+    expose:
+      - "8000"
+    depends_on:
+      postgres: { condition: service_healthy }
+      qdrant: { condition: service_started }
+      redis: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD-SHELL", "python -c 'import urllib.request,sys; sys.exit(0 if urllib.request.urlopen(\"http://localhost:8000/health\", timeout=3).status==200 else 1)'"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  web:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.web
+      target: prod
+    restart: unless-stopped
+    environment:
+      SERVICE_FQDN_WEB_80: /
+    expose:
+      - "80"
+    depends_on:
+      - api
+
+volumes:
+  postgres_data:
+  qdrant_data:
+  redis_data:
