@@ -37,12 +37,12 @@ Cible : VPS Hetzner CCX23/CCX33 ou Scaleway équivalent (UE).
 2. Installer Docker + Compose
 3. `git clone` du dépôt et copier `.env` rempli avec secrets de production
 4. Configurer Caddy avec votre domaine pour TLS automatique
-5. Lancer `docker compose -f infra/docker-compose.prod.yml up -d`
+5. Lancer `docker compose -f docker-compose.prod.yml up -d`
 6. Configurer backups : `pg_dump` quotidien + `qdrant snapshot` quotidien → S3-compatible
 7. Activer monitoring Prometheus + Grafana + Loki
 8. Tester le runbook DR (RTO < 4 h)
 
-> Le fichier `infra/docker-compose.prod.yml` et les runbooks détaillés seront livrés en phase 5.
+> Le fichier `docker-compose.prod.yml` et les runbooks détaillés seront livrés en phase 5.
 
 ## Ressources externes nécessaires
 

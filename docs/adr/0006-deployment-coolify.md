@@ -21,7 +21,7 @@ Nouveau VPS proposé : `51.68.129.187`. Domaine `consciencedeclasse.com` déjà 
 - **Machine** : `51.68.129.187`.
 - **Orchestrateur** : Coolify v4 self-hosted (Apache-2.0).
 - **Reverse proxy + TLS** : Traefik intégré à Coolify, Let's Encrypt automatique. Pas de Caddy en prod (le Caddyfile dev est conservé, `infra/caddy/Caddyfile`, mais n'est pas déployé).
-- **Compose prod** : `infra/docker-compose.prod.yml` ; pas de section `networks:` (gotcha Coolify documenté), pas de service `caddy`, pas de ports exposés sur les bases.
+- **Compose prod** : `docker-compose.prod.yml` ; pas de section `networks:` (gotcha Coolify documenté), pas de service `caddy`, pas de ports exposés sur les bases.
 - **Architecture web↔api** : sous-domaines split (`consciencedeclasse.com` web, `api.consciencedeclasse.com` api), CORS ajouté à la 1re route consommée par le navigateur.
 - **Auto-deploy** : webhook GitHub via GitHub App Coolify, branche `main`.
 - **Bases applicatives** : déclarées dans le compose, backups assurés par Scheduled Tasks Coolify (pas le natif réservé aux *standalone Coolify Database resources*).

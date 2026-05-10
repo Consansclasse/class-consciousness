@@ -229,7 +229,7 @@ Resource > **+ New > Docker Compose Empty** :
 - Source : GitHub App `coolify-cc` → `Concsience/class-consciousness`
 - Branch : `main`
 - Base directory : `/`
-- Docker Compose location : `infra/docker-compose.prod.yml`
+- Docker Compose location : `docker-compose.prod.yml`
 - Build pack : Compose (build from source)
 
 ### 5.3 Variables Coolify (Settings > Environment Variables)

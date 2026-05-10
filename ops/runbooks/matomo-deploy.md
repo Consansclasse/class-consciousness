@@ -126,7 +126,7 @@ PUBLIC_MATOMO_URL = https://analytics.consciencedeclasse.com
 PUBLIC_MATOMO_SITE_ID = 1
 ```
 
-Si déjà fait dans `infra/docker-compose.prod.yml > web > build.args`, c'est suffisant — Coolify les passe au build. Sinon les ajouter en variables. Redéployer le projet `class-consciousness` (Coolify UI > Resource > Redeploy).
+Si déjà fait dans `docker-compose.prod.yml > web > build.args`, c'est suffisant — Coolify les passe au build. Sinon les ajouter en variables. Redéployer le projet `class-consciousness` (Coolify UI > Resource > Redeploy).
 
 ## Phase 9 — Validation cookieless en navigation privée
 
