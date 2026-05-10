@@ -16,7 +16,7 @@ COPY pyproject.toml uv.lock* /app/
 COPY apps/api/pyproject.toml /app/apps/api/
 COPY packages/corpus-tools/pyproject.toml /app/packages/corpus-tools/
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-install-project || uv sync --no-install-project
+    uv sync --frozen --no-install-project --package cc-api
 
 FROM deps AS dev
 COPY apps/api /app/apps/api
@@ -29,7 +29,7 @@ FROM deps AS prod
 COPY apps/api /app/apps/api
 COPY packages/corpus-tools /app/packages/corpus-tools
 RUN --mount=type=cache,target=/root/.cache/uv \
-    (uv sync --frozen 2>/dev/null || uv sync) \
+    uv sync --frozen --package cc-api \
     && chown -R 1000:1000 /app/.venv
 ENV PATH="/app/.venv/bin:$PATH"
 EXPOSE 8000
