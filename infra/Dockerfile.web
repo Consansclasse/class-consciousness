@@ -17,6 +17,12 @@ WORKDIR /app/apps/web
 CMD ["pnpm", "dev", "--host", "0.0.0.0"]
 
 FROM deps AS build
+ARG PUBLIC_API_URL
+ARG PUBLIC_MATOMO_URL
+ARG PUBLIC_MATOMO_SITE_ID
+ENV PUBLIC_API_URL=$PUBLIC_API_URL \
+    PUBLIC_MATOMO_URL=$PUBLIC_MATOMO_URL \
+    PUBLIC_MATOMO_SITE_ID=$PUBLIC_MATOMO_SITE_ID
 COPY apps/web /app/apps/web
 RUN pnpm --filter web build
 

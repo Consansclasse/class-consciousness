@@ -24,11 +24,11 @@ Greenfield. Stack à figer pour la phase 0. Critères : qualité absolue du mote
 - **Bibliographie** : CSL-JSON 1.0
 - **Identifiants** : ARK (NAAN n2t.net) + Wikidata + VIAF + IdRef
 - **Conteneurisation** : Docker + Docker Compose + buildx multi-arch
-- **Reverse-proxy** : Caddy 2
+- **Reverse-proxy** : Caddy 2 (dev local) ; Traefik via Coolify (prod, ADR-0006)
 - **CI** : GitHub Actions (CodeQL + Dependabot + osv-scanner + gitleaks)
 - **Lint/format** : Ruff + mypy strict (Py), Biome (TS), Prettier
 - **Tests** : pytest + Hypothesis (back), Vitest + Playwright (front), cassettes VCR pour le LLM
-- **Observabilité** : Prometheus + Grafana + Loki ; Plausible (cookieless)
+- **Observabilité** : Prometheus + Grafana + Loki ; Matomo cookieless (ADR-0007)
 - **Préservation** : Sigstore (cosign) + Software Heritage + Internet Archive + IPFS pinning
 
 ## Conséquences
@@ -57,6 +57,10 @@ Coûts :
 - Supabase : couplage SaaS, schema control limité
 - TEI Publisher / eXist-db : XQuery/XSLT niche, UX moderne difficile
 - Vercel/Netlify : centralisateurs, vendor lock-in
+
+## Mises à jour
+
+- 2026-05-10 — déploiement précisé : Coolify v4 + Traefik (ADR-0006), analytique Matomo cookieless (ADR-0007).
 
 ## Hypothèses à vérifier avant figeage final
 

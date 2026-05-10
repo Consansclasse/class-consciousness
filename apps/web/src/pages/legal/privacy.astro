@@ -1,0 +1,89 @@
+---
+// SPDX-License-Identifier: AGPL-3.0-or-later
+const matomoUrl = import.meta.env.PUBLIC_MATOMO_URL;
+const matomoSiteId = import.meta.env.PUBLIC_MATOMO_SITE_ID;
+const optOutUrl = matomoUrl
+  ? `${matomoUrl}/index.php?module=CoreAdminHome&action=optOut&language=fr&backgroundColor=&fontColor=&fontSize=&fontFamily=`
+  : null;
+---
+
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Confidentialité — class-consciousness</title>
+    <meta name="robots" content="noindex" />
+    {matomoUrl && (
+      <script define:vars={{ matomoUrl, matomoSiteId }}>
+        var _paq = window._paq = window._paq || [];
+        _paq.push(['disableCookies']);
+        _paq.push(['setDoNotTrack', true]);
+        _paq.push(['anonymizeIp']);
+        _paq.push(['trackPageView']);
+        (function () {
+          var u = matomoUrl + '/';
+          _paq.push(['setTrackerUrl', u + 'matomo.php']);
+          _paq.push(['setSiteId', matomoSiteId]);
+          var d = document;
+          var g = d.createElement('script');
+          var s = d.getElementsByTagName('script')[0];
+          g.async = true;
+          g.src = u + 'matomo.js';
+          s.parentNode.insertBefore(g, s);
+        })();
+      </script>
+    )}
+  </head>
+  <body>
+    <main>
+      <h1>Confidentialité</h1>
+
+      <h2>Mesure d'audience</h2>
+      <p>
+        class-consciousness utilise <strong>Matomo Analytics</strong> auto-hébergé en France
+        (OVH, région <code>GRA</code>) pour mesurer la fréquentation du site. La configuration
+        respecte la dispense de consentement de la CNIL (délibération 2020-091) :
+      </p>
+      <ul>
+        <li>aucun cookie de suivi n'est posé sur ton terminal&nbsp;;</li>
+        <li>ton adresse IP est anonymisée à la source (deux derniers octets supprimés)&nbsp;;</li>
+        <li>l'en-tête <code>Do Not Track</code> est respecté&nbsp;: si tu l'actives, aucune requête de mesure n'est émise&nbsp;;</li>
+        <li>aucun identifiant utilisateur n'est collecté, aucune donnée n'est partagée avec un tiers&nbsp;;</li>
+        <li>la durée de conservation des données brutes est limitée à 13 mois.</li>
+      </ul>
+
+      <h2>Refuser la mesure d'audience</h2>
+      {optOutUrl ? (
+        <>
+          <p>Tu peux désactiver la mesure pour ce navigateur ci-dessous. Le choix est conservé via un cookie technique sur le domaine <code>analytics.consciencedeclasse.com</code> (uniquement si tu cliques&nbsp;; rien sinon).</p>
+          <iframe
+            src={optOutUrl}
+            style="border:0; width:100%; height:200px;"
+            title="Opt-out Matomo"
+          />
+        </>
+      ) : (
+        <p>Le formulaire d'opt-out n'est pas disponible dans cet environnement (variable <code>PUBLIC_MATOMO_URL</code> non définie).</p>
+      )}
+
+      <h2>Hébergement et juridiction</h2>
+      <p>
+        Le site et la mesure d'audience sont hébergés en France (OVH SAS, datacenters <code>GRA</code>),
+        soumis au RGPD et à la loi française. Aucun transfert hors UE.
+      </p>
+
+      <h2>Sources et licences</h2>
+      <p>
+        Le code de class-consciousness est diffusé sous licence AGPL-3.0-or-later. Le corpus et les
+        commentaires sont diffusés sous licence CC BY-SA 4.0.
+      </p>
+
+      <h2>Contact</h2>
+      <p>
+        Pour toute question relative à tes données ou à l'exercice de tes droits&nbsp;:
+        <a href="mailto:consciencedeclasse@proton.me">consciencedeclasse@proton.me</a>.
+      </p>
+    </main>
+  </body>
+</html>

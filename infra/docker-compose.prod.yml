@@ -1,0 +1,113 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Compose prod déployé via Coolify v4. Voir docs/adr/0006-deployment-coolify.md
+# et ops/runbooks/coolify-deploy.md pour le runbook complet.
+#
+# Contraintes Coolify respectées :
+# - aucune section `networks:` (gotcha : casse l'HTTPS Traefik)
+# - pas de `ports:` sur postgres/qdrant/redis (privés au réseau Coolify)
+# - magic vars `SERVICE_PASSWORD_*` pour secrets, `SERVICE_FQDN_*_<port>` pour les FQDN
+# - build target `prod` sur api et web
+# - `ANTHROPIC_API_KEY` et `VOYAGE_API_KEY` injectés via Coolify Settings (pas en dur)
+name: class-consciousness
+
+services:
+  postgres:
+    image: postgres:17.2-alpine
+    environment:
+      POSTGRES_USER: cc
+      POSTGRES_PASSWORD: ${SERVICE_PASSWORD_POSTGRES}
+      POSTGRES_DB: cc
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cc -d cc"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+  qdrant:
+    image: qdrant/qdrant:v1.12.0
+    environment:
+      QDRANT__LOG_LEVEL: INFO
+      QDRANT__SERVICE__API_KEY: ${SERVICE_PASSWORD_QDRANT}
+    volumes:
+      - qdrant_data:/qdrant/storage
+    healthcheck:
+      # qdrant/qdrant n'embarque ni curl ni wget — TCP probe via /dev/tcp
+      test: ["CMD-SHELL", "bash -c 'cat < /dev/tcp/localhost/6333' || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--requirepass", "${SERVICE_PASSWORD_REDIS}", "--appendonly", "yes", "--save", "60", "1"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${SERVICE_PASSWORD_REDIS}", "--no-auth-warning", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+  api:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.api
+      target: prod
+    environment:
+      SERVICE_FQDN_API_8000: api.consciencedeclasse.com
+      CC_API_ENV: prod
+      CC_API_LOG_LEVEL: INFO
+      CC_API_CORS_ORIGINS: https://consciencedeclasse.com
+      CC_POSTGRES_HOST: postgres
+      CC_POSTGRES_PORT: "5432"
+      CC_POSTGRES_USER: cc
+      CC_POSTGRES_PASSWORD: ${SERVICE_PASSWORD_POSTGRES}
+      CC_POSTGRES_DB: cc
+      CC_REDIS_HOST: redis
+      CC_REDIS_PORT: "6379"
+      CC_REDIS_PASSWORD: ${SERVICE_PASSWORD_REDIS}
+      CC_QDRANT_URL: http://qdrant:6333
+      CC_QDRANT_API_KEY: ${SERVICE_PASSWORD_QDRANT}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      VOYAGE_API_KEY: ${VOYAGE_API_KEY}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:8000/health\").read()'"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.web
+      target: prod
+      args:
+        PUBLIC_API_URL: https://api.consciencedeclasse.com
+        PUBLIC_MATOMO_URL: https://analytics.consciencedeclasse.com
+        PUBLIC_MATOMO_SITE_ID: "1"
+    environment:
+      SERVICE_FQDN_WEB_80: consciencedeclasse.com
+    depends_on:
+      - api
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  qdrant_data:
+  redis_data:
