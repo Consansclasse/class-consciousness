@@ -1,30 +1,108 @@
-# Déployer Matomo cookieless via Coolify (analytics.consciencedeclasse.com)
+# Déployer Matomo cookieless via Coolify (matomo.consciencedeclasse.com)
 
 > **Quand** : après que `coolify-deploy.md` est exécuté jusqu'à la Phase 6 inclus (Coolify installé, projet `class-consciousness` déployé, TLS UI Coolify OK).
-> **Effet** : Matomo joignable en HTTPS sur `analytics.consciencedeclasse.com`, mode CNIL strict configuré, GeoIP DB-IP en place, archivage horaire actif.
+> **Effet** : Matomo joignable en HTTPS sur `matomo.consciencedeclasse.com`, mode CNIL strict configuré, GeoIP DB-IP en place, archivage horaire actif.
 > **Décision** : ADR-0007.
 > **Coût mémoire** : ≈ +250 Mo RAM (PHP+Apache + MariaDB tunée à `innodb_buffer_pool_size=512M`).
 
 ## Pré-requis
 
 - Coolify déjà installé et bindé (cf. `coolify-deploy.md` Phases 1-4).
-- DNS `analytics.consciencedeclasse.com` propagé : `dig +short analytics.consciencedeclasse.com` doit retourner `51.68.129.187`. Si non : OVH Manager > Zone DNS > A `analytics` → `51.68.129.187`, TTL 300. Le wildcard `*` ajouté Phase 2 le couvre déjà ; cet enregistrement explicite reste recommandé pour traçabilité.
+- DNS `matomo.consciencedeclasse.com` propagé : `dig +short matomo.consciencedeclasse.com` doit retourner `51.68.129.187`. Si non : OVH Manager > Zone DNS > A `matomo` → `51.68.129.187`, TTL 300. Le wildcard `*` ajouté Phase 2 le couvre déjà ; cet enregistrement explicite reste recommandé pour traçabilité.
 - Compte admin Coolify avec 2FA actif.
 
-## Phase 1 — Création du projet Coolify
+## Phase 1 — Création du projet Coolify (Docker Compose Empty)
 
 Coolify > **Projects > + Add** :
 - Nom : `matomo`
 - Environment : `production`
 
-Resource > **+ New > Docker Compose Empty** :
-- Source : GitHub App `coolify-cc` → `Concsience/class-consciousness`
-- Branch : `main`
-- Base directory : `/`
-- Docker Compose location : `infra/matomo/docker-compose.yml`
-- Build pack : Compose
+Resource > **+ New > Docker Compose Empty**. Dans le champ **Docker Compose**, coller intégralement le compose ci-dessous (aligné sur le compose officiel `matomo-org/docker` Apache + MariaDB LTS) :
 
-Aucune variable externe n'est requise (Matomo n'utilise pas d'API tierce). Tous les secrets (`SERVICE_PASSWORD_MATOMO_DB`, `SERVICE_PASSWORD_MATOMO_DB_ROOT`) sont des magic vars Coolify auto-générées au 1er parse du compose.
+```yaml
+services:
+  matomo:
+    image: matomo:5.10-apache
+    environment:
+      SERVICE_FQDN_MATOMO_80: matomo.consciencedeclasse.com
+      MATOMO_DATABASE_ADAPTER: mysql
+      MATOMO_DATABASE_TABLES_PREFIX: matomo_
+      MATOMO_DATABASE_HOST: matomo-db
+      MATOMO_DATABASE_DBNAME: matomo
+      MATOMO_DATABASE_USERNAME: matomo
+      MATOMO_DATABASE_PASSWORD: ${MARIADB_PASSWORD}
+      PHP_MEMORY_LIMIT: 512M
+    volumes:
+      - matomo_data:/var/www/html
+    depends_on:
+      matomo-db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  matomo-db:
+    image: mariadb:lts
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --innodb-buffer-pool-size=512M
+      - --innodb-flush-log-at-trx-commit=2
+    environment:
+      MARIADB_AUTO_UPGRADE: "1"
+      MARIADB_DISABLE_UPGRADE_BACKUP: "1"
+      MARIADB_INITDB_SKIP_TZINFO: "1"
+      MARIADB_DATABASE: matomo
+      MARIADB_USER: matomo
+      MARIADB_PASSWORD: ${MARIADB_PASSWORD}
+      MARIADB_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD}
+    volumes:
+      - matomo_db:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+  matomo-cron:
+    image: matomo:5.10-apache
+    entrypoint: ["sh", "-c"]
+    command:
+      - 'while true; do sleep 3600; php /var/www/html/console core:archive --url=https://matomo.consciencedeclasse.com/ || true; done'
+    volumes:
+      - matomo_data:/var/www/html
+    environment:
+      MATOMO_DATABASE_ADAPTER: mysql
+      MATOMO_DATABASE_TABLES_PREFIX: matomo_
+      MATOMO_DATABASE_HOST: matomo-db
+      MATOMO_DATABASE_DBNAME: matomo
+      MATOMO_DATABASE_USERNAME: matomo
+      MATOMO_DATABASE_PASSWORD: ${MARIADB_PASSWORD}
+    depends_on:
+      matomo:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  matomo_data:
+  matomo_db:
+```
+
+**Save**. Coolify détecte les 3 services et propose **Domains for matomo** : saisir `https://matomo.consciencedeclasse.com`.
+
+**Environment Variables** (onglet dédié de la ressource) — Matomo nécessite deux mots de passe MariaDB explicites (le compose officiel `matomo-org/docker` les attend via `.env`). Génère-les côté local et ajoute-les dans Coolify :
+
+```sh
+openssl rand -hex 24   # pour MARIADB_PASSWORD
+openssl rand -hex 24   # pour MARIADB_ROOT_PASSWORD (à conserver dans ton gestionnaire de passwords)
+```
+
+| Key | Type | Valeur |
+|---|---|---|
+| `MARIADB_PASSWORD` | runtime | `<sortie 1re openssl>` |
+| `MARIADB_ROOT_PASSWORD` | runtime | `<sortie 2e openssl>` |
+
+> Pourquoi pas de magic vars Coolify `SERVICE_PASSWORD_*` ? Coolify ne génère qu'**un** password par service (identifier dérivé du nom de service). Or Matomo a besoin de **deux** passwords (user `matomo` + root MariaDB). On les définit manuellement.
 
 ## Phase 2 — Premier déploiement
 
@@ -32,19 +110,19 @@ Bouton **Deploy**. Surveiller les logs Coolify > Deployments. Attendre que les t
 
 Vérifications immédiates :
 ```sh
-curl -I https://analytics.consciencedeclasse.com           # 200 + LE valid
-dig +short analytics.consciencedeclasse.com                # 51.68.129.187
+curl -I https://matomo.consciencedeclasse.com           # 200 + LE valid
+dig +short matomo.consciencedeclasse.com                # 51.68.129.187
 ```
 
 ## Phase 3 — Wizard d'installation Matomo
 
-Ouvrir `https://analytics.consciencedeclasse.com` dans le navigateur. Le wizard Matomo s'affiche.
+Ouvrir `https://matomo.consciencedeclasse.com` dans le navigateur. Le wizard Matomo s'affiche.
 
 | Étape | Valeur |
 |---|---|
 | Welcome | Next |
 | System check | Tous verts ; corriger si jaune avant de continuer |
-| Database setup | Host: `matomo-db`, login: `matomo`, password: (récupérer la valeur de `SERVICE_PASSWORD_MATOMO_DB` depuis Coolify > Resource matomo > Environment Variables), name: `matomo`, prefix: `matomo_` |
+| Database setup | Host: `matomo-db`, login: `matomo`, password: la valeur de `MARIADB_PASSWORD` (Coolify > Resource matomo > Environment Variables), name: `matomo`, prefix: `matomo_` |
 | Tables creation | Next |
 | Super user | email: `consciencedeclasse@proton.me`, login: choisir, mot de passe ≥ 24 caractères depuis manager |
 | Setup website | Name: `class-consciousness`, URL: `https://consciencedeclasse.com`, timezone: `Europe/Paris`, ecommerce: **NO** |
@@ -71,7 +149,7 @@ Vérifier ou ajouter dans la section `[General]` :
 ```ini
 [General]
 force_ssl = 1
-trusted_hosts[] = "analytics.consciencedeclasse.com"
+trusted_hosts[] = "matomo.consciencedeclasse.com"
 enable_auto_update = 0
 assume_secure_protocol = 1
 proxy_client_headers[] = "HTTP_X_FORWARDED_FOR"
@@ -122,7 +200,7 @@ Le snippet `_paq` est déjà dans `apps/web/src/pages/index.astro` (et toute pag
 
 Configurer dans Coolify > Resource `class-consciousness` > Environment Variables :
 ```
-PUBLIC_MATOMO_URL = https://analytics.consciencedeclasse.com
+PUBLIC_MATOMO_URL = https://matomo.consciencedeclasse.com
 PUBLIC_MATOMO_SITE_ID = 1
 ```
 

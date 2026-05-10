@@ -56,7 +56,7 @@ services:
       dockerfile: infra/Dockerfile.api
       target: prod
     environment:
-      SERVICE_FQDN_API_8000: api.consciencedeclasse.com
+      SERVICE_FQDN_API_8000: api.cdc.consciencedeclasse.com
       CC_API_ENV: prod
       CC_API_LOG_LEVEL: INFO
       CC_API_CORS_ORIGINS: https://consciencedeclasse.com
@@ -93,8 +93,8 @@ services:
       dockerfile: infra/Dockerfile.web
       target: prod
       args:
-        PUBLIC_API_URL: https://api.consciencedeclasse.com
-        PUBLIC_MATOMO_URL: https://analytics.consciencedeclasse.com
+        PUBLIC_API_URL: https://api.cdc.consciencedeclasse.com
+        PUBLIC_MATOMO_URL: https://matomo.consciencedeclasse.com
         PUBLIC_MATOMO_SITE_ID: "1"
     environment:
       SERVICE_FQDN_WEB_80: consciencedeclasse.com

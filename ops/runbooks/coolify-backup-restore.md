@@ -168,7 +168,7 @@ set -euo pipefail
 TS=$(date -u +%Y%m%dT%H%M%SZ)
 CID=$(docker ps --filter label=com.docker.compose.service=matomo-db -q)
 docker exec "$CID" mariadb-dump \
-  -uroot -p"${SERVICE_PASSWORD_MATOMO_DB_ROOT}" \
+  -umatomo -p"${MARIADB_PASSWORD}" \
   --single-transaction --routines --events \
   matomo | gzip > /tmp/matomo-${TS}.sql.gz
 aws s3 --endpoint-url https://s3.gra.io.cloud.ovh.net \

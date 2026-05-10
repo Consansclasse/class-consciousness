@@ -16,7 +16,7 @@ Motifs : (a) documentation CNIL « exemption de consentement » disponible clé 
 - **Outil** : Matomo 5.x — image officielle `matomo:5.10-apache` (variante FPM rejetée pour simplicité opérationnelle ; un seul container PHP+Apache au lieu de FPM+nginx side-car).
 - **Base** : MariaDB LTS — image officielle `mariadb:lts` (alias `11.8.6`). Matomo n'a pas d'adaptateur Postgres ; nous ne pouvons pas réutiliser la Postgres 17 du projet `class-consciousness`.
 - **Cron archivage** : container `matomo-cron` réutilisant l'image Matomo, boucle horaire `console core:archive --url=…`. Discipline §13bis règle 8 (pas de service à un seul appelant ; mais ici le cron est un service distinct par nature, pas un helper — l'alternative `crond` système alourdirait la config sans gain).
-- **Hébergement** : Project Coolify séparé `matomo`, sous-domaine `analytics.consciencedeclasse.com`, sur le VPS OVH FR (cf. ADR-0006).
+- **Hébergement** : Project Coolify séparé `matomo`, sous-domaine `matomo.consciencedeclasse.com`, sur le VPS OVH FR (cf. ADR-0006).
 - **Mode tracking** : CNIL strict (mode natif Matomo).
   - `disableCookies()` côté tracker JS (zéro cookie posé).
   - `setDoNotTrack(true)` (DNT respecté).

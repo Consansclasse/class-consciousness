@@ -1,7 +1,7 @@
 # Déployer class-consciousness via Coolify sur OVH `51.68.129.187`
 
 > **Quand** : mise en production initiale ou re-bootstrap après incident catastrophique.
-> **Effet** : VPS durci, Coolify installé et bindé sur `coolify.consciencedeclasse.com`, app `class-consciousness` joignable en HTTPS sur `consciencedeclasse.com` + `api.consciencedeclasse.com`.
+> **Effet** : VPS durci, Coolify installé et bindé sur `coolify.consciencedeclasse.com`, app `class-consciousness` joignable en HTTPS sur `consciencedeclasse.com` + `api.cdc.consciencedeclasse.com`.
 > **Décision** : ADR-0006.
 
 ## Pré-requis utilisateur
@@ -138,11 +138,11 @@ timedatectl set-ntp true
 |---|---|---|
 | A | `coolify` | `51.68.129.187` |
 | A | `www` | `51.68.129.187` |
-| A | `api` | `51.68.129.187` |
-| A | `analytics` | `51.68.129.187` |
+| A | `api.cdc` | `51.68.129.187` |
+| A | `matomo` | `51.68.129.187` |
 | A | `*` | `51.68.129.187` |
 
-> Le sous-domaine canonique pour Matomo est `analytics.consciencedeclasse.com` (ADR-0007). L'ancien `matomo` peut être laissé en CNAME si déjà créé, mais c'est `analytics` qui est utilisé partout (compose, snippet Astro, runbook matomo-deploy).
+> Le sous-domaine canonique pour Matomo est `matomo.consciencedeclasse.com` (ADR-0007, ADR initial qui mentionnait `analytics` a été aligné sur `matomo` après que le DNS OVH a été figé sur ce nom).
 
 TTL initial 300, à passer à 3600 quand figé.
 
@@ -150,7 +150,7 @@ Vérifier la propagation :
 
 ```sh
 dig +short coolify.consciencedeclasse.com
-dig +short api.consciencedeclasse.com
+dig +short api.cdc.consciencedeclasse.com
 dig +short anything.consciencedeclasse.com   # vérifie le wildcard
 ```
 
@@ -245,7 +245,7 @@ VOYAGE_API_KEY    = ...
 
 Confirmer dans l'UI Coolify (les magic vars `SERVICE_FQDN_WEB_80` et `SERVICE_FQDN_API_8000` font le mapping ; l'UI demande de valider) :
 - `web` → `https://consciencedeclasse.com`
-- `api` → `https://api.consciencedeclasse.com`
+- `api` → `https://api.cdc.consciencedeclasse.com`
 - `postgres`, `qdrant`, `redis` : **pas** de FQDN (privés).
 
 ### 5.5 Premier déploiement
@@ -262,7 +262,7 @@ Depuis un poste local :
 
 ```sh
 curl -I https://consciencedeclasse.com           # 200
-curl https://api.consciencedeclasse.com/health   # {"status":"ok"}
+curl https://api.cdc.consciencedeclasse.com/health   # {"status":"ok"}
 nmap -p 5432,6333,6334,6379 51.68.129.187        # tous filtered/closed
 ```
 
@@ -307,7 +307,7 @@ Coolify gère multi-apps nativement.
 
 1. **1 Project Coolify par app** (`class-consciousness`, `matomo`, ...).
 2. **Pas de partage de DB** : Postgres class-consciousness ≠ MariaDB matomo.
-3. **Sous-domaines disjoints** : `consciencedeclasse.com` (cc), `analytics.consciencedeclasse.com` (matomo), `coolify.consciencedeclasse.com` (UI).
+3. **Sous-domaines disjoints** : `consciencedeclasse.com` (cc), `matomo.consciencedeclasse.com` (matomo), `coolify.consciencedeclasse.com` (UI).
 4. **Bucket S3 séparé par projet** : `cc-backups-prod`, `matomo-backups-prod`.
 5. **Surveillance pression RAM** dès le 2e projet : viser < 70 % de la RAM totale en cumul.
 
