@@ -29,6 +29,8 @@ dev = [
     "ruff>=0.6",
     "mypy>=1.11",
     "testcontainers[postgres,qdrant]>=4.8",
+    "pytest-watch>=4.2",
+    "watchfiles>=0.24",
 ]
 
 [build-system]

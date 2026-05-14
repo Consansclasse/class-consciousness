@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xmlns="http://www.tei-c.org/ns/1.0">
+  <teiHeader>
+    <fileDesc>
+      <titleStmt>
+        <title>Fixture invalide — pas de licence</title>
+        <author>Conscience de classe — équipe technique</author>
+      </titleStmt>
+      <publicationStmt>
+        <publisher>class-consciousness.org</publisher>
+        <date when="2026-01-01">2026-01-01</date>
+        <idno type="ARK">ark:/00000/test-bilan-invalid-license</idno>
+      </publicationStmt>
+      <sourceDesc>
+        <p>Document de test : il manque la licence explicite.</p>
+      </sourceDesc>
+    </fileDesc>
+  </teiHeader>
+  <text>
+    <body>
+      <p>Texte court de test qui ne devrait jamais être ingéré, faute de licence.</p>
+    </body>
+  </text>
+</TEI>

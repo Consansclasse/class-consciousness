@@ -14,10 +14,17 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "B", "UP", "S", "ASYNC", "RUF"]
-ignore = ["S101"]
+# S101 : assert toléré (tests).
+# ASYNC240 : pathlib dans async — non pertinent (on n'utilise pas anyio/trio.Path,
+# les I/O fichier sont locales et négligeables vs Voyage HTTP).
+ignore = ["S101", "ASYNC240"]
 
 [tool.ruff.lint.per-file-ignores]
 "**/tests/**" = ["S"]
+# Settings : bind 0.0.0.0 en docker, choix conscient
+"apps/api/src/cc_api/core/settings.py" = ["S104"]
+# Debug router : routes dev-only, subprocess docker/git/alembic + tail logs assumés
+"apps/api/src/cc_api/routers/debug.py" = ["S603", "S607", "ASYNC221", "B904"]
 
 [tool.mypy]
 python_version = "3.12"
@@ -29,5 +36,5 @@ no_implicit_reexport = true
 
 [tool.pytest.ini_options]
 testpaths = ["apps/api/tests", "packages/corpus-tools/tests"]
-addopts = "-ra --strict-markers --strict-config"
+addopts = "-ra --strict-markers --strict-config --import-mode=importlib"
 asyncio_mode = "auto"

@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xmlns="http://www.tei-c.org/ns/1.0">
+  <teiHeader>
+    <fileDesc>
+      <titleStmt>
+        <title>Fixture de test — pipeline ingestion</title>
+        <author>Conscience de classe — équipe technique</author>
+      </titleStmt>
+      <publicationStmt>
+        <publisher>class-consciousness.org</publisher>
+        <date when="2026-01-01">2026-01-01</date>
+        <idno type="ARK">ark:/00000/test-bilan-001</idno>
+        <availability status="free">
+          <licence target="https://creativecommons.org/publicdomain/zero/1.0/">CC0 1.0</licence>
+        </availability>
+      </publicationStmt>
+      <sourceDesc>
+        <p>Document de test synthétique, non destiné à publication. Sert exclusivement à valider le pipeline d'ingestion TEI P5 vers Postgres et Qdrant, dans le cadre du projet Conscience de classe.</p>
+      </sourceDesc>
+    </fileDesc>
+  </teiHeader>
+  <text>
+    <body>
+      <p>Premier paragraphe de la fixture de test. Il valide le parsing TEI P5 et la préservation des offsets caractères dans le pipeline d'ingestion vers Postgres et Qdrant. Ce paragraphe contient suffisamment de mots pour produire un embedding vectoriel non dégénéré via Voyage AI.</p>
+      <p>Deuxième paragraphe. Il contient une terminologie distincte du premier : matérialisme historique, lutte des classes, plus-value, mode de production. Le self-test post-ingest doit pouvoir retrouver ce paragraphe par recherche sémantique sur la collection Qdrant nommée bilan.</p>
+      <p>Troisième paragraphe. Sa fonction est de garantir qu'au moins trois chunks distincts seront produits par le chunker, et que le test d'idempotence peut comparer N versus 2N chunks après deux exécutions consécutives du même fichier source.</p>
+    </body>
+  </text>
+</TEI>
