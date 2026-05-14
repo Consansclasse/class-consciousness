@@ -22,6 +22,10 @@ class Settings(BaseSettings):
 
     redis_url: str = Field(default="redis://redis:6379/0", alias="REDIS_URL")
 
+    voyage_api_key: str | None = Field(default=None, alias="VOYAGE_API_KEY")
+    voyage_embed_model: str = Field(default="voyage-4", alias="VOYAGE_EMBED_MODEL")
+    voyage_rerank_model: str = Field(default="rerank-2.5", alias="VOYAGE_RERANK_MODEL")
+
     @property
     def postgres_dsn(self) -> str:
         return (

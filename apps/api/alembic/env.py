@@ -14,7 +14,9 @@ if config.config_file_name is not None:
 for key in ("POSTGRES_USER", "POSTGRES_PASSWORD", "POSTGRES_HOST", "POSTGRES_PORT", "POSTGRES_DB"):
     config.set_main_option(key, os.environ.get(key, ""))
 
-target_metadata = None  # cf. ADR-0004 ; sera renseigné quand cc_api.models sera créé
+from cc_api.models import Base  # noqa: E402
+
+target_metadata = Base.metadata
 
 
 def run_migrations_offline() -> None:
