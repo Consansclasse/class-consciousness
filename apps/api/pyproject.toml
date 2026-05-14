@@ -28,6 +28,7 @@ dev = [
     "vcrpy>=6.0",
     "ruff>=0.6",
     "mypy>=1.11",
+    "testcontainers[postgres,qdrant]>=4.8",
 ]
 
 [build-system]

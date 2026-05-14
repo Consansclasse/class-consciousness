@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "allow": [
+      "Bash(make *)",
+      "Bash(docker compose *)",
+      "Bash(docker ps*)",
+      "Bash(docker logs *)",
+      "Bash(pnpm *)",
+      "Bash(npx *)",
+      "Bash(uv *)",
+      "Bash(uvx *)",
+      "Bash(pytest *)",
+      "Bash(ruff *)",
+      "Bash(mypy *)",
+      "Bash(biome *)",
+      "Bash(curl *)",
+      "Bash(psql *)",
+      "Bash(redis-cli *)",
+      "Bash(jq *)",
+      "Bash(gh *)",
+      "Bash(git status*)",
+      "Bash(git diff*)",
+      "Bash(git log*)",
+      "Bash(git show*)",
+      "Bash(git branch --show-current)",
+      "Bash(git rev-parse*)"
+    ],
+    "deny": [
+      "Bash(git checkout -b*)",
+      "Bash(git switch -c*)",
+      "Bash(git branch *)",
+      "Bash(git push --force*)",
+      "Bash(git reset --hard*)",
+      "Bash(rm -rf /*)",
+      "Bash(gh pr create*)"
+    ]
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "make agent-status 2>&1 | head -60"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "f=$(jq -r '.tool_input.file_path // empty' 2>/dev/null); if [ -z \"$f\" ]; then exit 0; fi; case \"$f\" in *apps/api/*.py) cd /home/yamamoto/class-consciousness && uv run ruff check --quiet \"$f\" || true ;; *apps/web/*.ts|*apps/web/*.tsx|*apps/web/*.astro|*apps/web/*.mjs|*apps/web/*.js) cd /home/yamamoto/class-consciousness && pnpm exec biome check \"$f\" --no-errors-on-unmatched 2>/dev/null || true ;; esac"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cd /home/yamamoto/class-consciousness && timeout 10 make smoke 2>&1 | tail -10 || true"
+          }
+        ]
+      }
+    ]
+  }
+}

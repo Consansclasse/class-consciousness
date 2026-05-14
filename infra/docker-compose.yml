@@ -1,9 +1,16 @@
 name: class-consciousness-dev
 
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
 services:
   postgres:
     image: postgres:17-alpine
     restart: unless-stopped
+    logging: *default-logging
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-cc}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
@@ -21,6 +28,7 @@ services:
   qdrant:
     image: qdrant/qdrant:latest
     restart: unless-stopped
+    logging: *default-logging
     ports:
       - "6333:6333"
       - "6334:6334"
@@ -37,6 +45,7 @@ services:
   redis:
     image: redis:7-alpine
     restart: unless-stopped
+    logging: *default-logging
     command: ["redis-server", "--appendonly", "yes", "--save", "60", "1"]
     ports: ["6379:6379"]
     volumes:
@@ -53,6 +62,7 @@ services:
       dockerfile: infra/Dockerfile.api
       target: dev
     restart: unless-stopped
+    logging: *default-logging
     env_file:
       - path: ../.env
         required: false
@@ -71,6 +81,7 @@ services:
       dockerfile: infra/Dockerfile.web
       target: dev
     restart: unless-stopped
+    logging: *default-logging
     env_file:
       - path: ../.env
         required: false
@@ -83,6 +94,7 @@ services:
   caddy:
     image: caddy:2-alpine
     restart: unless-stopped
+    logging: *default-logging
     ports:
       - "80:80"
       - "443:443"

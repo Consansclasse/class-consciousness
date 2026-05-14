@@ -41,6 +41,52 @@ jobs:
       - run: pnpm test
       - run: pnpm build
 
+  e2e:
+    runs-on: ubuntu-latest
+    needs: [python, node]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+      - run: uv python install 3.12
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: uv sync --all-packages
+      - run: pnpm install
+      - name: Start dev stack
+        run: docker compose -f infra/docker-compose.yml up -d --wait
+      - name: Wait for API health
+        run: |
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:8000/health && exit 0
+            sleep 2
+          done
+          echo "API never became healthy"; exit 1
+      - name: Install Playwright browsers
+        working-directory: apps/web
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Run E2E suite
+        working-directory: apps/web
+        run: pnpm exec playwright test
+      - name: Upload Playwright artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            apps/web/playwright-report/
+            apps/web/test-results/
+          retention-days: 7
+      - name: Tail docker logs on failure
+        if: failure()
+        run: docker compose -f infra/docker-compose.yml logs --tail=200
+
   security:
     runs-on: ubuntu-latest
     permissions:
