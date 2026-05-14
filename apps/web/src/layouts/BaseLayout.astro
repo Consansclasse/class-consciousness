@@ -1,0 +1,68 @@
+---
+// SPDX-License-Identifier: AGPL-3.0-or-later
+import "../styles/global.css";
+
+interface Props {
+  title?: string;
+  description?: string;
+}
+
+const {
+  title = "Conscience de classe",
+  description = "Outil pour la révolution communiste. Corpus sourcé : archives du groupe Bilan (1933-1938).",
+} = Astro.props;
+
+const matomoUrl = import.meta.env.PUBLIC_MATOMO_URL;
+const matomoSiteId = import.meta.env.PUBLIC_MATOMO_SITE_ID;
+---
+
+<!doctype html>
+<html lang="fr" class="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content={description} />
+    <meta name="color-scheme" content="light dark" />
+    <title>{title}</title>
+
+    <script is:inline>
+      // Init thème : respecte localStorage, sinon préférence système.
+      (() => {
+        try {
+          const stored = localStorage.getItem("theme");
+          const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+          const dark = stored ? stored === "dark" : prefersDark;
+          document.documentElement.classList.toggle("dark", dark);
+        } catch (_e) {
+          /* localStorage indisponible : on garde le défaut */
+        }
+      })();
+    </script>
+
+    {matomoUrl && (
+      <script define:vars={{ matomoUrl, matomoSiteId }}>
+        var _paq = (window._paq = window._paq || []);
+        _paq.push(["disableCookies"]);
+        _paq.push(["setDoNotTrack", true]);
+        _paq.push(["anonymizeIp"]);
+        _paq.push(["enableHeartBeatTimer", 30]);
+        _paq.push(["trackPageView"]);
+        _paq.push(["enableLinkTracking"]);
+        (function () {
+          var u = matomoUrl + "/";
+          _paq.push(["setTrackerUrl", u + "matomo.php"]);
+          _paq.push(["setSiteId", matomoSiteId]);
+          var d = document;
+          var g = d.createElement("script");
+          var s = d.getElementsByTagName("script")[0];
+          g.async = true;
+          g.src = u + "matomo.js";
+          s.parentNode.insertBefore(g, s);
+        })();
+      </script>
+    )}
+  </head>
+  <body class="bg-white text-black dark:bg-black dark:text-white antialiased font-Scheherazade">
+    <slot />
+  </body>
+</html>

@@ -1,0 +1,157 @@
+---
+// SPDX-License-Identifier: AGPL-3.0-or-later
+import BaseLayout from "../layouts/BaseLayout.astro";
+import ThemeToggle from "../components/ThemeToggle.astro";
+---
+
+<BaseLayout title="Conscience de classe — Conversation">
+  <div class="flex h-dvh flex-col bg-white dark:bg-black">
+    <!-- Header minimal, séparé du contenu par une fine ligne noire -->
+    <header
+      class="flex shrink-0 items-center justify-between px-6 lg:px-10 py-5 border-b border-black dark:border-white"
+    >
+      <a
+        href="/"
+        class="font-Scheherazade text-xs sm:text-sm uppercase tracking-[0.25em] text-black dark:text-white hover:text-darkpink transition-colors"
+      >
+        ← Retour
+      </a>
+      <a
+        href="/"
+        class="font-Scheherazade text-sm uppercase tracking-[0.2em] text-black dark:text-white hover:text-darkpink transition-colors"
+      >
+        Conscience de classe
+      </a>
+      <ThemeToggle />
+    </header>
+
+    <!-- Zone scrollable : flex column qui occupe toute la hauteur disponible -->
+    <main
+      id="conv"
+      class="flex-1 overflow-y-auto flex flex-col"
+      aria-live="polite"
+    >
+      <div class="mx-auto flex w-full max-w-3xl flex-1 flex-col px-6 md:px-10">
+        <!-- Messages : séparés par fines lignes noires -->
+        <ol
+          id="messages"
+          class="flex-1 divide-y divide-black dark:divide-white py-8"
+        ></ol>
+      </div>
+    </main>
+
+    <!-- Input : encadré d'une fine ligne noire, collé en bas avec un peu d'air -->
+    <form
+      id="chat-form"
+      autocomplete="off"
+      class="shrink-0 bg-white dark:bg-black px-6 md:px-10 pb-5 pt-2"
+    >
+      <div
+        class="mx-auto flex w-full max-w-3xl items-end gap-3 border border-black dark:border-white px-4 py-3"
+      >
+        <textarea
+          id="chat-input"
+          name="q"
+          rows="1"
+          maxlength="4000"
+          aria-label="Votre question"
+          class="min-h-[28px] max-h-48 flex-1 resize-none border-none bg-transparent py-1 font-Scheherazade text-lg leading-relaxed text-black dark:text-white outline-none"
+        ></textarea>
+
+        <button
+          type="submit"
+          id="chat-submit"
+          aria-label="Envoyer"
+          disabled
+          class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-darkpink text-white transition-opacity hover:opacity-90 focus-visible:opacity-90 disabled:opacity-25 disabled:cursor-not-allowed"
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            class="h-4 w-4"
+          >
+            <path d="M12 19V5"></path>
+            <path d="m5 12 7-7 7 7"></path>
+          </svg>
+        </button>
+      </div>
+    </form>
+  </div>
+
+  <script>
+    const form = document.getElementById("chat-form") as HTMLFormElement;
+    const ta = document.getElementById("chat-input") as HTMLTextAreaElement;
+    const btn = document.getElementById("chat-submit") as HTMLButtonElement;
+    const list = document.getElementById("messages") as HTMLOListElement;
+    const conv = document.getElementById("conv") as HTMLElement;
+
+    const autosize = () => {
+      ta.style.height = "auto";
+      ta.style.height = Math.min(ta.scrollHeight, 192) + "px";
+    };
+
+    const escapeHtml = (s: string) =>
+      s
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+
+    const pushMessage = (q: string) => {
+      const li = document.createElement("li");
+      li.className = "space-y-4 py-8 first:pt-0 last:pb-0";
+      li.innerHTML = `
+        <p class="font-Scheherazade text-xl sm:text-2xl leading-snug text-black dark:text-white text-pretty">${escapeHtml(q)}</p>
+        <p class="font-Scheherazade italic text-base sm:text-lg leading-relaxed text-black dark:text-white text-pretty">
+          ( à faire — le pipeline RAG n'est pas encore connecté )
+        </p>
+      `;
+      list.appendChild(li);
+
+      requestAnimationFrame(() => {
+        conv.scrollTo({ top: conv.scrollHeight, behavior: "smooth" });
+      });
+    };
+
+    ta.addEventListener("input", () => {
+      autosize();
+      btn.disabled = ta.value.trim().length === 0;
+    });
+
+    ta.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        form.requestSubmit();
+      }
+    });
+
+    form.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const q = ta.value.trim();
+      if (!q) return;
+      pushMessage(q);
+      ta.value = "";
+      autosize();
+      btn.disabled = true;
+      ta.focus();
+    });
+
+    // Préremplissage depuis ?q=…
+    const params = new URLSearchParams(window.location.search);
+    const initialQ = params.get("q")?.trim();
+    if (initialQ) {
+      ta.value = initialQ;
+      autosize();
+      btn.disabled = false;
+      form.requestSubmit();
+    } else {
+      ta.focus();
+    }
+  </script>
+</BaseLayout>

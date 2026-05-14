@@ -1,0 +1,81 @@
+---
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Disclosure accessible, basé sur <details> natif.
+// Pattern dérivé de artedusa-frontend/src/components/FAQ.tsx mais sémantique HTML pur.
+
+interface Props {
+  question: string;
+  /** Numéro affiché en marge (ex. "01"). Optionnel. */
+  index?: string;
+  /** Ouvert par défaut ? */
+  open?: boolean;
+}
+const { question, index, open = false } = Astro.props;
+---
+
+<details
+  class="group border-b border-black dark:border-white transition-colors"
+  open={open}
+>
+  <summary
+    class="flex cursor-pointer list-none items-baseline justify-between gap-6 py-6 outline-none transition-colors hover:text-darkpink focus-visible:text-darkpink"
+  >
+    <div class="flex items-baseline gap-4 md:gap-6">
+      {index && (
+        <span
+          class="font-Scheherazade text-xs sm:text-sm uppercase tracking-[0.3em] tabular-nums select-none"
+        >
+          {index}
+        </span>
+      )}
+      <h3
+        class="font-Scheherazade text-base sm:text-lg md:text-xl lg:text-2xl leading-snug text-pretty text-left"
+      >
+        {question}
+      </h3>
+    </div>
+
+    <!-- Icône + / − (purement noir/blanc, devient rose au hover via currentColor) -->
+    <span
+      aria-hidden="true"
+      class="relative inline-flex h-5 w-5 shrink-0 items-center justify-center transition-transform duration-300 group-open:rotate-180"
+    >
+      <span
+        class="absolute h-px w-4 bg-current transition-opacity group-open:opacity-0"
+      ></span>
+      <span
+        class="absolute h-px w-4 bg-current rotate-90 transition-transform duration-300 group-open:rotate-0"
+      ></span>
+    </span>
+  </summary>
+
+  <div
+    class="overflow-hidden pb-8 pl-0 md:pl-14 pr-2 font-Scheherazade text-base sm:text-lg md:text-xl leading-relaxed text-pretty"
+  >
+    <slot />
+  </div>
+</details>
+
+<style>
+  details > summary::-webkit-details-marker {
+    display: none;
+  }
+  details[open] > div {
+    animation: disclosure-reveal 320ms ease-out;
+  }
+  @keyframes disclosure-reveal {
+    from {
+      opacity: 0;
+      transform: translateY(-4px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    details[open] > div {
+      animation: none;
+    }
+  }
+</style>

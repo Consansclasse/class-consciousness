@@ -1,43 +1,193 @@
 ---
 // SPDX-License-Identifier: AGPL-3.0-or-later
-const title = "class-consciousness";
-const matomoUrl = import.meta.env.PUBLIC_MATOMO_URL;
-const matomoSiteId = import.meta.env.PUBLIC_MATOMO_SITE_ID;
+import BaseLayout from "../layouts/BaseLayout.astro";
+import AIButton from "../components/AIButton.astro";
+import ThemeToggle from "../components/ThemeToggle.astro";
+import ProjectExplain from "../components/ProjectExplain.astro";
+import ManifestoQuote from "../components/ManifestoQuote.astro";
+import SiteFooter from "../components/SiteFooter.astro";
+
+// Structure et copy adaptés de artedusa-frontend/src/components/home/PrivateAdvisorHeroSection.tsx
+const t = {
+  title: "Outil pour la révolution communiste.",
+  highlight: "Chaque réponse est une citation littérale du corpus.",
+  cta: "POSEZ VOTRE QUESTION",
+  // Corpus : strictement les archives du groupe Bilan (1933-1938).
+  // Exemples ancrés dans ce qui est réellement indexé.
+  examples: [
+    "Bilan sur la nature de l'URSS",
+    "La gauche communiste italienne face à la guerre d'Espagne",
+    "Bilan et la critique du fascisme",
+    "La défaite du prolétariat selon la Fraction italienne",
+  ],
+  pitch:
+    "Le corpus se limite aux archives du groupe Bilan — la revue théorique de la Fraction de gauche du Parti communiste d'Italie (1933-1938). Rien de plus. La suite n'a pas encore été décidée.",
+  noHallucination: "AUCUNE HALLUCINATION",
+  everySentenceSourced: "CHAQUE PHRASE SOURCÉE",
+};
 ---
 
-<!DOCTYPE html>
-<html lang="fr">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>{title}</title>
-    {matomoUrl && (
-      <script define:vars={{ matomoUrl, matomoSiteId }}>
-        var _paq = window._paq = window._paq || [];
-        _paq.push(['disableCookies']);
-        _paq.push(['setDoNotTrack', true]);
-        _paq.push(['anonymizeIp']);
-        _paq.push(['enableHeartBeatTimer', 30]);
-        _paq.push(['trackPageView']);
-        _paq.push(['enableLinkTracking']);
-        (function () {
-          var u = matomoUrl + '/';
-          _paq.push(['setTrackerUrl', u + 'matomo.php']);
-          _paq.push(['setSiteId', matomoSiteId]);
-          var d = document;
-          var g = d.createElement('script');
-          var s = d.getElementsByTagName('script')[0];
-          g.async = true;
-          g.src = u + 'matomo.js';
-          s.parentNode.insertBefore(g, s);
-        })();
-      </script>
-    )}
-  </head>
-  <body>
-    <main>
-      <h1>{title}</h1>
-      <p>Archive open-source de la théorie marxiste — phase 0, fondations.</p>
-    </main>
-  </body>
-</html>
+<BaseLayout title="Conscience de classe — Archive sourcée">
+  <main class="relative bg-white dark:bg-black">
+    <!-- Top bar : logotype + theme toggle (sticky pour rester visible au scroll) -->
+    <header
+      class="sticky top-0 z-30 flex items-center justify-between px-6 py-5 lg:px-10 bg-white/95 dark:bg-black/95 backdrop-blur"
+    >
+      <a
+        href="/"
+        class="font-Scheherazade text-sm uppercase tracking-[0.2em] text-black dark:text-white transition-colors hover:text-darkpink"
+      >
+        Conscience de classe
+      </a>
+      <div class="flex items-center gap-6">
+        <a
+          href="#projet"
+          class="hidden sm:inline font-Scheherazade text-xs uppercase tracking-[0.25em] text-black dark:text-white hover:text-darkpink transition-colors"
+        >
+          Le projet
+        </a>
+        <ThemeToggle />
+      </div>
+    </header>
+
+    <!-- HERO : titre + AIButton + exemples + pitch + promesse -->
+    <section
+      class="relative w-full bg-white dark:bg-black flex flex-col justify-center items-center px-6 md:px-12 lg:px-16 pt-8 md:pt-12 lg:pt-16 pb-16 min-h-[calc(100dvh-72px)]"
+    >
+      <div
+        class="w-full max-w-4xl md:max-w-5xl lg:max-w-6xl xl:max-w-7xl flex flex-col items-center text-center gap-16 sm:gap-10 md:gap-12"
+      >
+        <!-- Bloc 1 : titre + highlight italique -->
+        <div class="flex flex-col items-center gap-4 sm:gap-4 md:gap-5">
+          <h1
+            class="font-Scheherazade font-normal text-xl sm:text-2xl md:text-3xl lg:text-4xl xl:text-5xl 2xl:text-6xl leading-[1.1] tracking-tight text-black dark:text-white text-pretty"
+          >
+            {t.title}
+          </h1>
+          <p
+            class="font-Scheherazade italic text-base sm:text-lg md:text-xl xl:text-2xl text-black dark:text-white max-w-3xl md:max-w-4xl lg:max-w-5xl text-pretty leading-snug"
+          >
+            {t.highlight}
+          </p>
+        </div>
+
+        <!-- Bloc 2 : AIButton + exemples -->
+        <div class="w-full flex flex-col items-center gap-7 sm:gap-9 md:gap-11">
+          <div
+            class="scale-100 sm:scale-105 md:scale-110 lg:scale-[1.15] origin-center"
+          >
+            <AIButton placeholder={t.cta} id="hero-cta" />
+          </div>
+
+          <ul
+            class="w-full max-w-5xl flex flex-col sm:flex-row sm:flex-wrap items-center justify-center gap-y-3 sm:gap-y-2"
+          >
+            {
+              t.examples.map((label, i) => (
+                <li class="inline-flex items-center">
+                  <button
+                    type="button"
+                    data-example={label}
+                    class="font-Scheherazade italic text-base sm:text-base md:text-lg lg:text-xl xl:text-2xl text-black dark:text-white hover:text-darkpink focus-visible:text-darkpink active:text-darkpink underline-offset-4 hover:underline focus-visible:underline focus-visible:outline-none transition-colors text-center"
+                  >
+                    {label}
+                  </button>
+                  {i < t.examples.length - 1 && (
+                    <span
+                      aria-hidden="true"
+                      class="hidden sm:inline mx-2 sm:mx-2.5 md:mx-3 text-black dark:text-white text-base sm:text-base md:text-lg lg:text-xl xl:text-2xl"
+                    >
+                      ·
+                    </span>
+                  )}
+                </li>
+              ))
+            }
+          </ul>
+        </div>
+
+        <!-- Bloc 3 : pitch + promesse -->
+        <div
+          class="flex flex-col items-center text-center gap-5 sm:gap-4 md:gap-5"
+        >
+          <p
+            class="font-Scheherazade text-sm sm:text-base md:text-lg lg:text-xl xl:text-2xl leading-relaxed text-black dark:text-white max-w-2xl md:max-w-4xl lg:max-w-5xl xl:max-w-6xl 2xl:max-w-7xl text-pretty"
+          >
+            {t.pitch}
+          </p>
+          <div
+            class="flex flex-col sm:flex-row sm:items-center sm:justify-center font-Scheherazade uppercase tracking-[0.2em] sm:tracking-[0.3em] text-sm sm:text-base md:text-lg xl:text-xl text-black dark:text-white gap-y-2 sm:gap-y-0 text-center"
+          >
+            <span>{t.noHallucination}</span>
+            <span
+              aria-hidden="true"
+              class="hidden sm:inline mx-3 sm:mx-4 md:mx-5 text-black dark:text-white"
+            >
+              ·
+            </span>
+            <span>{t.everySentenceSourced}</span>
+          </div>
+        </div>
+
+        <!-- Indication de scroll -->
+        <a
+          href="#projet"
+          aria-label="Explorer le projet"
+          class="mt-4 inline-flex flex-col items-center gap-2 font-Scheherazade text-xs uppercase tracking-[0.3em] text-black dark:text-white hover:text-darkpink transition-colors"
+        >
+          <span>Explorer</span>
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.5"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            class="h-5 w-5 animate-bounce"
+            style="animation-duration: 2s;"
+          >
+            <path d="M12 5v14M19 12l-7 7-7-7"></path>
+          </svg>
+        </a>
+      </div>
+    </section>
+
+    <!-- Bande séparatrice : barre rose minimaliste -->
+    <div
+      aria-hidden="true"
+      class="mx-auto h-px w-24 bg-darkpink"
+    ></div>
+
+    <!-- SECTION ACCORDÉON : explications du projet -->
+    <ProjectExplain />
+
+    <!-- Bande séparatrice -->
+    <div
+      aria-hidden="true"
+      class="mx-auto h-px w-24 bg-darkpink"
+    ></div>
+
+    <!-- MANIFESTE : citation centrale -->
+    <ManifestoQuote />
+
+    <!-- FOOTER complet -->
+    <SiteFooter />
+  </main>
+
+  <script>
+    const open = (q?: string) => {
+      const trimmed = (q ?? "").trim().slice(0, 4000);
+      const url = trimmed ? `/chat?q=${encodeURIComponent(trimmed)}` : "/chat";
+      window.location.href = url;
+    };
+
+    document.getElementById("hero-cta")?.addEventListener("click", () => open());
+
+    document
+      .querySelectorAll<HTMLButtonElement>("button[data-example]")
+      .forEach((b) => {
+        b.addEventListener("click", () => open(b.dataset.example));
+      });
+  </script>
+</BaseLayout>

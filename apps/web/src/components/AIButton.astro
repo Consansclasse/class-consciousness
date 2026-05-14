@@ -1,0 +1,49 @@
+---
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copié de artedusa-frontend/src/components/ai-search/AIButton.tsx — fidèle.
+
+interface Props {
+  placeholder: string;
+  id?: string;
+}
+const { placeholder, id = "ai-button" } = Astro.props;
+---
+
+<button
+  id={id}
+  type="button"
+  style="-webkit-tap-highlight-color: transparent;"
+  class="group ai-btn-glow rounded-full border px-4 py-2.5 transition-all duration-300 hover:scale-105 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 focus-visible:ring-offset-2"
+  aria-label={placeholder}
+>
+  <div class="flex items-center justify-center gap-2.5">
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      fill="none"
+      class="text-white transition-transform group-hover:rotate-180 duration-500"
+    >
+      <path
+        d="M12 2L14.09 8.26L20 10.5L14.09 12.74L12 19L9.91 12.74L4 10.5L9.91 8.26L12 2Z"
+        fill="currentColor"
+      ></path>
+      <path
+        class="ai-star-a"
+        d="M19 15L19.94 17.06L22 18L19.94 18.94L19 21L18.06 18.94L16 18L18.06 17.06L19 15Z"
+        fill="currentColor"
+      ></path>
+      <path
+        class="ai-star-b"
+        d="M5 5L5.94 7.06L8 8L5.94 8.94L5 11L4.06 8.94L2 8L4.06 7.06L5 5Z"
+        fill="currentColor"
+      ></path>
+    </svg>
+    <span
+      class="text-sm lg:text-[15px] xl:text-base font-Scheherazade text-white tracking-wide whitespace-nowrap drop-shadow-[0_1px_2px_rgba(0,0,0,0.25)]"
+    >
+      {placeholder}
+    </span>
+  </div>
+</button>

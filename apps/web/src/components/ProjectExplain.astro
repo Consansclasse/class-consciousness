@@ -1,0 +1,140 @@
+---
+// SPDX-License-Identifier: AGPL-3.0-or-later
+import Disclosure from "./Disclosure.astro";
+
+const sectionTitle = "Le projet, ouvertement.";
+const sectionSubtitle =
+  "Sept questions, sept réponses claires. Cliquez sur chacune pour la déplier.";
+---
+
+<section
+  id="projet"
+  class="relative bg-white dark:bg-black px-6 md:px-12 lg:px-16 py-24 md:py-32"
+>
+  <div class="mx-auto w-full max-w-4xl">
+    <!-- En-tête section -->
+    <header class="mb-12 md:mb-16 text-center">
+      <h2
+        class="font-Scheherazade text-3xl sm:text-4xl md:text-5xl xl:text-6xl leading-[1.1] tracking-tight text-black dark:text-white"
+      >
+        {sectionTitle}
+      </h2>
+      <p
+        class="mt-4 font-Scheherazade italic text-base sm:text-lg md:text-xl text-black dark:text-white"
+      >
+        {sectionSubtitle}
+      </p>
+    </header>
+
+    <!-- Accordéon -->
+    <div class="border-t border-black dark:border-white">
+      <Disclosure index="01" question="Pourquoi ce projet existe-t-il ?">
+        <p>
+          Les modèles de langue génériques inventent des citations, fabriquent
+          des références, attribuent à des auteurs des phrases qu'ils n'ont
+          jamais écrites. Sur un terrain politique aussi exigeant — où la
+          moindre formule peut être instrumentalisée — c'est un défaut
+          rédhibitoire.
+        </p>
+        <p class="mt-4">
+          <span class="text-darkpink">Conscience de classe</span> est un outil
+          pour la révolution communiste&nbsp;: une archive critique qui ne
+          génère jamais une source, ne résume jamais sans pointer le passage
+          exact, et refuse de répondre quand le corpus ne le permet pas.
+        </p>
+      </Disclosure>
+
+      <Disclosure index="02" question="Comment garantissez-vous chaque citation ?">
+        <p>
+          Le pipeline prévu est en quatre étapes&nbsp;: embedding de la
+          question, recherche vectorielle dans le corpus (Qdrant + Voyage AI),
+          reranking sémantique, puis génération encadrée par Claude Opus.
+        </p>
+        <p class="mt-4">
+          Avant tout affichage, un vérificateur découpe la réponse en phrases.
+          Chacune doit pointer un passage du corpus dont le texte cité est
+          littéralement présent (correspondance ≥ 95%). Toute phrase qui échoue
+          à ce test est rejetée. Si le corpus ne contient pas la réponse, le
+          système répond «&nbsp;je ne sais pas&nbsp;» — jamais une
+          approximation.
+        </p>
+      </Disclosure>
+
+      <Disclosure index="03" question="Quel est le corpus ?">
+        <p>
+          Le corpus est strictement, et pour le moment exclusivement, les
+          <span class="text-darkpink">archives du groupe Bilan</span>&nbsp;:
+          les textes de la revue théorique de la Fraction de gauche du Parti
+          communiste d'Italie (1933-1938) et de ses prolongements.
+        </p>
+        <p class="mt-4">
+          Bilan&nbsp;: 46 numéros publiés à Bruxelles puis Paris, un travail
+          théorique exigeant sur la nature de l'URSS, la défaite du prolétariat,
+          le fascisme, la guerre d'Espagne. Une littérature politique de
+          premier plan, longtemps difficile d'accès, et qui mérite une
+          indexation citationnelle propre.
+        </p>
+        <p class="mt-4">
+          <em>La suite n'a pas encore été décidée.</em>
+        </p>
+      </Disclosure>
+
+      <Disclosure index="04" question="Pourquoi est-ce open source ?">
+        <p>
+          Le code est sous licence <em>AGPL-3.0</em>, le corpus dérivé sous
+          <em>CC-BY-SA-4.0</em>. Toute modification publique du code ou du
+          corpus doit elle aussi être ouverte.
+        </p>
+        <p class="mt-4">
+          Le pipeline est conçu pour être reproductible. Les embeddings, les
+          chunks, les identifiants persistants, les checksums — versionnés et
+          archivables. Vous pouvez forker la base, refaire les calculs,
+          contester un résultat.
+        </p>
+      </Disclosure>
+
+      <Disclosure index="05" question="À qui s'adresse Conscience de classe ?">
+        <p class="italic">( à faire )</p>
+      </Disclosure>
+
+      <Disclosure index="06" question="Qu'est-ce qui est absolument interdit à ce projet ?">
+        <p>
+          <em>Aucune hallucination.</em> Si le système ne trouve pas, il le dit.
+          Pas de phrase «&nbsp;plausible&nbsp;» fabriquée pour combler.
+        </p>
+        <p class="mt-4">
+          <em>Aucune paraphrase non sourcée.</em> Pas de «&nbsp;Marx dit en
+          substance que…&nbsp;» — soit on cite, soit on se tait.
+        </p>
+        <p class="mt-4">
+          <em>Aucun fallback opaque.</em> Le modèle de génération, le modèle
+          d'embedding, la base vectorielle&nbsp;: tout est nommé, tracé,
+          remplaçable. Pas de dépendance silencieuse à un service tiers fermé
+          pour les fonctions critiques.
+        </p>
+      </Disclosure>
+
+      <Disclosure index="07" question="Comment contribuer ? Comment critiquer ?">
+        <p>
+          Ce travail est un <span class="text-darkpink">projet ouvert</span>.
+          Toutes les critiques sont les bienvenues — sur le choix du corpus,
+          sur la méthode citationnelle, sur le code, sur les positions
+          théoriques retenues. La rigueur exige la contradiction&nbsp;: une
+          archive critique qui refuserait la critique se nierait elle-même.
+        </p>
+        <p class="mt-4">
+          N'hésitez pas à prendre contact, à proposer une correction, à signaler
+          une faille de raisonnement ou de transcription.
+        </p>
+        <p class="mt-4">
+          Écrire&nbsp;:
+          <a
+            href="mailto:contact@consciencedeclasse.com"
+            class="text-darkpink underline-offset-4 hover:underline focus-visible:underline transition-colors"
+            >contact@consciencedeclasse.com</a
+          >
+        </p>
+      </Disclosure>
+    </div>
+  </div>
+</section>
