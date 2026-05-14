@@ -18,11 +18,17 @@ jobs:
         with:
           enable-cache: true
       - run: uv python install 3.12
-      - run: uv sync --all-packages
+      - run: uv sync --all-packages --all-extras
+      - name: Assert VOYAGE_API_KEY present on push to main
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: test -n "${{ secrets.VOYAGE_API_KEY }}" || (echo "VOYAGE_API_KEY missing on main" && exit 1)
       - run: uv run ruff check .
       - run: uv run ruff format --check .
       - run: uv run mypy apps/api/src packages/corpus-tools/src
-      - run: uv run pytest --cov=apps/api/src --cov=packages/corpus-tools/src
+      - name: Run pytest with coverage
+        env:
+          VOYAGE_API_KEY: ${{ secrets.VOYAGE_API_KEY }}
+        run: uv run pytest --cov=apps/api/src --cov=packages/corpus-tools/src --cov-fail-under=70
 
   node:
     runs-on: ubuntu-latest
@@ -60,6 +66,8 @@ jobs:
       - run: uv sync --all-packages
       - run: pnpm install
       - name: Start dev stack
+        env:
+          VOYAGE_API_KEY: ${{ secrets.VOYAGE_API_KEY }}
         run: docker compose -f infra/docker-compose.yml up -d --wait
       - name: Wait for API health
         run: |
@@ -68,11 +76,15 @@ jobs:
             sleep 2
           done
           echo "API never became healthy"; exit 1
+      - name: Apply Alembic migrations inside API container
+        run: docker compose -f infra/docker-compose.yml exec -T api uv run alembic -c apps/api/alembic.ini upgrade head
       - name: Install Playwright browsers
         working-directory: apps/web
         run: pnpm exec playwright install --with-deps chromium
       - name: Run E2E suite
         working-directory: apps/web
+        env:
+          PUBLIC_API_BASE_URL: http://localhost:8000
         run: pnpm exec playwright test
       - name: Upload Playwright artifacts
         if: failure()

@@ -4,6 +4,7 @@
 Règle d'or : aucune phrase produite par le pipeline ne doit exister sans citation
 littéralement vérifiable dans le corpus source. Voir `.claude/rules/no-unsourced-rag.md`.
 """
+
 from __future__ import annotations
 
 from typing import Any

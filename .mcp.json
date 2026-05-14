@@ -13,10 +13,7 @@
     },
     "postgres": {
       "command": "uvx",
-      "args": [
-        "postgres-mcp",
-        "--access-mode=unrestricted"
-      ],
+      "args": ["postgres-mcp", "--access-mode=unrestricted"],
       "env": {
         "DATABASE_URI": "postgresql://cc:changeme@localhost:5432/class_consciousness"
       }

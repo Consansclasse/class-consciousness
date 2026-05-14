@@ -1,0 +1,129 @@
+---
+import ThemeToggle from "../components/ThemeToggle.astro";
+// SPDX-License-Identifier: AGPL-3.0-or-later
+import BaseLayout from "../layouts/BaseLayout.astro";
+
+type CorpusEntry = {
+  title: string;
+  author: string;
+  insertedAt: string; // ISO date
+};
+
+const apiBase = import.meta.env.PUBLIC_API_BASE_URL ?? "http://localhost:8000";
+let entries: CorpusEntry[] = [];
+try {
+  const res = await fetch(`${apiBase}/corpus?size=200`);
+  if (res.ok) {
+    const body = (await res.json()) as { items?: CorpusEntry[] };
+    entries = body.items ?? [];
+  }
+} catch {
+  // API indisponible : on retombe sur l'état vide explicite (cf. règle "vérité avant ergonomie").
+  entries = [];
+}
+---
+
+<BaseLayout title="Conscience de classe — Corpus">
+  <div class="flex min-h-dvh flex-col bg-white dark:bg-black">
+    <!-- Header -->
+    <header
+      class="flex shrink-0 items-center justify-between px-6 lg:px-10 py-5 border-b border-black dark:border-white"
+    >
+      <a
+        href="/"
+        class="font-Scheherazade text-xs sm:text-sm uppercase tracking-[0.25em] text-black dark:text-white hover:text-darkpink transition-colors"
+      >
+        ← Retour
+      </a>
+      <a
+        href="/"
+        class="font-Scheherazade text-sm uppercase tracking-[0.2em] text-black dark:text-white hover:text-darkpink transition-colors"
+      >
+        Conscience de classe
+      </a>
+      <ThemeToggle />
+    </header>
+
+    <!-- Contenu -->
+    <main class="flex-1 px-6 md:px-12 lg:px-16 py-16 md:py-24">
+      <div class="mx-auto w-full max-w-4xl">
+        <!-- Titre + compteur -->
+        <div
+          class="mb-12 md:mb-16 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between"
+        >
+          <div>
+            <h1
+              class="font-Scheherazade text-4xl sm:text-5xl md:text-6xl leading-none text-black dark:text-white"
+            >
+              Le corpus
+            </h1>
+            <p
+              class="mt-3 font-Scheherazade italic text-base sm:text-lg text-black dark:text-white"
+            >
+              Liste exhaustive des textes indexés.
+            </p>
+          </div>
+          <p
+            class="font-Scheherazade text-xs sm:text-sm uppercase tracking-[0.25em] text-black dark:text-white"
+          >
+            {entries.length} texte{entries.length === 1 ? "" : "s"} indexé{entries.length === 1 ? "" : "s"}
+          </p>
+        </div>
+
+        {
+          entries.length === 0 ? (
+            <!-- État vide -->
+            <div
+              class="border-y border-black dark:border-white py-24 text-center"
+            >
+              <p
+                class="font-Scheherazade italic text-lg sm:text-xl text-black dark:text-white"
+              >
+                ( à faire )
+              </p>
+              <p
+                class="mt-6 font-Scheherazade text-sm sm:text-base text-black dark:text-white max-w-xl mx-auto leading-relaxed"
+              >
+                Aucun texte n'a encore été indexé.
+              </p>
+              <p
+                class="mt-2 font-Scheherazade text-sm sm:text-base text-black dark:text-white max-w-xl mx-auto leading-relaxed"
+              >
+                Cette page sera populée à mesure que les numéros de Bilan
+                seront ajoutés au corpus.
+              </p>
+            </div>
+          ) : (
+            <!-- Liste -->
+            <ol
+              class="divide-y divide-black dark:divide-white border-y border-black dark:border-white"
+            >
+              {entries.map((e) => (
+                <li class="grid grid-cols-1 sm:grid-cols-12 gap-2 sm:gap-6 py-5 sm:py-6">
+                  <p class="sm:col-span-6 font-Scheherazade text-base sm:text-lg text-black dark:text-white text-pretty">
+                    {e.title}
+                  </p>
+                  <p class="sm:col-span-4 font-Scheherazade italic text-sm sm:text-base text-black dark:text-white">
+                    {e.author}
+                  </p>
+                  <p class="sm:col-span-2 font-Scheherazade text-xs sm:text-sm uppercase tracking-[0.15em] text-black dark:text-white sm:text-right tabular-nums">
+                    {e.insertedAt}
+                  </p>
+                </li>
+              ))}
+            </ol>
+          )
+        }
+
+        <!-- Note méthode -->
+        <p
+          class="mt-12 font-Scheherazade italic text-xs sm:text-sm text-black dark:text-white max-w-2xl"
+        >
+          La liste reflète l'état réel de l'indexation. Aucune entrée
+          n'apparaît tant que le texte n'a pas été ingéré, vectorisé et
+          vérifié. Pas de promesse, pas de placeholder caché.
+        </p>
+      </div>
+    </main>
+  </div>
+</BaseLayout>

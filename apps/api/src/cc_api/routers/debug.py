@@ -3,47 +3,53 @@
 
 Activé uniquement si `CC_API_ENV=dev`. Garde-fou strict sur les routes destructives.
 """
+
 from __future__ import annotations
 
-import os
 import subprocess
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import text
 
 from cc_api.clients.db import get_session_maker
 from cc_api.clients.qdrant import get_qdrant
 from cc_api.clients.redis import get_redis
 from cc_api.core.logging import get_logger
+from cc_api.core.security import require_dev
 from cc_api.core.settings import settings
 
-router = APIRouter(prefix="/__debug", tags=["debug"], include_in_schema=False)
+router = APIRouter(
+    prefix="/__debug",
+    tags=["debug"],
+    include_in_schema=False,
+    dependencies=[Depends(require_dev)],
+)
 log = get_logger(__name__)
-
-
-def _ensure_dev() -> None:
-    if not settings.is_dev:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"__debug routes disabled (CC_API_ENV={settings.env})",
-        )
 
 
 def _git_sha() -> str:
     try:
-        return subprocess.check_output(
-            ["git", "rev-parse", "--short", "HEAD"], cwd="/app", stderr=subprocess.DEVNULL
-        ).decode().strip()
+        return (
+            subprocess.check_output(
+                ["git", "rev-parse", "--short", "HEAD"], cwd="/app", stderr=subprocess.DEVNULL
+            )
+            .decode()
+            .strip()
+        )
     except Exception:
         return "unknown"
 
 
 def _alembic_head() -> str:
     try:
-        result = subprocess.check_output(
-            ["alembic", "current"], cwd="/app/apps/api", stderr=subprocess.DEVNULL
-        ).decode().strip()
+        result = (
+            subprocess.check_output(
+                ["alembic", "current"], cwd="/app/apps/api", stderr=subprocess.DEVNULL
+            )
+            .decode()
+            .strip()
+        )
         return result or "(none)"
     except Exception:
         return "unknown"
@@ -52,10 +58,8 @@ def _alembic_head() -> str:
 @router.get("/state")
 async def state() -> dict[str, Any]:
     """Vue panoptique de l'état de l'app."""
-    _ensure_dev()
-
     # Postgres : counts par table
-    tables: dict[str, int] = {}
+    tables: dict[str, int | str] = {}
     try:
         async with get_session_maker()() as session:
             rows = await session.execute(
@@ -66,7 +70,7 @@ async def state() -> dict[str, Any]:
             )
             table_names = [r[0] for r in rows]
             for t in table_names:
-                count = await session.execute(text(f'SELECT count(*) FROM {t}'))
+                count = await session.execute(text(f"SELECT count(*) FROM {t}"))  # noqa: S608
                 tables[t] = int(count.scalar() or 0)
     except Exception as exc:
         tables = {"_error": str(exc)}
@@ -122,12 +126,18 @@ async def logs(
     n: int = Query(200, ge=1, le=2000),
 ) -> dict[str, Any]:
     """Tail des logs JSON d'un service via docker compose."""
-    _ensure_dev()
     try:
         out = subprocess.check_output(
             [
-                "docker", "compose", "-f", "/app/infra/docker-compose.yml",
-                "logs", "--tail", str(n), "--no-color", service,
+                "docker",
+                "compose",
+                "-f",
+                "/app/infra/docker-compose.yml",
+                "logs",
+                "--tail",
+                str(n),
+                "--no-color",
+                service,
             ],
             stderr=subprocess.STDOUT,
             timeout=10,
@@ -136,26 +146,47 @@ async def logs(
     except subprocess.CalledProcessError as exc:
         raise HTTPException(status_code=500, detail=exc.output.decode(errors="replace"))
     except FileNotFoundError:
-        # docker CLI absent dans le conteneur — fallback : lire stdout du process courant n'est pas trivial
+        # docker CLI absent dans le conteneur — fallback non-trivial
         raise HTTPException(status_code=501, detail="docker CLI not available inside API container")
 
 
 @router.post("/seed")
 async def seed() -> dict[str, Any]:
-    """Seeds reproductibles (fixtures académiques minimales)."""
-    _ensure_dev()
-    # TODO chantier ultérieur : appeler cc_corpus.ingest sur corpus/_seed/
-    log.info("debug.seed.called")
-    return {"status": "noop", "reason": "seed pipeline not implemented yet (phase 0)"}
+    """Seeds reproductibles : ingère la fixture canonique TEI.
+
+    Skip silencieux si VOYAGE_API_KEY absente (dev local sans clé).
+    """
+    from pathlib import Path
+
+    if not settings.voyage_api_key:
+        log.info("debug.seed.skipped", reason="VOYAGE_API_KEY absent")
+        return {"status": "skipped", "reason": "VOYAGE_API_KEY non configuré"}
+
+    candidates = [
+        Path("/app/corpus/_seed/bilan-001.tei.xml"),
+        Path(__file__).resolve().parents[4] / "corpus" / "_seed" / "bilan-001.tei.xml",
+    ]
+    fixture = next((p for p in candidates if p.exists()), None)
+    if fixture is None:
+        log.warning("debug.seed.fixture_missing", candidates=[str(p) for p in candidates])
+        return {"status": "skipped", "reason": "fixture TEI introuvable"}
+
+    from cc_api.services.ingest import ingest_tei
+
+    ref = await ingest_tei(fixture)
+    log.info("debug.seed.done", work_id=ref.work_id, n_chunks=ref.n_chunks)
+    return {
+        "status": "ok",
+        "work_id": ref.work_id,
+        "ark": ref.ark,
+        "n_chunks": ref.n_chunks,
+        "was_duplicate": ref.was_duplicate,
+    }
 
 
 @router.post("/reset")
 async def reset() -> dict[str, Any]:
     """Drop+recreate DB schemas + collections Qdrant + flush Redis. Dev only."""
-    _ensure_dev()
-    if os.getenv("CC_API_ENV", "dev") != "dev":
-        raise HTTPException(status_code=403, detail="reset refused outside dev")
-
     results: dict[str, Any] = {}
 
     # Postgres : drop all + recreate public schema

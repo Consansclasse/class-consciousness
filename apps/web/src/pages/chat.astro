@@ -1,7 +1,7 @@
 ---
+import ThemeToggle from "../components/ThemeToggle.astro";
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import BaseLayout from "../layouts/BaseLayout.astro";
-import ThemeToggle from "../components/ThemeToggle.astro";
 ---
 
 <BaseLayout title="Conscience de classe — Conversation">
@@ -22,7 +22,15 @@ import ThemeToggle from "../components/ThemeToggle.astro";
       >
         Conscience de classe
       </a>
-      <ThemeToggle />
+      <div class="flex items-center gap-6">
+        <a
+          href="/corpus"
+          class="hidden sm:inline font-Scheherazade text-xs uppercase tracking-[0.25em] text-black dark:text-white hover:text-darkpink transition-colors"
+        >
+          Le corpus
+        </a>
+        <ThemeToggle />
+      </div>
     </header>
 
     <!-- Zone scrollable : flex column qui occupe toute la hauteur disponible -->

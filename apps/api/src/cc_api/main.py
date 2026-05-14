@@ -3,7 +3,7 @@ from fastapi import FastAPI
 
 from cc_api.core.logging import configure_logging
 from cc_api.core.settings import settings
-from cc_api.routers import debug
+from cc_api.routers import corpus, debug
 
 configure_logging()
 
@@ -15,5 +15,8 @@ async def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
+app.include_router(corpus.router)
+
 if settings.is_dev:
     app.include_router(debug.router)
+    app.include_router(corpus.admin_router)

@@ -77,29 +77,39 @@ textarea {
    Copié de artedusa-frontend/src/app/globals.css
    ============================================================ */
 @keyframes ai-glow {
-  0%, 100% {
+  0%,
+  100% {
     box-shadow: 0 0 8px rgba(226, 126, 204, 0.3);
     border-color: rgba(226, 126, 204, 0.45);
     background-color: rgba(226, 126, 204, 0.5);
   }
   50% {
-    box-shadow:
-      0 0 16px rgba(210, 115, 218, 0.5),
-      0 0 32px rgba(226, 126, 204, 0.1);
+    box-shadow: 0 0 16px rgba(210, 115, 218, 0.5), 0 0 32px rgba(226, 126, 204, 0.1);
     border-color: rgba(210, 115, 218, 0.6);
     background-color: rgba(215, 118, 216, 0.55);
   }
 }
 
 @keyframes ai-shimmer {
-  0%   { transform: translateX(-100%); }
-  30%  { transform: translateX(100%); }
-  100% { transform: translateX(100%); }
+  0% {
+    transform: translateX(-100%);
+  }
+  30% {
+    transform: translateX(100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
 }
 
 @keyframes ai-twinkle {
-  0%, 100% { opacity: 1; }
-  50%      { opacity: 0.25; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.25;
+  }
 }
 
 .ai-btn-glow {
@@ -124,12 +134,7 @@ textarea {
   content: "";
   position: absolute;
   inset: 0;
-  background: linear-gradient(
-    105deg,
-    transparent 30%,
-    rgba(255, 255, 255, 0.15) 50%,
-    transparent 70%
-  );
+  background: linear-gradient(105deg, transparent 30%, rgba(255, 255, 255, 0.15) 50%, transparent 70%);
   animation: ai-shimmer 5s ease-in-out infinite;
   pointer-events: none;
   transform: translateZ(0);
@@ -148,15 +153,9 @@ textarea {
 .ai-btn-glow:hover {
   animation: none;
   background-color: rgba(226, 126, 204, 0.6);
-  box-shadow:
-    0 0 20px rgba(226, 126, 204, 0.55),
-    0 0 40px rgba(226, 126, 204, 0.15);
+  box-shadow: 0 0 20px rgba(226, 126, 204, 0.55), 0 0 40px rgba(226, 126, 204, 0.15);
   border-color: rgba(226, 126, 204, 0.7);
-  transition:
-    transform 300ms,
-    box-shadow 0s,
-    background-color 0s,
-    border-color 0s;
+  transition: transform 300ms, box-shadow 0s, background-color 0s, border-color 0s;
 }
 
 .ai-btn-glow:hover::before {

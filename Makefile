@@ -1,4 +1,4 @@
-.PHONY: help install dev test test-e2e smoke lint typecheck build migrate seed reset clean \
+.PHONY: help install dev test test-e2e smoke lint typecheck build migrate seed ingest reset clean \
         logs logs-api logs-web logs-db logs-qdrant logs-redis \
         agent-status agent-bootstrap api-check web-check \
         db-snapshot db-restore
@@ -90,10 +90,14 @@ migrate:
 
 seed:
 	@if [ ! -d corpus/_seed ]; then \
-		echo "Pas de corpus de seed (phase 0). Skip."; \
+		echo "Pas de corpus de seed. Skip."; \
 	else \
 		uv run cc-corpus ingest corpus/_seed/*.tei.xml; \
 	fi
+
+ingest:
+	@test -n "$(FILES)" || (echo "Usage: make ingest FILES='corpus/_seed/*.tei.xml'"; exit 1)
+	uv run cc-corpus ingest $(FILES)
 
 reset:
 	@curl -sf -X POST http://localhost:8000/__debug/reset || \

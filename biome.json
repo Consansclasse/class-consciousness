@@ -12,5 +12,16 @@
       "style": { "useImportType": "warn" }
     }
   },
+  "overrides": [
+    {
+      "include": ["apps/web/tests/e2e/fixtures/**"],
+      "linter": {
+        "rules": {
+          "suspicious": { "noConfusingVoidType": "off" },
+          "correctness": { "noEmptyPattern": "off" }
+        }
+      }
+    }
+  ],
   "javascript": { "formatter": { "quoteStyle": "double", "semicolons": "always" } }
 }

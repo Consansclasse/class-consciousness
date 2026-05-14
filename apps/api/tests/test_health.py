@@ -1,7 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-from fastapi.testclient import TestClient
-
 from cc_api.main import app
+from fastapi.testclient import TestClient
 
 
 def test_health() -> None:

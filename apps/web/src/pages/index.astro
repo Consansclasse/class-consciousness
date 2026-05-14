@@ -1,11 +1,11 @@
 ---
+import AIButton from "../components/AIButton.astro";
+import ManifestoQuote from "../components/ManifestoQuote.astro";
+import ProjectExplain from "../components/ProjectExplain.astro";
+import SiteFooter from "../components/SiteFooter.astro";
+import ThemeToggle from "../components/ThemeToggle.astro";
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import BaseLayout from "../layouts/BaseLayout.astro";
-import AIButton from "../components/AIButton.astro";
-import ThemeToggle from "../components/ThemeToggle.astro";
-import ProjectExplain from "../components/ProjectExplain.astro";
-import ManifestoQuote from "../components/ManifestoQuote.astro";
-import SiteFooter from "../components/SiteFooter.astro";
 
 // Structure et copy adaptés de artedusa-frontend/src/components/home/PrivateAdvisorHeroSection.tsx
 const t = {
@@ -45,6 +45,12 @@ const t = {
           class="hidden sm:inline font-Scheherazade text-xs uppercase tracking-[0.25em] text-black dark:text-white hover:text-darkpink transition-colors"
         >
           Le projet
+        </a>
+        <a
+          href="/corpus"
+          class="hidden sm:inline font-Scheherazade text-xs uppercase tracking-[0.25em] text-black dark:text-white hover:text-darkpink transition-colors"
+        >
+          Le corpus
         </a>
         <ThemeToggle />
       </div>
