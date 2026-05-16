@@ -1,0 +1,358 @@
+---
+// SPDX-License-Identifier: AGPL-3.0-or-later
+import BaseLayout from "../../layouts/BaseLayout.astro";
+import ThemeToggle from "../../components/ThemeToggle.astro";
+
+export function getStaticPaths() {
+  return [
+    {
+      params: { tier: "individuel" },
+      props: {
+        tierEnum: "INDIVIDUAL",
+        label: "Membre individuel",
+        montantAffiche: "9 €",
+        montantCents: 900,
+        cible: "Lectrices et lecteurs réguliers, étudiantes, militantes, chercheuses.",
+        contreparties: [
+          "Droit de vote à l'assemblée générale annuelle.",
+          "Participation aux décisions éditoriales.",
+          "100 questions par jour, export PDF citationnel, API personnelle.",
+        ],
+        accepteSolidaire: true,
+        accepteOverride: false,
+      },
+    },
+    {
+      params: { tier: "structure" },
+      props: {
+        tierEnum: "STRUCTURE",
+        label: "Membre structure",
+        montantAffiche: "99 €",
+        montantCents: 9900,
+        cible: "Universités, syndicats, médias, librairies, collectifs, fondations, bibliothèques.",
+        contreparties: [
+          "1000 questions par jour mutualisées, clé API d'équipe.",
+          "Voix collective en assemblée générale.",
+          "Priorité sur les demandes d'indexation de nouveaux corpus.",
+        ],
+        accepteSolidaire: false,
+        accepteOverride: false,
+      },
+    },
+    {
+      params: { tier: "mecenat" },
+      props: {
+        tierEnum: "MECENE",
+        label: "Mécénat",
+        montantAffiche: "à partir de 500 €",
+        montantCents: 50000,
+        cible: "Personnes morales ou physiques soutenant la pérennité de l'archive.",
+        contreparties: [
+          "Reconnaissance publique opt-in (nom ou anonymat).",
+          "Rapport annuel détaillé d'utilisation des fonds.",
+          "Reçu fiscal art. 200 / 238 bis CGI sous condition de rescrit obtenu.",
+        ],
+        accepteSolidaire: false,
+        accepteOverride: true,
+      },
+    },
+  ];
+}
+
+const {
+  tierEnum,
+  label,
+  montantAffiche,
+  montantCents,
+  cible,
+  contreparties,
+  accepteSolidaire,
+  accepteOverride,
+} = Astro.props;
+
+const apiBase = import.meta.env.PUBLIC_API_BASE_URL ?? "http://localhost:8000";
+---
+
+<BaseLayout title={`Adhérer — ${label}`}>
+  <div class="flex min-h-dvh flex-col bg-white dark:bg-black">
+    <header
+      class="flex shrink-0 items-center justify-between px-6 lg:px-10 py-5 border-b border-black dark:border-white"
+    >
+      <a
+        href="/adherer"
+        class="font-Scheherazade text-xs sm:text-sm uppercase tracking-[0.25em] text-black dark:text-white hover:text-darkpink transition-colors"
+      >
+        ← Paliers
+      </a>
+      <a
+        href="/"
+        class="font-Scheherazade text-sm uppercase tracking-[0.2em] text-black dark:text-white hover:text-darkpink transition-colors"
+      >
+        Conscience de classe
+      </a>
+      <ThemeToggle />
+    </header>
+
+    <main class="flex-1 px-6 md:px-12 lg:px-16 py-12 md:py-20">
+      <div class="mx-auto w-full max-w-2xl">
+        <div class="mb-10">
+          <p
+            class="font-Scheherazade text-xs sm:text-sm uppercase tracking-[0.25em] text-darkpink"
+          >
+            Adhésion — {montantAffiche} par an
+          </p>
+          <h1
+            class="mt-3 font-Scheherazade text-4xl sm:text-5xl leading-none text-black dark:text-white"
+          >
+            {label}
+          </h1>
+          <p
+            class="mt-4 font-Scheherazade italic text-sm sm:text-base text-black dark:text-white max-w-xl"
+          >
+            {cible}
+          </p>
+        </div>
+
+        <ul
+          class="mb-10 border-y border-black dark:border-white py-6 font-Scheherazade text-sm sm:text-base text-black dark:text-white space-y-2.5 leading-relaxed"
+        >
+          {
+            contreparties.map((c) => (
+              <li class="flex gap-2">
+                <span aria-hidden="true" class="text-darkpink shrink-0">·</span>
+                <span>{c}</span>
+              </li>
+            ))
+          }
+        </ul>
+
+        <form id="adhesion-form" class="space-y-6" novalidate>
+          <input type="hidden" name="tier" value={tierEnum} />
+
+          <div>
+            <label
+              for="email"
+              class="block font-Scheherazade text-sm uppercase tracking-[0.2em] text-black dark:text-white mb-2"
+            >
+              Email *
+            </label>
+            <input
+              id="email"
+              name="email"
+              type="email"
+              required
+              autocomplete="email"
+              class="block w-full border border-black dark:border-white bg-transparent px-4 py-3 font-Scheherazade text-base text-black dark:text-white focus:outline-none focus:border-darkpink"
+            />
+          </div>
+
+          <div>
+            <label
+              for="display_name"
+              class="block font-Scheherazade text-sm uppercase tracking-[0.2em] text-black dark:text-white mb-2"
+            >
+              Nom affiché (facultatif)
+            </label>
+            <input
+              id="display_name"
+              name="display_name"
+              type="text"
+              autocomplete="name"
+              maxlength="255"
+              class="block w-full border border-black dark:border-white bg-transparent px-4 py-3 font-Scheherazade text-base text-black dark:text-white focus:outline-none focus:border-darkpink"
+            />
+          </div>
+
+          {
+            accepteOverride && (
+              <div>
+                <label
+                  for="amount_override"
+                  class="block font-Scheherazade text-sm uppercase tracking-[0.2em] text-black dark:text-white mb-2"
+                >
+                  Montant en euros (minimum 500)
+                </label>
+                <input
+                  id="amount_override"
+                  name="amount_override"
+                  type="number"
+                  min="500"
+                  step="1"
+                  value="500"
+                  class="block w-full border border-black dark:border-white bg-transparent px-4 py-3 font-Scheherazade text-base text-black dark:text-white focus:outline-none focus:border-darkpink"
+                />
+              </div>
+            )
+          }
+
+          {
+            accepteSolidaire && (
+              <label
+                for="solidaire"
+                class="flex items-start gap-3 cursor-pointer"
+              >
+                <input
+                  id="solidaire"
+                  name="solidaire"
+                  type="checkbox"
+                  class="mt-1 shrink-0 accent-darkpink"
+                />
+                <span class="font-Scheherazade text-sm sm:text-base text-black dark:text-white leading-relaxed">
+                  Tarif solidaire — 0 € sur déclaration (étudiantes, sans-emploi,
+                  militantes sans budget). Aucun justificatif demandé, sur
+                  l'honneur.
+                </span>
+              </label>
+            )
+          }
+
+          <label for="consent_data" class="flex items-start gap-3 cursor-pointer">
+            <input
+              id="consent_data"
+              name="consent_data"
+              type="checkbox"
+              required
+              class="mt-1 shrink-0 accent-darkpink"
+            />
+            <span
+              class="font-Scheherazade text-sm text-black dark:text-white leading-relaxed"
+            >
+              J'ai lu la
+              <a
+                href="/legal/privacy"
+                target="_blank"
+                rel="noopener"
+                class="underline decoration-1 underline-offset-4 hover:text-darkpink"
+                >politique de confidentialité</a
+              >
+              et j'accepte que mon email et mon nom soient conservés par
+              l'association pour la durée de mon adhésion + 3 ans. *
+            </span>
+          </label>
+
+          <label
+            for="consent_newsletter"
+            class="flex items-start gap-3 cursor-pointer"
+          >
+            <input
+              id="consent_newsletter"
+              name="consent_newsletter"
+              type="checkbox"
+              class="mt-1 shrink-0 accent-darkpink"
+            />
+            <span
+              class="font-Scheherazade text-sm text-black dark:text-white leading-relaxed"
+            >
+              Je veux recevoir la lettre annuelle de l'association (facultatif,
+              révocable à tout moment).
+            </span>
+          </label>
+
+          <div
+            id="error-banner"
+            role="alert"
+            class="hidden border border-darkpink bg-darkpink/10 px-4 py-3 font-Scheherazade text-sm text-darkpink"
+          >
+          </div>
+
+          <button
+            id="submit-btn"
+            type="submit"
+            class="w-full border border-black dark:border-white bg-black text-white dark:bg-white dark:text-black font-Scheherazade text-base uppercase tracking-[0.2em] px-6 py-4 hover:bg-darkpink hover:border-darkpink hover:text-white dark:hover:text-white transition-colors disabled:opacity-50 disabled:cursor-wait"
+          >
+            Payer par carte → Stripe
+          </button>
+
+          <p
+            class="font-Scheherazade italic text-xs text-black dark:text-white max-w-xl leading-relaxed"
+          >
+            Vous serez redirigé sur la page sécurisée de Stripe. Aucune donnée
+            bancaire ne transite par les serveurs de l'association. À la fin du
+            paiement, retour automatique sur cette archive.
+          </p>
+        </form>
+      </div>
+    </main>
+  </div>
+</BaseLayout>
+
+<script define:vars={{ apiBase }}>
+  const form = document.getElementById("adhesion-form");
+  const btn = document.getElementById("submit-btn");
+  const banner = document.getElementById("error-banner");
+
+  function showError(message) {
+    banner.textContent = message;
+    banner.classList.remove("hidden");
+  }
+
+  function hideError() {
+    banner.textContent = "";
+    banner.classList.add("hidden");
+  }
+
+  form?.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    hideError();
+
+    if (!form.consent_data?.checked) {
+      showError(
+        "Le consentement à la conservation de vos données est obligatoire pour adhérer.",
+      );
+      return;
+    }
+
+    const payload = {
+      email: form.email.value.trim(),
+      display_name: form.display_name.value.trim() || null,
+      tier: form.tier.value,
+      solidaire: form.solidaire?.checked ?? false,
+      consent_data: true,
+      consent_newsletter: form.consent_newsletter?.checked ?? false,
+    };
+
+    if (form.amount_override) {
+      const v = parseInt(form.amount_override.value, 10);
+      if (Number.isFinite(v) && v >= 500) {
+        payload.amount_eur_cents_override = v * 100;
+      }
+    }
+
+    btn.disabled = true;
+    btn.textContent = "Préparation du paiement…";
+
+    try {
+      const res = await fetch(`${apiBase}/adhesions/checkout`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        const detail =
+          typeof body.detail === "string"
+            ? body.detail
+            : "Erreur côté serveur — réessayez dans un instant.";
+        showError(detail);
+        btn.disabled = false;
+        btn.textContent = "Payer par carte → Stripe";
+        return;
+      }
+
+      const data = await res.json();
+      // Cas tarif solidaire 0 € : pas de redirection Stripe.
+      if (data.redirect_url?.includes("solidaire=1")) {
+        window.location.assign(`/adherer/merci?intent=${data.intent_id}&solidaire=1`);
+        return;
+      }
+      window.location.assign(data.redirect_url);
+    } catch (err) {
+      showError(
+        "Réseau injoignable. Vérifiez votre connexion et réessayez.",
+      );
+      btn.disabled = false;
+      btn.textContent = "Payer par carte → Stripe";
+    }
+  });
+</script>

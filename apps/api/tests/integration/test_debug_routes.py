@@ -36,13 +36,3 @@ def test_debug_reset_refused_outside_dev(client: Any, monkeypatch: Any) -> None:
     monkeypatch.setattr(settings_module.settings, "env", "staging")
     response = client.post("/__debug/reset")
     assert response.status_code == 403
-
-
-def test_debug_seed_skipped_without_voyage_key(client: Any, monkeypatch: Any) -> None:
-    """POST /__debug/seed skip si VOYAGE_API_KEY absent (dev local sans clé)."""
-    from cc_api.core import settings as settings_module
-
-    monkeypatch.setattr(settings_module.settings, "voyage_api_key", None)
-    response = client.post("/__debug/seed")
-    assert response.status_code == 200
-    assert response.json()["status"] == "skipped"

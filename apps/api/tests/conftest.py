@@ -1,9 +1,9 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Fixtures pytest partagées — testcontainers Postgres+Qdrant éphémères.
 
-Pas de mocks pour la DB ou Qdrant. Voyage AI est testé via httpx.MockTransport
-(transport, pas mock métier), avec des embeddings déterministes par hash du
-texte (unicité garantie pour le self-test).
+Pas de mocks pour la DB ou Qdrant. Le serveur cc-embed est simulé via
+httpx.MockTransport (transport, pas mock métier), avec des embeddings
+déterministes par hash du texte (unicité garantie pour le self-test).
 """
 
 from __future__ import annotations
@@ -19,9 +19,16 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
-import httpx
-import pytest
-import pytest_asyncio
+# Daemon Docker chargé : passer le timeout par défaut de 60s à 600s avant que
+# testcontainers crée son client. Évite les ReadTimeout sur container.start()
+# quand de nombreux conteneurs tournent déjà sur l'hôte.
+import docker.constants
+
+docker.constants.DEFAULT_TIMEOUT_SECONDS = 600
+
+import httpx  # noqa: E402
+import pytest  # noqa: E402
+import pytest_asyncio  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 API_DIR = REPO_ROOT / "apps" / "api"
@@ -36,8 +43,10 @@ def postgres_url() -> Iterator[str]:
     testcontainers 4.x (ExecWaitStrategy `psql --host 127.0.0.1`) ne fonctionne
     pas quand le host a déjà un Postgres système sur 5432. Le log-based wait
     scanne stdout du container et est insensible aux conflits de ports host.
-    Postgres émet « database system is ready » 2 fois ; on attend la 2e
-    occurrence (`times=2`) pour s'assurer que l'init est terminé.
+    Postgres émet « database system is ready » 2 fois (init + post-init) mais
+    sur un hôte chargé l'initdb peut dépasser 120s (default). On élève le
+    `startup_timeout` à 240s et on attend la 2e occurrence pour ne pas se
+    connecter pendant l'init avant que la DB soit servie.
     """
     try:
         from testcontainers.core.wait_strategies import LogMessageWaitStrategy
@@ -49,7 +58,10 @@ def postgres_url() -> Iterator[str]:
         "postgres:17-alpine", username="cc", password="cc", dbname="cc_test"
     )
     container.waiting_for(
-        LogMessageWaitStrategy("database system is ready to accept connections", times=2)
+        LogMessageWaitStrategy(
+            "database system is ready to accept connections",
+            times=2,
+        ).with_startup_timeout(240)
     )
     container.start()
     try:
@@ -102,7 +114,10 @@ async def clean_db(migrated_db: str) -> AsyncIterator[None]:
     engine = create_async_engine(migrated_db, echo=False)
     try:
         async with engine.begin() as conn:
-            await conn.exec_driver_sql("TRUNCATE chunks, works, authors RESTART IDENTITY CASCADE")
+            await conn.exec_driver_sql(
+                "TRUNCATE chunks, articles, issues, authors, auth_tokens, memberships, users "
+                "RESTART IDENTITY CASCADE"
+            )
     finally:
         await engine.dispose()
     yield
@@ -122,12 +137,28 @@ async def db_session(migrated_db: str) -> AsyncIterator[Any]:
 
 @pytest_asyncio.fixture
 async def qdrant_client(qdrant_url: str) -> AsyncIterator[Any]:
-    """AsyncQdrantClient function-scope avec warmup + close propre."""
+    """AsyncQdrantClient function-scope avec warmup retry + close propre.
+
+    Timeout HTTP 60s + retry warmup pour absorber les démarrages lents du
+    container Qdrant sous charge (Actix prêt mais collections endpoint pas
+    encore stable).
+    """
+    import asyncio
+
     from qdrant_client import AsyncQdrantClient
 
-    client = AsyncQdrantClient(url=qdrant_url, timeout=30, prefer_grpc=False)
-    # Warmup : vérifie connectivité avant de yield (force la première connexion HTTP)
-    await client.get_collections()
+    client = AsyncQdrantClient(url=qdrant_url, timeout=60, prefer_grpc=False)
+    last_exc: Exception | None = None
+    for _ in range(20):  # ~10s max
+        try:
+            await client.get_collections()
+            last_exc = None
+            break
+        except Exception as exc:
+            last_exc = exc
+            await asyncio.sleep(0.5)
+    if last_exc is not None:
+        raise last_exc
     try:
         yield client
     finally:
@@ -136,10 +167,23 @@ async def qdrant_client(qdrant_url: str) -> AsyncIterator[Any]:
 
 @pytest_asyncio.fixture
 async def clean_qdrant(qdrant_client: Any) -> AsyncIterator[None]:
-    """Drop la collection `bilan` avant chaque test pour isolation."""
+    """Drop la collection `bilan` avant chaque test pour isolation.
+
+    Qdrant peut renvoyer la collection comme « absente » par get_collections()
+    juste après un delete et pourtant refuser la prochaine create_collection
+    avec « already exists » sous charge concurrente. On confirme la suppression
+    par polling court avant de yield.
+    """
+    import asyncio
+
     cols = await qdrant_client.get_collections()
     if "bilan" in {c.name for c in cols.collections}:
         await qdrant_client.delete_collection("bilan")
+        for _ in range(40):  # ~2s max
+            cols = await qdrant_client.get_collections()
+            if "bilan" not in {c.name for c in cols.collections}:
+                break
+            await asyncio.sleep(0.05)
     yield
 
 
@@ -154,28 +198,32 @@ def _deterministic_embedding(text: str, dim: int = 1024) -> list[float]:
 
 
 @pytest_asyncio.fixture
-async def mock_voyage_client() -> AsyncIterator[Any]:
-    """VoyageClient avec httpx.MockTransport qui produit des embeddings déterministes."""
-    from cc_api.clients.voyage import VoyageClient
+async def mock_embed_client() -> AsyncIterator[Any]:
+    """LocalEmbedClient branché sur un httpx.MockTransport — embeddings déterministes.
+
+    Reproduit le contrat HTTP du serveur cc-embed sans GPU : `POST /embed`
+    renvoie des vecteurs normalisés L2 dérivés du hash du texte (un texte ↔ un
+    vecteur stable), en dimension `settings.embed_dim`.
+    """
+    from cc_api.clients.embed import LocalEmbedClient
+    from cc_api.core.settings import settings
 
     def handler(request: httpx.Request) -> httpx.Response:
         body = json.loads(request.content)
         return httpx.Response(
             200,
             json={
-                "data": [
-                    {"embedding": _deterministic_embedding(t), "index": i}
-                    for i, t in enumerate(body["input"])
+                "embeddings": [
+                    _deterministic_embedding(t, settings.embed_dim) for t in body["texts"]
                 ],
-                "model": body["model"],
-                "usage": {"total_tokens": sum(len(t) for t in body["input"])},
+                "dim": settings.embed_dim,
+                "model": settings.embed_model,
             },
         )
 
     transport = httpx.MockTransport(handler)
     async with httpx.AsyncClient(transport=transport) as http_client:
-        vc = VoyageClient(api_key="sk-mock", client=http_client, backoff_base=0)
-        yield vc
+        yield LocalEmbedClient("http://embed-mock", client=http_client)
 
 
 @pytest.fixture

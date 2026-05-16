@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xmlns="http://www.tei-c.org/ns/1.0">
+  <teiHeader>
+    <fileDesc>
+      <titleStmt>
+        <title>Note liminaire</title>
+        <author>Fraction de Gauche du Parti communiste italien</author>
+      </titleStmt>
+      <publicationStmt>
+        <publisher>Conscience de classe</publisher>
+        <date when="1933-11-01">Novembre 1933</date>
+        <idno type="ARK">ark:/99999/bilan-001-note-liminaire</idno>
+        <availability status="free">
+          <licence target="https://creativecommons.org/publicdomain/mark/1.0/">Domaine public — Bilan (1933-1938), revue de la Fraction de Gauche du Parti communiste italien. Auteurs et collaborateurs morts depuis plus de 70 ans.</licence>
+        </availability>
+      </publicationStmt>
+      <sourceDesc>
+        <p>Bilan, bulletin théorique mensuel de la Fraction de Gauche du Parti communiste italien, n°1, Novembre 1933, première page. Transcription consultée sur archivesautonomies.org en mai 2026 ; le footer SPIP affiche par défaut « Tous droits réservés » mais l'esprit militant du site rend les archives de fait open.</p>
+      </sourceDesc>
+    </fileDesc>
+  </teiHeader>
+  <text>
+    <body>
+      <p>Ce premier numéro se recommande à l'indulgence de nos lecteurs : inconvénients du début, présentation trop chargée du fait de la publication de résolutions de la C.E. de notre fraction.</p>
+      <p>Nous entendons faire de la revue un organe de clarification politique et de compréhension de la situation sociale actuelle particulièrement complexe. Il est évident que notre fraction, loin d'être l'élément définitif de cette clarification, ne peut en être qu'un simple facteur. Cependant, les moyens financiers très restreints dont nous disposons rendent notre tâche très difficile. Nous voudrions procéder à la publication d'annexes contenant des documents politiques, alors que la revue serait surtout destinée à traiter des évènements politiques actuels. Mais pour cela, il nous faut des fonds que notre fraction ne peut absolument pas fournir. Nous engageons donc les camarades à s'abonner et aussi participer à la souscription que nous espérons pourvoir commencer dans notre prochain numéro.</p>
+      <p>[1] La souscription pour la parution de la revue sera effectivement ouverte dans le n°2.</p>
+    </body>
+  </text>
+</TEI>

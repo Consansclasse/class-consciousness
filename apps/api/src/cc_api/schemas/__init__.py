@@ -3,22 +3,41 @@
 
 from __future__ import annotations
 
+from cc_api.schemas.adhesion import (
+    TIER_DEFAULT_AMOUNTS_CENTS,
+    TIER_LABELS,
+    AdhesionCheckoutIn,
+    AdhesionCheckoutOut,
+    AdhesionIntentStatusOut,
+)
 from cc_api.schemas.corpus import (
+    ArticleDetail,
+    ArticleSummary,
     AuthorOut,
-    ChunkOut,
     CorpusPage,
     IngestRequest,
     IngestResult,
-    WorkOut,
-    WorkSummary,
+    IssueDetail,
+    IssueSummary,
 )
+from cc_api.schemas.qa import Citation, QaRequest, QaResponse, Sentence
 
 __all__ = [
+    "TIER_DEFAULT_AMOUNTS_CENTS",
+    "TIER_LABELS",
+    "AdhesionCheckoutIn",
+    "AdhesionCheckoutOut",
+    "AdhesionIntentStatusOut",
+    "ArticleDetail",
+    "ArticleSummary",
     "AuthorOut",
-    "ChunkOut",
+    "Citation",
     "CorpusPage",
     "IngestRequest",
     "IngestResult",
-    "WorkOut",
-    "WorkSummary",
+    "IssueDetail",
+    "IssueSummary",
+    "QaRequest",
+    "QaResponse",
+    "Sentence",
 ]

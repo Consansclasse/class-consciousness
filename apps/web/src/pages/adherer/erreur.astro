@@ -1,0 +1,55 @@
+---
+// SPDX-License-Identifier: AGPL-3.0-or-later
+import BaseLayout from "../../layouts/BaseLayout.astro";
+import ThemeToggle from "../../components/ThemeToggle.astro";
+---
+
+<BaseLayout title="Paiement annulé — Conscience de classe">
+  <div class="flex min-h-dvh flex-col bg-white dark:bg-black">
+    <header
+      class="flex shrink-0 items-center justify-between px-6 lg:px-10 py-5 border-b border-black dark:border-white"
+    >
+      <a
+        href="/adherer"
+        class="font-Scheherazade text-xs sm:text-sm uppercase tracking-[0.25em] text-black dark:text-white hover:text-darkpink transition-colors"
+      >
+        ← Paliers
+      </a>
+      <a
+        href="/"
+        class="font-Scheherazade text-sm uppercase tracking-[0.2em] text-black dark:text-white hover:text-darkpink transition-colors"
+      >
+        Conscience de classe
+      </a>
+      <ThemeToggle />
+    </header>
+
+    <main class="flex-1 px-6 md:px-12 lg:px-16 py-16 md:py-24">
+      <div class="mx-auto w-full max-w-2xl">
+        <p
+          class="font-Scheherazade text-xs uppercase tracking-[0.25em] text-darkpink"
+        >
+          Paiement annulé
+        </p>
+        <h1
+          class="mt-3 font-Scheherazade text-4xl sm:text-5xl leading-none text-black dark:text-white"
+        >
+          Aucun montant n'a été prélevé.
+        </h1>
+        <p
+          class="mt-6 font-Scheherazade text-base sm:text-lg text-black dark:text-white leading-relaxed max-w-xl"
+        >
+          Vous avez interrompu le paiement avant la fin. Vos données n'ont
+          pas été enregistrées comme une adhésion active — vous pouvez
+          reprendre quand vous voulez.
+        </p>
+        <a
+          href="/adherer"
+          class="mt-8 inline-block font-Scheherazade text-base uppercase tracking-[0.2em] underline decoration-1 underline-offset-4 text-black dark:text-white hover:text-darkpink"
+        >
+          Revenir aux paliers d'adhésion →
+        </a>
+      </div>
+    </main>
+  </div>
+</BaseLayout>

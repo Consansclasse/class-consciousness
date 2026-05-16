@@ -3,29 +3,52 @@ import ThemeToggle from "../components/ThemeToggle.astro";
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import BaseLayout from "../layouts/BaseLayout.astro";
 
-type CorpusEntry = {
+type ArticleSummary = {
+  slug: string;
   title: string;
   author: string;
-  insertedAt: string; // ISO date
+  idxInIssue: number;
+};
+
+type IssueSummary = {
+  slug: string;
+  journalTitle: string;
+  issueNumber: number | null;
+  title: string;
+  publishedDate: string | null;
+  insertedAt: string;
+  nArticles: number;
 };
 
 const apiBase = import.meta.env.PUBLIC_API_BASE_URL ?? "http://localhost:8000";
-let entries: CorpusEntry[] = [];
+
+let issues: (IssueSummary & { articles: ArticleSummary[] })[] = [];
 try {
   const res = await fetch(`${apiBase}/corpus?size=200`);
   if (res.ok) {
-    const body = (await res.json()) as { items?: CorpusEntry[] };
-    entries = body.items ?? [];
+    const body = (await res.json()) as { items?: IssueSummary[] };
+    const summaries = body.items ?? [];
+    // Pour chaque issue, fetch les articles (N+1 acceptable jusqu'à ~50 numéros).
+    issues = await Promise.all(
+      summaries.map(async (issue) => {
+        try {
+          const detailRes = await fetch(`${apiBase}/corpus/${issue.slug}`);
+          if (!detailRes.ok) return { ...issue, articles: [] };
+          const detail = (await detailRes.json()) as { articles?: ArticleSummary[] };
+          return { ...issue, articles: detail.articles ?? [] };
+        } catch {
+          return { ...issue, articles: [] };
+        }
+      }),
+    );
   }
 } catch {
-  // API indisponible : on retombe sur l'état vide explicite (cf. règle "vérité avant ergonomie").
-  entries = [];
+  issues = [];
 }
 ---
 
 <BaseLayout title="Conscience de classe — Corpus">
   <div class="flex min-h-dvh flex-col bg-white dark:bg-black">
-    <!-- Header -->
     <header
       class="flex shrink-0 items-center justify-between px-6 lg:px-10 py-5 border-b border-black dark:border-white"
     >
@@ -44,10 +67,8 @@ try {
       <ThemeToggle />
     </header>
 
-    <!-- Contenu -->
     <main class="flex-1 px-6 md:px-12 lg:px-16 py-16 md:py-24">
       <div class="mx-auto w-full max-w-4xl">
-        <!-- Titre + compteur -->
         <div
           class="mb-12 md:mb-16 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between"
         >
@@ -60,19 +81,18 @@ try {
             <p
               class="mt-3 font-Scheherazade italic text-base sm:text-lg text-black dark:text-white"
             >
-              Liste exhaustive des textes indexés.
+              Liste exhaustive des numéros indexés.
             </p>
           </div>
           <p
             class="font-Scheherazade text-xs sm:text-sm uppercase tracking-[0.25em] text-black dark:text-white"
           >
-            {entries.length} texte{entries.length === 1 ? "" : "s"} indexé{entries.length === 1 ? "" : "s"}
+            {issues.length} numéro{issues.length === 1 ? "" : "s"} indexé{issues.length === 1 ? "" : "s"}
           </p>
         </div>
 
         {
-          entries.length === 0 ? (
-            <!-- État vide -->
+          issues.length === 0 ? (
             <div
               class="border-y border-black dark:border-white py-24 text-center"
             >
@@ -84,44 +104,57 @@ try {
               <p
                 class="mt-6 font-Scheherazade text-sm sm:text-base text-black dark:text-white max-w-xl mx-auto leading-relaxed"
               >
-                Aucun texte n'a encore été indexé.
-              </p>
-              <p
-                class="mt-2 font-Scheherazade text-sm sm:text-base text-black dark:text-white max-w-xl mx-auto leading-relaxed"
-              >
-                Cette page sera populée à mesure que les numéros de Bilan
-                seront ajoutés au corpus.
+                Aucun numéro n'a encore été indexé.
               </p>
             </div>
           ) : (
-            <!-- Liste -->
             <ol
               class="divide-y divide-black dark:divide-white border-y border-black dark:border-white"
             >
-              {entries.map((e) => (
-                <li class="grid grid-cols-1 sm:grid-cols-12 gap-2 sm:gap-6 py-5 sm:py-6">
-                  <p class="sm:col-span-6 font-Scheherazade text-base sm:text-lg text-black dark:text-white text-pretty">
-                    {e.title}
-                  </p>
-                  <p class="sm:col-span-4 font-Scheherazade italic text-sm sm:text-base text-black dark:text-white">
-                    {e.author}
-                  </p>
-                  <p class="sm:col-span-2 font-Scheherazade text-xs sm:text-sm uppercase tracking-[0.15em] text-black dark:text-white sm:text-right tabular-nums">
-                    {e.insertedAt}
-                  </p>
+              {issues.map((issue) => (
+                <li class="py-2 sm:py-3">
+                  <details class="group">
+                    <summary class="cursor-pointer list-none grid grid-cols-1 sm:grid-cols-12 gap-2 sm:gap-6 py-3 sm:py-4 hover:text-darkpink transition-colors">
+                      <p class="sm:col-span-7 font-Scheherazade text-base sm:text-lg text-black dark:text-white group-hover:text-darkpink dark:group-hover:text-darkpink text-pretty">
+                        <span class="inline-block w-4">▸</span>
+                        <span class="group-open:hidden">{issue.title}</span>
+                        <span class="hidden group-open:inline">{issue.title}</span>
+                      </p>
+                      <p class="sm:col-span-3 font-Scheherazade italic text-sm sm:text-base text-black dark:text-white">
+                        {issue.nArticles} article{issue.nArticles === 1 ? "" : "s"}
+                      </p>
+                      <p class="sm:col-span-2 font-Scheherazade text-xs sm:text-sm uppercase tracking-[0.15em] text-black dark:text-white sm:text-right tabular-nums">
+                        {issue.publishedDate ?? ""}
+                      </p>
+                    </summary>
+                    <ul class="ml-8 mb-3 sm:mb-4 mt-1 space-y-2">
+                      {issue.articles.map((article) => (
+                        <li>
+                          <a
+                            href={`/corpus/${issue.slug}/${article.slug}`}
+                            class="font-Scheherazade text-sm sm:text-base text-black dark:text-white hover:text-darkpink underline decoration-1 underline-offset-4 decoration-black/30 dark:decoration-white/30 hover:decoration-darkpink"
+                          >
+                            {article.title}
+                          </a>
+                          <span class="font-Scheherazade italic text-xs text-black dark:text-white ml-2">
+                            — {article.author}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
                 </li>
               ))}
             </ol>
           )
         }
 
-        <!-- Note méthode -->
         <p
           class="mt-12 font-Scheherazade italic text-xs sm:text-sm text-black dark:text-white max-w-2xl"
         >
-          La liste reflète l'état réel de l'indexation. Aucune entrée
-          n'apparaît tant que le texte n'a pas été ingéré, vectorisé et
-          vérifié. Pas de promesse, pas de placeholder caché.
+          La liste reflète l'état réel de l'indexation. Aucune entrée n'apparaît
+          tant que le numéro n'a pas été ingéré, vectorisé et vérifié. Pas de
+          promesse, pas de placeholder caché.
         </p>
       </div>
     </main>

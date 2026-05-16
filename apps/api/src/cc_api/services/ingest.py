@@ -1,8 +1,10 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Service d'ingestion TEI → Postgres + Qdrant.
+"""Service d'ingestion TEI (issue hiérarchique) → Postgres + Qdrant.
 
-Transaction unique Postgres avec rollback compensating Qdrant en cas d'échec.
-Idempotence par SHA256 des bytes bruts. Self-test post-ingest : seuil ≥ 0.99.
+1 TEI = 1 issue (numéro de revue) contenant N articles. Chaque article est
+chunké et indexé indépendamment. Transaction unique Postgres avec rollback
+compensating Qdrant en cas d'échec. Idempotence par SHA256 du fichier TEI.
+Self-test post-ingest : seuil ≥ 0.99 sur le 1er chunk du 1er article.
 """
 
 from __future__ import annotations
@@ -16,7 +18,7 @@ from datetime import date
 from pathlib import Path
 
 from cc_corpus.chunk import split
-from cc_corpus.tei import parse
+from cc_corpus.tei import parse_issue
 from qdrant_client import AsyncQdrantClient
 from qdrant_client.http.models import (
     Distance,
@@ -30,14 +32,13 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from cc_api.clients.db import get_session_maker
+from cc_api.clients.embed import EmbedClient, get_embed_client
 from cc_api.clients.qdrant import get_qdrant
-from cc_api.clients.voyage import VoyageClient, get_voyage_client
 from cc_api.core.logging import get_logger
 from cc_api.core.settings import settings
-from cc_api.models import Author, Chunk, Work
+from cc_api.models import Article, Author, Chunk, Issue
 
 COLLECTION = "bilan"
-VOYAGE_DIM = 1024
 SELF_TEST_THRESHOLD = 0.99
 NAMESPACE_QDRANT = uuid.uuid5(uuid.NAMESPACE_URL, "https://consciencedeclasse.com/qdrant/bilan")
 
@@ -49,17 +50,19 @@ class IngestSelfTestError(RuntimeError):
 
 
 @dataclass(frozen=True)
-class WorkRef:
-    work_id: int
+class IssueRef:
+    issue_id: int
+    slug: str
     ark: str
+    n_articles: int
     n_chunks: int
     duration_ms: int
     was_duplicate: bool = False
 
 
-def chunk_point_id(work_ark: str, idx: int) -> uuid.UUID:
-    """UUID v5 déterministe pour un (work_ark, idx). Permet la reproductibilité."""
-    return uuid.uuid5(NAMESPACE_QDRANT, f"{work_ark}#{idx:08d}")
+def chunk_point_id(article_ark: str, idx: int) -> uuid.UUID:
+    """UUID v5 déterministe pour un (article_ark, idx)."""
+    return uuid.uuid5(NAMESPACE_QDRANT, f"{article_ark}#{idx:08d}")
 
 
 def _parse_published_date(date_iso: str) -> date | None:
@@ -72,19 +75,34 @@ def _parse_published_date(date_iso: str) -> date | None:
 
 
 async def _ensure_collection(qdrant: AsyncQdrantClient) -> None:
+    """Crée la collection Qdrant si absente, en dimension `settings.embed_dim`.
+
+    Si elle existe déjà avec une dimension différente (ex. après un changement
+    de modèle d'embedding), on échoue explicitement : mélanger deux espaces
+    vectoriels corromprait la recherche. La recréation est une opération
+    destructrice délibérée, jamais implicite ici.
+    """
     cols = await qdrant.get_collections()
     if COLLECTION not in {c.name for c in cols.collections}:
         await qdrant.create_collection(
             collection_name=COLLECTION,
-            vectors_config=VectorParams(size=VOYAGE_DIM, distance=Distance.COSINE),
+            vectors_config=VectorParams(size=settings.embed_dim, distance=Distance.COSINE),
+        )
+        return
+    info = await qdrant.get_collection(COLLECTION)
+    existing_dim = info.config.params.vectors.size  # type: ignore[union-attr]
+    if existing_dim != settings.embed_dim:
+        raise RuntimeError(
+            f"collection '{COLLECTION}' en dimension {existing_dim}, "
+            f"attendu {settings.embed_dim}. "
+            f"Recréer la collection puis ré-ingérer le corpus."
         )
 
 
 async def _self_test(
     qdrant: AsyncQdrantClient,
     first_embedding: list[float],
-    expected_point_id: str,
-    expected_work_id: int,
+    expected_article_id: int,
 ) -> None:
     hits = await qdrant.query_points(
         collection_name=COLLECTION,
@@ -92,35 +110,46 @@ async def _self_test(
         limit=1,
         with_payload=True,
         query_filter=Filter(
-            must=[FieldCondition(key="work_id", match=MatchValue(value=expected_work_id))]
+            must=[FieldCondition(key="article_id", match=MatchValue(value=expected_article_id))]
         ),
     )
     if not hits.points:
         raise IngestSelfTestError(
-            f"aucun point retrouvé pour work_id={expected_work_id} après upsert"
+            f"aucun point retrouvé pour article_id={expected_article_id} après upsert"
         )
     top = hits.points[0]
     if top.score is None or top.score < SELF_TEST_THRESHOLD:
         raise IngestSelfTestError(
-            f"self-test score={top.score} (< {SELF_TEST_THRESHOLD}) pour work_id={expected_work_id}"
+            f"self-test score={top.score} (< {SELF_TEST_THRESHOLD}) "
+            f"pour article_id={expected_article_id}"
         )
 
 
-async def ingest_tei(
+async def _upsert_author(session: AsyncSession, display_name: str) -> Author:
+    row = await session.execute(select(Author).where(Author.display_name == display_name))
+    author = row.scalar_one_or_none()
+    if author is None:
+        author = Author(display_name=display_name)
+        session.add(author)
+        await session.flush()
+    return author
+
+
+async def ingest_issue(
     path: Path,
     *,
     session: AsyncSession | None = None,
     qdrant: AsyncQdrantClient | None = None,
-    voyage: VoyageClient | None = None,
-) -> WorkRef:
-    """Ingère un fichier TEI P5 → Postgres + Qdrant. Idempotent par SHA256.
+    embed: EmbedClient | None = None,
+) -> IssueRef:
+    """Ingère un fichier TEI (1 numéro de revue avec N articles) → Postgres + Qdrant.
 
-    Ordre transactionnel : INSERT Postgres (sans commit) → UPSERT Qdrant →
-    self-test → COMMIT Postgres. En cas d'échec : rollback Postgres + DELETE
-    des points Qdrant déjà créés (best-effort).
+    Idempotent par SHA256. Ordre transactionnel : INSERT Postgres (sans commit)
+    → UPSERT Qdrant → self-test → COMMIT Postgres. Rollback compensating Qdrant
+    si échec après UPSERT.
     """
     started_at = time.monotonic()
-    embedding_model = settings.voyage_embed_model
+    embedding_model = settings.embed_model
 
     raw_bytes = path.read_bytes()
     sha256_hex = hashlib.sha256(raw_bytes).hexdigest()
@@ -134,168 +163,171 @@ async def ingest_tei(
     )
 
     owns_session = session is None
-    owns_voyage = voyage is None
+    owns_embed = embed is None
     if session is None:
         session = get_session_maker()()
     if qdrant is None:
         qdrant = get_qdrant()
-    if voyage is None:
-        voyage = get_voyage_client()
+    if embed is None:
+        embed = get_embed_client()
 
+    all_point_ids: list[int | str | uuid.UUID] = []
     try:
         # Idempotence — short-circuit si SHA256 déjà connu.
         existing = (
-            await session.execute(select(Work.id, Work.ark).where(Work.sha256 == sha256_hex))
+            await session.execute(
+                select(Issue.id, Issue.slug, Issue.ark).where(Issue.sha256 == sha256_hex)
+            )
         ).first()
         if existing is not None:
             duration_ms = int((time.monotonic() - started_at) * 1000)
             log.info(
                 "ingest.short_circuit_idempotent",
                 sha256_short=sha_short,
-                existing_work_id=existing.id,
-                reason="sha256_match",
+                existing_issue_id=existing.id,
             )
-            return WorkRef(
-                work_id=existing.id,
+            return IssueRef(
+                issue_id=existing.id,
+                slug=existing.slug,
                 ark=existing.ark,
+                n_articles=0,
                 n_chunks=0,
                 duration_ms=duration_ms,
                 was_duplicate=True,
             )
 
-        # Parse TEI
-        parse_start = time.monotonic()
-        doc = parse(path)
+        # Parse TEI hiérarchique.
+        doc = parse_issue(path)
         log.info(
             "ingest.parsed",
             sha256_short=sha_short,
-            title=doc.title,
-            author_name=doc.author_name,
-            n_paragraphs=len(doc.paragraphs),
-            duration_ms=int((time.monotonic() - parse_start) * 1000),
+            journal=doc.journal_title,
+            issue_number=doc.issue_number,
+            n_articles=len(doc.articles),
         )
 
-        # Chunk
-        chunk_start = time.monotonic()
-        chunks = split(doc.paragraphs)
-        if not chunks:
-            raise ValueError(f"aucun chunk produit pour {path}")
-        avg = sum(c.token_count for c in chunks) // len(chunks)
-        max_tokens = max(c.token_count for c in chunks)
-        log.info(
-            "ingest.chunked",
-            sha256_short=sha_short,
-            n_chunks=len(chunks),
-            avg_tokens=avg,
-            max_tokens=max_tokens,
-            duration_ms=int((time.monotonic() - chunk_start) * 1000),
-        )
-
-        # Embed
-        embed_start = time.monotonic()
-        embeddings = await voyage.embed_batch([c.text for c in chunks])
-        if len(embeddings) != len(chunks):
-            raise RuntimeError(
-                f"Voyage a renvoyé {len(embeddings)} vecteurs pour {len(chunks)} chunks"
-            )
-        log.info(
-            "ingest.embedded",
-            sha256_short=sha_short,
-            n_chunks=len(chunks),
-            model=embedding_model,
-            duration_ms=int((time.monotonic() - embed_start) * 1000),
-        )
-
-        # Upsert auteur (recherche par display_name simple en phase 0)
-        author_row = await session.execute(
-            select(Author).where(Author.display_name == doc.author_name)
-        )
-        author = author_row.scalar_one_or_none()
-        if author is None:
-            author = Author(display_name=doc.author_name)
-            session.add(author)
-            await session.flush()
-
-        # INSERT work + chunks (sans commit)
-        store_start = time.monotonic()
-        work = Work(
+        # INSERT issue.
+        issue = Issue(
+            slug=doc.slug,
             ark=doc.ark,
+            journal_title=doc.journal_title,
+            issue_number=doc.issue_number,
             title=doc.title,
-            author_id=author.id,
             published_date=_parse_published_date(doc.date_iso),
             license=doc.license,
+            source_desc=doc.source_desc,
             sha256=sha256_hex,
         )
-        session.add(work)
+        session.add(issue)
         await session.flush()
 
-        chunk_rows: list[Chunk] = []
-        point_ids: list[int | str | uuid.UUID] = []
-        for c in chunks:
-            point_uuid = chunk_point_id(doc.ark, c.idx)
-            point_ids.append(point_uuid)
-            chunk_rows.append(
-                Chunk(
-                    work_id=work.id,
-                    idx=c.idx,
-                    text=c.text,
-                    char_start=c.char_start,
-                    char_end=c.char_end,
-                    token_count=c.token_count,
-                    embedding_model=embedding_model,
-                    qdrant_point_id=point_uuid,
-                )
+        # Pour le self-test après UPSERT Qdrant.
+        first_article_id: int | None = None
+        first_embedding: list[float] | None = None
+        total_chunks = 0
+        all_points: list[PointStruct] = []
+
+        for idx_in_issue, article_data in enumerate(doc.articles):
+            author = await _upsert_author(session, article_data.author_name)
+            article_ark = f"{doc.ark}/{article_data.slug}"
+            article = Article(
+                issue_id=issue.id,
+                slug=article_data.slug,
+                ark=article_ark,
+                title=article_data.title,
+                author_id=author.id,
+                idx_in_issue=idx_in_issue,
             )
-        session.add_all(chunk_rows)
-        await session.flush()
+            session.add(article)
+            await session.flush()
+
+            # Chunk + embed.
+            chunks = split(article_data.paragraphs)
+            if not chunks:
+                raise ValueError(f"article '{article_data.slug}' produit 0 chunks")
+            embeddings = await embed.embed_batch(
+                [c.text for c in chunks], input_type="document"
+            )
+            if len(embeddings) != len(chunks):
+                raise RuntimeError(
+                    f"le backend d'embedding a renvoyé {len(embeddings)} vecteurs "
+                    f"pour {len(chunks)} chunks"
+                )
+
+            chunk_rows: list[Chunk] = []
+            for c, emb in zip(chunks, embeddings, strict=True):
+                point_uuid = chunk_point_id(article_ark, c.idx)
+                all_point_ids.append(point_uuid)
+                chunk_rows.append(
+                    Chunk(
+                        article_id=article.id,
+                        idx=c.idx,
+                        text=c.text,
+                        char_start=c.char_start,
+                        char_end=c.char_end,
+                        token_count=c.token_count,
+                        embedding_model=embedding_model,
+                        qdrant_point_id=point_uuid,
+                    )
+                )
+                all_points.append(
+                    PointStruct(
+                        id=point_uuid,
+                        vector=emb,
+                        payload={
+                            "issue_id": issue.id,
+                            "issue_slug": doc.slug,
+                            "issue_ark": doc.ark,
+                            "issue_title": doc.title,
+                            "article_id": article.id,
+                            "article_slug": article_data.slug,
+                            "article_ark": article_ark,
+                            "article_title": article_data.title,
+                            "author_name": article_data.author_name,
+                            "chunk_idx": c.idx,
+                            "char_start": c.char_start,
+                            "char_end": c.char_end,
+                            "text": c.text,
+                        },
+                    )
+                )
+            session.add_all(chunk_rows)
+            await session.flush()
+            total_chunks += len(chunks)
+
+            if first_article_id is None:
+                first_article_id = article.id
+                first_embedding = embeddings[0]
+
         log.info(
             "ingest.stored",
             sha256_short=sha_short,
-            work_id=work.id,
-            author_id=author.id,
-            n_chunks_inserted=len(chunks),
-            duration_ms=int((time.monotonic() - store_start) * 1000),
+            issue_id=issue.id,
+            n_articles=len(doc.articles),
+            n_chunks_inserted=total_chunks,
         )
 
-        # UPSERT Qdrant + self-test
-        await _ensure_collection(qdrant)
-        points = [
-            PointStruct(
-                id=point_ids[i],
-                vector=embeddings[i],
-                payload={
-                    "work_id": work.id,
-                    "chunk_idx": c.idx,
-                    "char_start": c.char_start,
-                    "char_end": c.char_end,
-                    "ark": doc.ark,
-                },
-            )
-            for i, c in enumerate(chunks)
-        ]
+        # UPSERT Qdrant + self-test. `_ensure_collection` est dans le bloc
+        # protégé : une incompatibilité de dimension détectée ici doit aussi
+        # déclencher le rollback compensating Postgres.
         qdrant_start = time.monotonic()
         try:
-            await qdrant.upsert(collection_name=COLLECTION, points=points)
+            await _ensure_collection(qdrant)
+            await qdrant.upsert(collection_name=COLLECTION, points=all_points)
             log.info(
                 "ingest.qdrant_upserted",
                 sha256_short=sha_short,
-                work_id=work.id,
+                issue_id=issue.id,
                 collection=COLLECTION,
-                n_points=len(points),
+                n_points=len(all_points),
                 duration_ms=int((time.monotonic() - qdrant_start) * 1000),
             )
-
-            selftest_start = time.monotonic()
-            await _self_test(qdrant, embeddings[0], str(point_ids[0]), work.id)
-            log.info(
-                "ingest.selftest_ok",
-                sha256_short=sha_short,
-                work_id=work.id,
-                duration_ms=int((time.monotonic() - selftest_start) * 1000),
-            )
+            assert first_embedding is not None and first_article_id is not None
+            await _self_test(qdrant, first_embedding, first_article_id)
+            log.info("ingest.selftest_ok", sha256_short=sha_short, issue_id=issue.id)
         except Exception as exc:
             with contextlib.suppress(Exception):
-                await qdrant.delete(collection_name=COLLECTION, points_selector=point_ids)
+                await qdrant.delete(collection_name=COLLECTION, points_selector=all_point_ids)
             await session.rollback()
             log.error(
                 "ingest.error",
@@ -307,20 +339,23 @@ async def ingest_tei(
             )
             raise
 
-        # COMMIT Postgres
+        # COMMIT Postgres.
         await session.commit()
         duration_ms = int((time.monotonic() - started_at) * 1000)
         log.info(
             "ingest.done",
             sha256_short=sha_short,
-            work_id=work.id,
-            n_chunks=len(chunks),
+            issue_id=issue.id,
+            n_articles=len(doc.articles),
+            n_chunks=total_chunks,
             total_duration_ms=duration_ms,
         )
-        return WorkRef(
-            work_id=work.id,
+        return IssueRef(
+            issue_id=issue.id,
+            slug=doc.slug,
             ark=doc.ark,
-            n_chunks=len(chunks),
+            n_articles=len(doc.articles),
+            n_chunks=total_chunks,
             duration_ms=duration_ms,
             was_duplicate=False,
         )
@@ -328,5 +363,5 @@ async def ingest_tei(
     finally:
         if owns_session:
             await session.close()
-        if owns_voyage:
-            await voyage.aclose()
+        if owns_embed:
+            await embed.aclose()

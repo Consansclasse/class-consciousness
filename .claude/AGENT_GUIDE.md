@@ -19,7 +19,7 @@ Archive open-source de la théorie marxiste avec **RAG sourcé**. Greenfield à 
 ## Décisions verrouillées
 
 - **Licence** : AGPL-3.0-or-later (code), CC-BY-SA-4.0 (corpus original), licences respectives pour œuvres dérivées.
-- **Pile IA** : Anthropic Claude Opus 4.7 (génération), Voyage `voyage-4` (embeddings, 1024 dims), Voyage `rerank-2.5` (reranking). Aucun fallback OpenAI.
+- **Pile IA** : Anthropic Claude Opus 4.7 (génération, API). Embeddings + reranking **100 % auto-hébergés en local** sur GPU (RTX A2000 12 Go) — serveur `cc-embed` (`apps/embed-server`) : Qwen3-Embedding-8B 8-bit (embeddings, 4096 dims) et Qwen3-Reranker-0.6B (reranking). **Jamais Voyage, jamais OpenAI** : aucun service d'IA tiers hormis la génération Anthropic. Le code Voyage hérité (`clients/voyage*.py`) est à supprimer.
 - **Langues corpus** : français de référence, allemand et anglais en secondaire (sources primaires). Sortie système : français exclusivement.
 - **Vectoriel** : Qdrant (Apache 2.0), pas de Pinecone, pas de Weaviate, pas de pgvector.
 - **Déploiement** : self-hosted (OVH/Hetzner via Coolify), pas de SaaS managé.
@@ -78,7 +78,7 @@ Statut juridique des traducteurs : à vérifier individuellement avant toute ing
 - **Chrome DevTools MCP sans `--autoConnect`** — fuite mémoire ~13 MB/min (Issues #1192/#1214).
 - **`browser_snapshot` MCP interdit en boucle** — retourne 50-540 KB de DOM, sature le contexte après 2-3 visites.
 - **Postgres MCP Pro** — Crystal DBA, R/W unrestricted en dev. Backup snapshot avant session longue (`make db-snapshot`).
-- **Qdrant MCP officiel non utilisé** — FastEmbed local incompatible avec embeddings Voyage du corpus. Utiliser `/__debug/state` à la place.
+- **Qdrant MCP officiel non utilisé** — FastEmbed local incompatible avec les embeddings Qwen3 4096-d du corpus. Utiliser `/__debug/state` à la place.
 
 ## Boucle agentique attendue
 

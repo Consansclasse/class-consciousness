@@ -1,0 +1,133 @@
+{
+  "_meta": {
+    "description": "Questions de référence pour évaluer le pipeline RAG sur Bilan n°1 (5 articles réels).",
+    "corpus": "corpus/bilan/bilan-001.tei.xml",
+    "issue_slug": "bilan-1",
+    "n_articles": 5,
+    "extracted_from_real_corpus": true,
+    "balance": "9 questions factuelles citables littéralement + 3 questions de synthèse modérée (pour mesurer le taux de refus attendu sous la règle d'or stricte)"
+  },
+  "questions": [
+    {
+      "id": "Q01",
+      "question": "Quel est l'objectif éditorial de la revue Bilan tel que présenté dans le premier numéro ?",
+      "expected_article_slug": "note-liminaire",
+      "expected_min_citations": 1,
+      "type": "factuelle"
+    },
+    {
+      "id": "Q02",
+      "question": "Quelles difficultés financières la fraction évoque-t-elle pour la parution de la revue ?",
+      "expected_article_slug": "note-liminaire",
+      "expected_min_citations": 1,
+      "type": "factuelle"
+    },
+    {
+      "id": "Q03",
+      "question": "Que demande la fraction à ses lecteurs et camarades concernant la souscription ?",
+      "expected_article_slug": "note-liminaire",
+      "expected_min_citations": 1,
+      "type": "factuelle"
+    },
+    {
+      "id": "Q04",
+      "question": "Selon l'introduction, la fraction prétend-elle apporter des solutions définitives aux problèmes posés au prolétariat ?",
+      "expected_article_slug": "introduction",
+      "expected_min_citations": 1,
+      "type": "factuelle",
+      "note": "Réponse attendue : non. Citation possible : « ne croit pas pouvoir présenter des solutions définitives »."
+    },
+    {
+      "id": "Q05",
+      "question": "De quel passé politique et de quelle tradition la Fraction de Gauche du Parti communiste italien se réclame-t-elle dans l'introduction ?",
+      "expected_article_slug": "introduction",
+      "expected_min_citations": 1,
+      "type": "factuelle"
+    },
+    {
+      "id": "Q06",
+      "question": "Quel événement historique fonde la commémoration discutée dans l'article « Seizième anniversaire de la révolution russe » ?",
+      "expected_article_slug": "anniversaire-revolution-russe",
+      "expected_min_citations": 1,
+      "type": "factuelle",
+      "note": "Réponse attendue : la révolution d'octobre 1917 (16 ans avant le numéro de novembre 1933)."
+    },
+    {
+      "id": "Q07",
+      "question": "Quels événements ou phénomènes le texte associe-t-il à l'évolution de la révolution russe depuis 1917 ?",
+      "expected_article_slug": "anniversaire-revolution-russe",
+      "expected_min_citations": 1,
+      "type": "synthèse-moderée"
+    },
+    {
+      "id": "Q08",
+      "question": "À quoi correspond l'expression « Internationale deux et trois quarts » employée par la fraction ?",
+      "expected_article_slug": "internationale-deux-trois-quarts",
+      "expected_min_citations": 1,
+      "type": "factuelle"
+    },
+    {
+      "id": "Q09",
+      "question": "Quelle trajectoire l'Internationale Communiste suit-elle selon l'article « Vers l'Internationale deux et trois quarts » ?",
+      "expected_article_slug": "internationale-deux-trois-quarts",
+      "expected_min_citations": 1,
+      "type": "synthèse-moderée"
+    },
+    {
+      "id": "Q10",
+      "question": "Selon la fraction, est-il opportun de proclamer immédiatement une nouvelle internationale ouvrière ?",
+      "expected_article_slug": "internationale-deux-trois-quarts",
+      "expected_min_citations": 1,
+      "type": "factuelle"
+    },
+    {
+      "id": "Q11",
+      "question": "Quel est l'objet précis du projet de bureau international d'information défendu par la fraction ?",
+      "expected_article_slug": "bureau-international-information",
+      "expected_min_citations": 1,
+      "type": "factuelle"
+    },
+    {
+      "id": "Q12",
+      "question": "Quels groupes ou fractions communistes la Fraction de Gauche convie-t-elle au bureau international d'information ?",
+      "expected_article_slug": "bureau-international-information",
+      "expected_min_citations": 1,
+      "type": "factuelle"
+    }
+  ],
+  "questions_hors_corpus": [
+    {
+      "id": "OOC01",
+      "question": "Quel est le PIB de la France en 2024 ?",
+      "expected_refused_reason": "unverified_citations",
+      "type": "totalement_hors_sujet"
+    },
+    {
+      "id": "OOC02",
+      "question": "Comment cuisiner une bouillabaisse marseillaise traditionnelle ?",
+      "expected_refused_reason": "unverified_citations",
+      "type": "totalement_hors_sujet"
+    },
+    {
+      "id": "OOC03",
+      "question": "Quelle est la position de Staline sur la théorie de la révolution permanente ?",
+      "expected_refused_reason": "unverified_citations",
+      "type": "piege_proche",
+      "note": "Staline et la révolution permanente sont des sujets adjacents à Bilan n°1 mais Staline n'est PAS l'auteur du corpus. Le pipeline doit refuser malgré la proximité thématique."
+    },
+    {
+      "id": "OOC04",
+      "question": "Combien de membres comptait la Fraction de Gauche du Parti communiste italien en 1933 ?",
+      "expected_refused_reason": "unverified_citations",
+      "type": "piege_proche",
+      "note": "Chiffres précis d'effectifs probablement absents du corpus. Tentation de bricoler une approximation."
+    },
+    {
+      "id": "OOC05",
+      "question": "Quel rôle a joué Léon Trotsky dans la création de la IVe Internationale en 1938 ?",
+      "expected_refused_reason": "unverified_citations",
+      "type": "piege_proche",
+      "note": "Trotsky est dans le champ thématique mais 1938 est postérieur à Bilan n°1 (novembre 1933). Le pipeline ne doit pas projeter du contenu post-1933 dans le corpus."
+    }
+  ]
+}

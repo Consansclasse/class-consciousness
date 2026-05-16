@@ -1,0 +1,231 @@
+---
+import ThemeToggle from "../components/ThemeToggle.astro";
+// SPDX-License-Identifier: AGPL-3.0-or-later
+import BaseLayout from "../layouts/BaseLayout.astro";
+
+type Tier = {
+  label: string;
+  prix: string;
+  prixDetail: string;
+  cible: string;
+  quota: string;
+  contreparties: string[];
+  cta: string;
+  href: string | null;
+};
+
+const tiers: Tier[] = [
+  {
+    label: "Lecture libre",
+    prix: "0 €",
+    prixDetail: "sans inscription",
+    cible: "Toute personne curieuse de l'archive.",
+    quota: "10 questions par jour, anonymement.",
+    contreparties: [
+      "Accès intégral à la lecture des textes du corpus.",
+      "Recherche plein texte sourcée.",
+      "Aucune publicité, aucun tracking.",
+    ],
+    cta: "C'est déjà ouvert — posez votre question",
+    href: "/chat",
+  },
+  {
+    label: "Membre individuel",
+    prix: "9 € / an",
+    prixDetail: "cotisation annuelle, tarif solidaire 0 € sur déclaration",
+    cible: "Lectrices et lecteurs réguliers, étudiantes, militantes, chercheuses.",
+    quota: "100 questions par jour. Export PDF citationnel. API personnelle.",
+    contreparties: [
+      "Droit de vote à l'assemblée générale annuelle.",
+      "Participation aux décisions éditoriales (prochains corpus à indexer).",
+      // Pas de reçu fiscal : la cotisation ouvre des contreparties significatives
+      // (quota, API, export) — non éligible art. 200 CGI. Seul le palier Mécénat
+      // (sans contrepartie matérielle) ouvre la réduction d'impôt, sous réserve
+      // d'un rescrit fiscal positif.
+      "Pas de reçu fiscal sur ce palier — c'est ce qui le distingue du Mécénat.",
+    ],
+    cta: "Adhérer — 9 €",
+    href: "/adherer/individuel",
+  },
+  {
+    label: "Membre structure",
+    prix: "99 € / an",
+    prixDetail: "cotisation annuelle mutualisée",
+    cible:
+      "Universités, syndicats, médias, librairies, collectifs, fondations, bibliothèques.",
+    quota: "1000 questions par jour mutualisées. Clé API d'équipe.",
+    contreparties: [
+      "Logo dans la page Soutiens (opt-in).",
+      "Voix collective en assemblée générale.",
+      "Priorité sur les demandes d'indexation de nouveaux corpus.",
+    ],
+    cta: "Adhérer — 99 €",
+    href: "/adherer/structure",
+  },
+  {
+    label: "Mécénat",
+    prix: "à partir de 500 € / an",
+    prixDetail: "don défiscalisable (66 % particulier, 60 % entreprise) après rescrit fiscal",
+    cible:
+      "Personnes morales ou physiques qui veulent soutenir la pérennité de l'archive au-delà d'une simple adhésion.",
+    quota: "Pas de contrepartie additionnelle — c'est ce qui rend le don défiscalisable.",
+    contreparties: [
+      "Reconnaissance publique opt-in (nom ou anonymat).",
+      "Rapport annuel détaillé d'utilisation des fonds.",
+      "Reçu fiscal art. 200 / 238 bis CGI à venir une fois le rescrit obtenu.",
+    ],
+    cta: "Devenir mécène",
+    href: "/adherer/mecenat",
+  },
+];
+---
+
+<BaseLayout title="Conscience de classe — Adhérer">
+  <div class="flex min-h-dvh flex-col bg-white dark:bg-black">
+    <header
+      class="flex shrink-0 items-center justify-between px-6 lg:px-10 py-5 border-b border-black dark:border-white"
+    >
+      <a
+        href="/"
+        class="font-Scheherazade text-xs sm:text-sm uppercase tracking-[0.25em] text-black dark:text-white hover:text-darkpink transition-colors"
+      >
+        ← Retour
+      </a>
+      <a
+        href="/"
+        class="font-Scheherazade text-sm uppercase tracking-[0.2em] text-black dark:text-white hover:text-darkpink transition-colors"
+      >
+        Conscience de classe
+      </a>
+      <ThemeToggle />
+    </header>
+
+    <main class="flex-1 px-6 md:px-12 lg:px-16 py-16 md:py-24">
+      <div class="mx-auto w-full max-w-4xl">
+        <!-- Titre + sous-titre -->
+        <div class="mb-12 md:mb-16">
+          <h1
+            class="font-Scheherazade text-4xl sm:text-5xl md:text-6xl leading-none text-black dark:text-white"
+          >
+            Adhérer
+          </h1>
+          <p
+            class="mt-4 font-Scheherazade italic text-base sm:text-lg text-black dark:text-white max-w-2xl text-pretty"
+          >
+            L'archive est et restera librement accessible. L'adhésion finance
+            l'indépendance de l'outil — pas l'accès au texte.
+          </p>
+        </div>
+
+        <!-- Préambule honnête : statut associatif + mode test Stripe -->
+        <div
+          class="mb-12 md:mb-16 border-y border-black dark:border-white py-6 space-y-3"
+        >
+          <p
+            class="font-Scheherazade text-sm sm:text-base text-black dark:text-white leading-relaxed"
+          >
+            <span class="uppercase tracking-[0.2em] text-xs sm:text-sm">État du projet —</span>
+            l'archive est portée par un projet en cours de constitution
+            associative (loi 1901, dépôt prévu après stabilisation du corpus de
+            référence).
+          </p>
+          <p
+            class="font-Scheherazade text-sm sm:text-base text-black dark:text-white leading-relaxed"
+          >
+            <span class="uppercase tracking-[0.2em] text-xs sm:text-sm">Paiement —</span>
+            le parcours d'adhésion ci-dessous est branché sur
+            <strong>Stripe en mode test</strong> tant que l'association n'a pas
+            été déclarée à la préfecture, publiée au JOAFE et immatriculée au
+            SIRET. Vous pouvez parcourir le formulaire et la page Stripe pour
+            inspection — aucun débit réel n'aura lieu.
+          </p>
+        </div>
+
+        <!-- Liste des paliers -->
+        <ol
+          class="divide-y divide-black dark:divide-white border-y border-black dark:border-white"
+        >
+          {
+            tiers.map((tier) => (
+              <li class="py-8 sm:py-10">
+                <div class="grid grid-cols-1 md:grid-cols-12 gap-4 md:gap-8">
+                  <!-- Colonne label + statut -->
+                  <div class="md:col-span-4">
+                    <p class="font-Scheherazade text-2xl sm:text-3xl text-black dark:text-white">
+                      {tier.label}
+                    </p>
+                    <p class="mt-2 font-Scheherazade italic text-sm sm:text-base text-black dark:text-white">
+                      {tier.prix}
+                    </p>
+                    <p class="mt-1 font-Scheherazade text-xs sm:text-sm text-black/70 dark:text-white/70">
+                      {tier.prixDetail}
+                    </p>
+                    <p class="mt-3 font-Scheherazade text-xs uppercase tracking-[0.2em] text-darkpink">
+                      {tier.href ? "Ouvert" : "À venir"}
+                    </p>
+                  </div>
+
+                  <!-- Colonne détails -->
+                  <div class="md:col-span-8 space-y-4">
+                    <p class="font-Scheherazade text-sm sm:text-base text-black dark:text-white leading-relaxed">
+                      <span class="uppercase tracking-[0.18em] text-xs">Public —</span>{" "}
+                      {tier.cible}
+                    </p>
+                    <p class="font-Scheherazade text-sm sm:text-base text-black dark:text-white leading-relaxed">
+                      <span class="uppercase tracking-[0.18em] text-xs">Usage —</span>{" "}
+                      {tier.quota}
+                    </p>
+                    <ul class="font-Scheherazade text-sm sm:text-base text-black dark:text-white space-y-1.5 leading-relaxed">
+                      {tier.contreparties.map((c) => (
+                        <li class="flex gap-2">
+                          <span aria-hidden="true" class="text-darkpink shrink-0">·</span>
+                          <span>{c}</span>
+                        </li>
+                      ))}
+                    </ul>
+                    <p class="pt-2">
+                      {tier.href ? (
+                        <a
+                          href={tier.href}
+                          class="font-Scheherazade text-sm sm:text-base text-black dark:text-white hover:text-darkpink underline decoration-1 underline-offset-4 decoration-black/30 dark:decoration-white/30 hover:decoration-darkpink"
+                        >
+                          {tier.cta} →
+                        </a>
+                      ) : (
+                        <a
+                          href={`mailto:consciencedeclasse@proton.me?subject=${encodeURIComponent("Adhésion — " + tier.label)}`}
+                          class="font-Scheherazade text-sm sm:text-base text-black dark:text-white hover:text-darkpink underline decoration-1 underline-offset-4 decoration-black/30 dark:decoration-white/30 hover:decoration-darkpink"
+                        >
+                          {tier.cta} →
+                        </a>
+                      )}
+                    </p>
+                  </div>
+                </div>
+              </li>
+            ))
+          }
+        </ol>
+
+        <!-- Note légale en bas -->
+        <div class="mt-16 space-y-4">
+          <p
+            class="font-Scheherazade italic text-xs sm:text-sm text-black dark:text-white max-w-3xl leading-relaxed"
+          >
+            La grille tarifaire est calibrée pour rester sous la franchise des
+            impôts commerciaux applicable aux associations (article 206-1bis CGI,
+            seuil indexé chaque année). Au-delà de ce seuil, une sectorisation
+            comptable ou une filiale coopérative sera mise en place.
+          </p>
+          <p
+            class="font-Scheherazade italic text-xs sm:text-sm text-black dark:text-white max-w-3xl leading-relaxed"
+          >
+            Aucune adhésion ne conditionne l'accès aux textes du corpus.
+            L'archive reste consultable sans inscription. C'est la garantie
+            inscrite dès le départ et qui ne bougera pas.
+          </p>
+        </div>
+      </div>
+    </main>
+  </div>
+</BaseLayout>

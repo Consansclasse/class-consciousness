@@ -15,7 +15,8 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-cc}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
       POSTGRES_DB: ${POSTGRES_DB:-class_consciousness}
-    ports: ["5432:5432"]
+    # Remap host 5433 → container 5432 pour cohabiter avec un pg système sur 5432.
+    ports: ["127.0.0.1:5433:5432"]
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./postgres/init:/docker-entrypoint-initdb.d:ro
@@ -47,7 +48,8 @@ services:
     restart: unless-stopped
     logging: *default-logging
     command: ["redis-server", "--appendonly", "yes", "--save", "60", "1"]
-    ports: ["6379:6379"]
+    # Remap host 6380 → container 6379 pour cohabiter avec un Redis système sur 6379.
+    ports: ["127.0.0.1:6380:6379"]
     volumes:
       - redis_data:/data
     healthcheck:
@@ -66,6 +68,14 @@ services:
     env_file:
       - path: ../.env
         required: false
+    environment:
+      # Override des vars .env : à l'intérieur du réseau docker, on parle au
+      # service "postgres" sur son port interne 5432, indépendamment du mapping
+      # host (5433) défini pour cohabiter avec un pg système.
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      QDRANT_URL: http://qdrant:6333
+      REDIS_URL: redis://redis:6379/0
     ports: ["8000:8000"]
     depends_on:
       postgres: { condition: service_healthy }
@@ -85,7 +95,8 @@ services:
     env_file:
       - path: ../.env
         required: false
-    ports: ["3000:3000"]
+    # Remap host 3001 → container 3000 pour cohabiter avec un autre service sur 3000.
+    ports: ["127.0.0.1:3001:3000"]
     depends_on:
       - api
     volumes:

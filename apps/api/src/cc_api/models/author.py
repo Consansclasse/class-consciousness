@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Modèle Author — auteur d'une œuvre du corpus.
+"""Modèle Author — auteur d'un Article.
 
 Identifiants d'autorité optionnels : VIAF, IdRef, Wikidata.
 """
@@ -15,7 +15,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from cc_api.models.base import Base
 
 if TYPE_CHECKING:
-    from cc_api.models.work import Work
+    from cc_api.models.article import Article
 
 
 class Author(Base):
@@ -32,4 +32,4 @@ class Author(Base):
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
 
-    works: Mapped[list[Work]] = relationship(back_populates="author")
+    articles: Mapped[list[Article]] = relationship(back_populates="author")

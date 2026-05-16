@@ -1,6 +1,7 @@
-.PHONY: help install dev test test-e2e smoke lint typecheck build migrate seed ingest reset clean \
+.PHONY: help install dev test test-e2e test-eval test-eval-deepeval test-eval-ragas \
+        smoke lint typecheck build migrate seed ingest reset clean \
         logs logs-api logs-web logs-db logs-qdrant logs-redis \
-        agent-status agent-bootstrap api-check web-check \
+        agent-status agent-bootstrap agent-preflight api-check web-check \
         db-snapshot db-restore
 
 COMPOSE := docker compose -f infra/docker-compose.yml
@@ -10,8 +11,10 @@ help:
 	@echo "  install            Install all deps (uv sync + pnpm install + pre-commit)"
 	@echo "  agent-bootstrap    One-shot setup for a fresh Claude Code session"
 	@echo "  dev                Run api + web in parallel (host mode)"
-	@echo "  test               Run all tests (pytest + vitest)"
+	@echo "  test               Run all tests (pytest + vitest, marker expensive exclu)"
 	@echo "  test-e2e           Run Playwright E2E suite"
+	@echo "  test-eval          Run RAG eval suites (DeepEval + RAGAS, coûteux ~\$$4-5)"
+	@echo "  agent-preflight    Check API keys + services up before expensive tests"
 	@echo "  smoke              Quick health check of the 5 services"
 	@echo "  lint               Lint all code (ruff + biome)"
 	@echo "  typecheck          Type-check all code (mypy + astro check)"
@@ -28,7 +31,7 @@ help:
 	@echo "  clean              Remove caches"
 
 install:
-	uv sync
+	uv sync --all-packages --all-extras
 	pnpm install
 	pre-commit install
 
@@ -57,6 +60,25 @@ test:
 
 test-e2e:
 	cd apps/web && pnpm exec playwright test
+
+# Suites eval RAG (DeepEval + RAGAS sur 12 golden questions Bilan n°1).
+# Coûte ~$3-5 par run (Anthropic + Voyage). Marker @pytest.mark.expensive,
+# exclus du `make test` par défaut. Nécessite ANTHROPIC_API_KEY + VOYAGE_API_KEY.
+test-eval: agent-preflight
+	uv run pytest apps/api/tests/eval -v --no-cov -m expensive
+
+test-eval-deepeval: agent-preflight
+	uv run pytest apps/api/tests/eval/test_rag_deepeval.py -v --no-cov -m expensive
+
+test-eval-ragas: agent-preflight
+	uv run pytest apps/api/tests/eval/test_rag_ragas.py -v --no-cov -m expensive
+
+# Pre-flight : vérifie env vars + services up avant les tests coûteux.
+agent-preflight:
+	@test -n "$$ANTHROPIC_API_KEY" || (echo "❌ ANTHROPIC_API_KEY manquant (source .env ou export)"; exit 1)
+	@test -n "$$VOYAGE_API_KEY" || (echo "❌ VOYAGE_API_KEY manquant (source .env ou export)"; exit 1)
+	@$(COMPOSE) ps --status running --services 2>/dev/null | grep -q postgres || (echo "❌ Postgres down — lance 'make agent-bootstrap'"; exit 1)
+	@echo "✅ pre-flight OK : ANTHROPIC_API_KEY + VOYAGE_API_KEY présents, Postgres up"
 
 smoke:
 	@echo "→ API /health"

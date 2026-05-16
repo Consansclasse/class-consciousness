@@ -154,13 +154,10 @@ async def logs(
 async def seed() -> dict[str, Any]:
     """Seeds reproductibles : ingère la fixture canonique TEI.
 
-    Skip silencieux si VOYAGE_API_KEY absente (dev local sans clé).
+    L'ingestion requiert le serveur cc-embed (embeddings) joignable ; à défaut,
+    `ingest_issue` lèvera une erreur explicite.
     """
     from pathlib import Path
-
-    if not settings.voyage_api_key:
-        log.info("debug.seed.skipped", reason="VOYAGE_API_KEY absent")
-        return {"status": "skipped", "reason": "VOYAGE_API_KEY non configuré"}
 
     candidates = [
         Path("/app/corpus/_seed/bilan-001.tei.xml"),
@@ -171,14 +168,16 @@ async def seed() -> dict[str, Any]:
         log.warning("debug.seed.fixture_missing", candidates=[str(p) for p in candidates])
         return {"status": "skipped", "reason": "fixture TEI introuvable"}
 
-    from cc_api.services.ingest import ingest_tei
+    from cc_api.services.ingest import ingest_issue
 
-    ref = await ingest_tei(fixture)
-    log.info("debug.seed.done", work_id=ref.work_id, n_chunks=ref.n_chunks)
+    ref = await ingest_issue(fixture)
+    log.info("debug.seed.done", issue_id=ref.issue_id, n_chunks=ref.n_chunks)
     return {
         "status": "ok",
-        "work_id": ref.work_id,
+        "issue_id": ref.issue_id,
+        "slug": ref.slug,
         "ark": ref.ark,
+        "n_articles": ref.n_articles,
         "n_chunks": ref.n_chunks,
         "was_duplicate": ref.was_duplicate,
     }

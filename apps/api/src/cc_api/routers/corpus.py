@@ -1,5 +1,12 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Router /corpus — liste paginée, détail, et /admin/ingest (dev-only)."""
+"""Router /corpus — hiérarchie Issue → Article.
+
+Routes :
+- GET /corpus → liste paginée d'IssueSummary
+- GET /corpus/{issue_slug} → IssueDetail avec liste d'ArticleSummary
+- GET /corpus/{issue_slug}/{article_slug} → ArticleDetail avec paragraphes
+- POST /admin/ingest (dev only) → ingère 1 TEI hiérarchique
+"""
 
 from __future__ import annotations
 
@@ -14,16 +21,18 @@ from sqlalchemy.orm import joinedload
 from cc_api.clients.db import get_session_maker
 from cc_api.core.logging import get_logger
 from cc_api.core.security import require_dev
-from cc_api.models import Chunk, Work
+from cc_api.models import Article, Chunk, Issue
 from cc_api.schemas import (
+    ArticleDetail,
+    ArticleSummary,
     AuthorOut,
     CorpusPage,
     IngestRequest,
     IngestResult,
-    WorkOut,
-    WorkSummary,
+    IssueDetail,
+    IssueSummary,
 )
-from cc_api.services.ingest import ingest_tei
+from cc_api.services.ingest import ingest_issue
 
 router = APIRouter(prefix="/corpus", tags=["corpus"])
 admin_router = APIRouter(prefix="/admin", tags=["admin"], dependencies=[Depends(require_dev)])
@@ -39,15 +48,14 @@ async def list_corpus(
     page: Annotated[int, Query(ge=1)] = 1,
     size: Annotated[int, Query(ge=1, le=200)] = 50,
 ) -> CorpusPage:
-    """Liste paginée des œuvres ingérées (résumé : titre, auteur, date d'insertion)."""
+    """Liste paginée des numéros de revues (par date d'insertion décroissante)."""
     async with await _session() as session:
-        total = (await session.execute(select(func.count()).select_from(Work))).scalar_one()
+        total = (await session.execute(select(func.count()).select_from(Issue))).scalar_one()
         rows = (
             (
                 await session.execute(
-                    select(Work)
-                    .options(joinedload(Work.author))
-                    .order_by(Work.inserted_at.desc())
+                    select(Issue)
+                    .order_by(Issue.inserted_at.desc())
                     .offset((page - 1) * size)
                     .limit(size)
                 )
@@ -55,64 +63,130 @@ async def list_corpus(
             .scalars()
             .all()
         )
-
-        items = [
-            WorkSummary(
-                title=w.title,
-                author=w.author.display_name,
-                inserted_at=w.inserted_at,
+        items: list[IssueSummary] = []
+        for issue in rows:
+            n_articles = (
+                await session.execute(
+                    select(func.count()).select_from(Article).where(Article.issue_id == issue.id)
+                )
+            ).scalar_one()
+            items.append(
+                IssueSummary(
+                    slug=issue.slug,
+                    journal_title=issue.journal_title,
+                    issue_number=issue.issue_number,
+                    title=issue.title,
+                    published_date=issue.published_date,
+                    inserted_at=issue.inserted_at,
+                    n_articles=n_articles,
+                )
             )
-            for w in rows
-        ]
     return CorpusPage(items=items, page=page, size=size, total=total)
 
 
-@router.get("/{work_id}", response_model=WorkOut)
-async def get_work(work_id: int) -> WorkOut:
-    """Détail d'une œuvre + nombre de chunks indexés."""
+@router.get("/{issue_slug}", response_model=IssueDetail)
+async def get_issue(issue_slug: str) -> IssueDetail:
+    """Détail d'un numéro + liste des articles dedans."""
     async with await _session() as session:
-        work_q = await session.execute(
-            select(Work).options(joinedload(Work.author)).where(Work.id == work_id)
-        )
-        work = work_q.scalar_one_or_none()
-        if work is None:
-            raise HTTPException(status_code=404, detail=f"work {work_id} introuvable")
-        n_chunks = (
-            await session.execute(
-                select(func.count()).select_from(Chunk).where(Chunk.work_id == work.id)
+        issue_q = await session.execute(select(Issue).where(Issue.slug == issue_slug))
+        issue = issue_q.scalar_one_or_none()
+        if issue is None:
+            raise HTTPException(status_code=404, detail=f"issue '{issue_slug}' introuvable")
+        articles = (
+            (
+                await session.execute(
+                    select(Article)
+                    .options(joinedload(Article.author))
+                    .where(Article.issue_id == issue.id)
+                    .order_by(Article.idx_in_issue)
+                )
             )
-        ).scalar_one()
-        return WorkOut(
-            id=work.id,
-            ark=work.ark,
-            title=work.title,
-            author=AuthorOut.model_validate(work.author),
-            published_date=work.published_date,
-            source_url=work.source_url,
-            license=work.license,
-            sha256=work.sha256,
-            inserted_at=work.inserted_at,
-            n_chunks=n_chunks,
+            .scalars()
+            .all()
+        )
+        return IssueDetail(
+            id=issue.id,
+            slug=issue.slug,
+            ark=issue.ark,
+            journal_title=issue.journal_title,
+            issue_number=issue.issue_number,
+            title=issue.title,
+            published_date=issue.published_date,
+            license=issue.license,
+            source_desc=issue.source_desc,
+            sha256=issue.sha256,
+            inserted_at=issue.inserted_at,
+            articles=[
+                ArticleSummary(
+                    slug=a.slug,
+                    title=a.title,
+                    author=a.author.display_name,
+                    idx_in_issue=a.idx_in_issue,
+                )
+                for a in articles
+            ],
+        )
+
+
+@router.get("/{issue_slug}/{article_slug}", response_model=ArticleDetail)
+async def get_article(issue_slug: str, article_slug: str) -> ArticleDetail:
+    """Article complet : titre, auteur, paragraphes reconstruits depuis les chunks."""
+    async with await _session() as session:
+        issue_q = await session.execute(select(Issue.id).where(Issue.slug == issue_slug))
+        issue_id = issue_q.scalar_one_or_none()
+        if issue_id is None:
+            raise HTTPException(status_code=404, detail=f"issue '{issue_slug}' introuvable")
+        article_q = await session.execute(
+            select(Article)
+            .options(joinedload(Article.author))
+            .where(Article.issue_id == issue_id, Article.slug == article_slug)
+        )
+        article = article_q.scalar_one_or_none()
+        if article is None:
+            raise HTTPException(
+                status_code=404, detail=f"article '{article_slug}' introuvable dans '{issue_slug}'"
+            )
+        chunks = (
+            (
+                await session.execute(
+                    select(Chunk.text).where(Chunk.article_id == article.id).order_by(Chunk.idx)
+                )
+            )
+            .scalars()
+            .all()
+        )
+        return ArticleDetail(
+            id=article.id,
+            slug=article.slug,
+            ark=article.ark,
+            title=article.title,
+            author=AuthorOut.model_validate(article.author),
+            idx_in_issue=article.idx_in_issue,
+            page_start=article.page_start,
+            page_end=article.page_end,
+            n_paragraphs=len(chunks),
+            paragraphs=list(chunks),
         )
 
 
 @admin_router.post("/ingest", response_model=IngestResult)
 async def admin_ingest(payload: IngestRequest) -> IngestResult:
-    """Ingère un fichier TEI P5 (dev only). Path lisible côté serveur API."""
+    """Ingère un fichier TEI (1 issue) (dev only)."""
     path = Path(payload.path)
     if not path.exists():
         raise HTTPException(status_code=422, detail=f"fichier introuvable : {path}")
     if not path.is_file():
         raise HTTPException(status_code=422, detail=f"pas un fichier : {path}")
-
     try:
-        ref = await ingest_tei(path)
+        ref = await ingest_issue(path)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     return IngestResult(
-        work_id=ref.work_id,
+        issue_id=ref.issue_id,
+        slug=ref.slug,
         ark=ref.ark,
+        n_articles=ref.n_articles,
         n_chunks=ref.n_chunks,
         duration_ms=ref.duration_ms,
         was_duplicate=ref.was_duplicate,

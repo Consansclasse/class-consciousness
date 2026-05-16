@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import os
 import subprocess
+from collections.abc import Iterator
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -47,15 +48,15 @@ def _run_alembic(args: list[str], env: dict[str, str]) -> subprocess.CompletedPr
     )
 
 
-async def test_alembic_upgrade_head_matches_models(postgres_url: str) -> None:
+async def test_alembic_upgrade_head_matches_models(alembic_pg: str) -> None:
     """Apply migrations, reflect, compare tables + colonnes à Base.metadata."""
-    env = _alembic_env(postgres_url)
+    env = _alembic_env(alembic_pg)
     proc = _run_alembic(["upgrade", "head"], env)
     assert proc.returncode == 0, (
         f"alembic upgrade head a échoué.\nSTDOUT={proc.stdout}\nSTDERR={proc.stderr}"
     )
 
-    engine = create_async_engine(postgres_url, echo=False)
+    engine = create_async_engine(alembic_pg, echo=False)
     try:
         async with engine.connect() as conn:
             db_state: dict[str, set[str]] = await conn.run_sync(
@@ -83,16 +84,16 @@ async def test_alembic_upgrade_head_matches_models(postgres_url: str) -> None:
         assert not col_extra, f"colonnes superflues dans {table_name} : {col_extra}"
 
 
-async def test_alembic_downgrade_drops_all_tables(postgres_url: str) -> None:
+async def test_alembic_downgrade_drops_all_tables(alembic_pg: str) -> None:
     """Apply puis downgrade base : toutes les tables disparaissent."""
-    env = _alembic_env(postgres_url)
+    env = _alembic_env(alembic_pg)
     up = _run_alembic(["upgrade", "head"], env)
     assert up.returncode == 0, up.stderr
 
     down = _run_alembic(["downgrade", "base"], env)
     assert down.returncode == 0, down.stderr
 
-    engine = create_async_engine(postgres_url, echo=False)
+    engine = create_async_engine(alembic_pg, echo=False)
     try:
         async with engine.connect() as conn:
             remaining: list[str] = await conn.run_sync(
@@ -106,10 +107,42 @@ async def test_alembic_downgrade_drops_all_tables(postgres_url: str) -> None:
     assert business_tables == [], f"tables non droppées : {business_tables}"
 
 
+@pytest.fixture(scope="module")
+def alembic_pg() -> Iterator[str]:
+    """Conteneur Postgres DÉDIÉ aux tests de migration.
+
+    Ces tests droppent/recréent le schéma et downgradent jusqu'à `base` : ils
+    NE DOIVENT PAS partager le testcontainer `postgres_url` (session-scoped) du
+    reste de la suite, sinon ils détruisent le schéma migré que les autres
+    fichiers de tests attendent (`clean_db` → « relation chunks does not exist »).
+    """
+    try:
+        from testcontainers.core.wait_strategies import LogMessageWaitStrategy
+        from testcontainers.postgres import PostgresContainer
+    except ImportError:
+        pytest.skip("testcontainers[postgres] non installé")
+
+    container = PostgresContainer(
+        "postgres:17-alpine", username="cc", password="cc", dbname="cc_test"
+    )
+    container.waiting_for(
+        LogMessageWaitStrategy(
+            "database system is ready to accept connections", times=2
+        ).with_startup_timeout(240)
+    )
+    container.start()
+    try:
+        yield container.get_connection_url().replace(
+            "postgresql+psycopg2", "postgresql+asyncpg"
+        )
+    finally:
+        container.stop()
+
+
 @pytest.fixture(autouse=True)
-async def _reset_db(postgres_url: str) -> None:
+async def _reset_db(alembic_pg: str) -> None:
     """Drop schema public + recreate avant chaque test pour isoler les migrations."""
-    engine = create_async_engine(postgres_url, echo=False, isolation_level="AUTOCOMMIT")
+    engine = create_async_engine(alembic_pg, echo=False, isolation_level="AUTOCOMMIT")
     try:
         async with engine.connect() as conn:
             await conn.exec_driver_sql("DROP SCHEMA public CASCADE")

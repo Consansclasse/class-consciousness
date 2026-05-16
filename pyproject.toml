@@ -6,7 +6,12 @@ requires-python = ">=3.12"
 license = { text = "AGPL-3.0-or-later" }
 
 [tool.uv.workspace]
-members = ["apps/api", "packages/corpus-tools"]
+members = ["apps/api", "packages/corpus-tools", "apps/embed-server"]
+
+[[tool.uv.index]]
+name = "pytorch-cu124"
+url = "https://download.pytorch.org/whl/cu124"
+explicit = true
 
 [tool.ruff]
 line-length = 100
@@ -36,5 +41,8 @@ no_implicit_reexport = true
 
 [tool.pytest.ini_options]
 testpaths = ["apps/api/tests", "packages/corpus-tools/tests"]
-addopts = "-ra --strict-markers --strict-config --import-mode=importlib"
+addopts = "-ra --strict-markers --strict-config --import-mode=importlib -m 'not expensive'"
 asyncio_mode = "auto"
+markers = [
+    "expensive: tests qui consomment l'API Anthropic et/ou Voyage (eval RAG, exécutés en CI nightly seulement)",
+]

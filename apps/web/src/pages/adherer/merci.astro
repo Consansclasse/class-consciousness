@@ -1,0 +1,174 @@
+---
+// SPDX-License-Identifier: AGPL-3.0-or-later
+import BaseLayout from "../../layouts/BaseLayout.astro";
+import ThemeToggle from "../../components/ThemeToggle.astro";
+
+const apiBase = import.meta.env.PUBLIC_API_BASE_URL ?? "http://localhost:8000";
+
+const intentParam = Astro.url.searchParams.get("intent");
+const solidaire = Astro.url.searchParams.get("solidaire") === "1";
+
+type IntentOut = {
+  intent_id: number;
+  status: "PENDING" | "COMPLETED" | "EXPIRED" | "FAILED";
+  tier: "INDIVIDUAL" | "STRUCTURE" | "MECENE";
+  amount_eur_cents: number;
+  paid_at: string | null;
+};
+
+let intent: IntentOut | null = null;
+let fetchError: string | null = null;
+
+if (intentParam) {
+  try {
+    const res = await fetch(`${apiBase}/adhesions/intent/${intentParam}`);
+    if (res.ok) {
+      intent = (await res.json()) as IntentOut;
+    } else if (res.status === 404) {
+      fetchError = "Adhésion introuvable. Vérifiez le lien de retour.";
+    } else {
+      fetchError = "Impossible de récupérer l'état de l'adhésion pour le moment.";
+    }
+  } catch {
+    fetchError = "API inaccessible. L'adhésion peut tout de même être confirmée — vérifiez votre email dans quelques minutes.";
+  }
+}
+
+const tierLabel: Record<NonNullable<IntentOut>["tier"], string> = {
+  INDIVIDUAL: "Membre individuel",
+  STRUCTURE: "Membre structure",
+  MECENE: "Mécène",
+};
+
+const isCompleted = intent?.status === "COMPLETED";
+const isPending = intent?.status === "PENDING";
+const isFailed =
+  intent?.status === "FAILED" || intent?.status === "EXPIRED";
+---
+
+<BaseLayout title="Adhésion confirmée — Conscience de classe">
+  <div class="flex min-h-dvh flex-col bg-white dark:bg-black">
+    <header
+      class="flex shrink-0 items-center justify-between px-6 lg:px-10 py-5 border-b border-black dark:border-white"
+    >
+      <a
+        href="/"
+        class="font-Scheherazade text-xs sm:text-sm uppercase tracking-[0.25em] text-black dark:text-white hover:text-darkpink transition-colors"
+      >
+        ← Accueil
+      </a>
+      <a
+        href="/"
+        class="font-Scheherazade text-sm uppercase tracking-[0.2em] text-black dark:text-white hover:text-darkpink transition-colors"
+      >
+        Conscience de classe
+      </a>
+      <ThemeToggle />
+    </header>
+
+    <main class="flex-1 px-6 md:px-12 lg:px-16 py-16 md:py-24">
+      <div class="mx-auto w-full max-w-2xl">
+        {
+          isCompleted && (
+            <>
+              <p class="font-Scheherazade text-xs uppercase tracking-[0.25em] text-darkpink">
+                {solidaire ? "Adhésion solidaire enregistrée" : "Paiement reçu"}
+              </p>
+              <h1 class="mt-3 font-Scheherazade text-4xl sm:text-5xl leading-none text-black dark:text-white">
+                Merci.
+              </h1>
+              <p class="mt-6 font-Scheherazade text-base sm:text-lg text-black dark:text-white leading-relaxed max-w-xl">
+                Votre adhésion {intent && tierLabel[intent.tier]} est active
+                pour les douze prochains mois.
+                {!solidaire &&
+                  intent &&
+                  ` Montant : ${(intent.amount_eur_cents / 100).toFixed(2)} €.`}
+              </p>
+              <p class="mt-4 font-Scheherazade italic text-sm sm:text-base text-black dark:text-white max-w-xl">
+                Un email de confirmation vous parviendra dans quelques instants.
+                Conservez-le — il fait office de justificatif d'adhésion.
+              </p>
+            </>
+          )
+        }
+
+        {
+          isPending && (
+            <>
+              <p class="font-Scheherazade text-xs uppercase tracking-[0.25em] text-darkpink">
+                Paiement en attente de confirmation
+              </p>
+              <h1 class="mt-3 font-Scheherazade text-4xl sm:text-5xl leading-none text-black dark:text-white">
+                Patientez.
+              </h1>
+              <p class="mt-6 font-Scheherazade text-base sm:text-lg text-black dark:text-white leading-relaxed max-w-xl">
+                Stripe nous confirme votre paiement de manière asynchrone. Cette
+                page se rechargera automatiquement.
+              </p>
+              <p class="mt-4 font-Scheherazade italic text-sm text-black dark:text-white max-w-xl">
+                Si rien ne se passe sous 30 secondes, vérifiez votre messagerie —
+                un email Stripe vous a été envoyé.
+              </p>
+              <meta http-equiv="refresh" content="5" />
+            </>
+          )
+        }
+
+        {
+          isFailed && (
+            <>
+              <p class="font-Scheherazade text-xs uppercase tracking-[0.25em] text-darkpink">
+                Paiement non finalisé
+              </p>
+              <h1 class="mt-3 font-Scheherazade text-4xl sm:text-5xl leading-none text-black dark:text-white">
+                Aucun débit n'a eu lieu.
+              </h1>
+              <p class="mt-6 font-Scheherazade text-base sm:text-lg text-black dark:text-white leading-relaxed max-w-xl">
+                Votre session de paiement a expiré ou a échoué. Aucun montant
+                n'a été prélevé.
+              </p>
+              <a
+                href="/adherer"
+                class="mt-8 inline-block font-Scheherazade text-base uppercase tracking-[0.2em] underline decoration-1 underline-offset-4 text-black dark:text-white hover:text-darkpink"
+              >
+                Reprendre l'adhésion →
+              </a>
+            </>
+          )
+        }
+
+        {
+          !intent && fetchError && (
+            <>
+              <h1 class="font-Scheherazade text-4xl sm:text-5xl leading-none text-black dark:text-white">
+                Confirmation différée.
+              </h1>
+              <p class="mt-6 font-Scheherazade text-base text-black dark:text-white leading-relaxed max-w-xl">
+                {fetchError}
+              </p>
+            </>
+          )
+        }
+
+        {
+          !intent && !fetchError && (
+            <>
+              <h1 class="font-Scheherazade text-4xl sm:text-5xl leading-none text-black dark:text-white">
+                Cette page attend un identifiant d'adhésion.
+              </h1>
+              <p class="mt-6 font-Scheherazade text-base text-black dark:text-white max-w-xl">
+                Elle s'affiche normalement après une redirection depuis Stripe.
+              </p>
+              <a
+                href="/adherer"
+                class="mt-8 inline-block font-Scheherazade text-base uppercase tracking-[0.2em] underline decoration-1 underline-offset-4 text-black dark:text-white hover:text-darkpink"
+              >
+                Voir les paliers d'adhésion →
+              </a>
+            </>
+          )
+        }
+      </div>
+    </main>
+  </div>
+</BaseLayout>

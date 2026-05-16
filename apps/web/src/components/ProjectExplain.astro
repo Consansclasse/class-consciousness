@@ -46,8 +46,9 @@ const sectionSubtitle = "Sept questions, sept réponses claires. Cliquez sur cha
       <Disclosure index="02" question="Comment garantissez-vous chaque citation ?">
         <p>
           Le pipeline prévu est en quatre étapes&nbsp;: embedding de la
-          question, recherche vectorielle dans le corpus (Qdrant + Voyage AI),
-          reranking sémantique, puis génération encadrée par Claude Opus.
+          question, recherche vectorielle dans le corpus (Qdrant + modèles
+          Qwen3 auto-hébergés), reranking sémantique, puis génération encadrée
+          par Claude Opus.
         </p>
         <p class="mt-4">
           Avant tout affichage, un vérificateur découpe la réponse en phrases.

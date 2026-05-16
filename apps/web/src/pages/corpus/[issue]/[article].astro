@@ -1,0 +1,127 @@
+---
+// SPDX-License-Identifier: AGPL-3.0-or-later
+import BaseLayout from "../../../layouts/BaseLayout.astro";
+import ThemeToggle from "../../../components/ThemeToggle.astro";
+
+type AuthorOut = {
+  id: number;
+  displayName: string;
+};
+
+type ArticleDetail = {
+  id: number;
+  slug: string;
+  ark: string;
+  title: string;
+  author: AuthorOut;
+  idxInIssue: number;
+  nParagraphs: number;
+  paragraphs: string[];
+};
+
+type IssueSummary = {
+  slug: string;
+  title: string;
+};
+
+const apiBase = import.meta.env.PUBLIC_API_BASE_URL ?? "http://localhost:8000";
+
+export async function getStaticPaths() {
+  const apiBase = import.meta.env.PUBLIC_API_BASE_URL ?? "http://localhost:8000";
+  try {
+    const res = await fetch(`${apiBase}/corpus?size=200`);
+    if (!res.ok) return [];
+    const body = (await res.json()) as { items: { slug: string }[] };
+    const paths = [];
+    for (const issue of body.items) {
+      const detailRes = await fetch(`${apiBase}/corpus/${issue.slug}`);
+      if (!detailRes.ok) continue;
+      const detail = (await detailRes.json()) as { articles: { slug: string }[] };
+      for (const article of detail.articles) {
+        paths.push({ params: { issue: issue.slug, article: article.slug } });
+      }
+    }
+    return paths;
+  } catch {
+    return [];
+  }
+}
+
+const { issue, article } = Astro.params;
+
+let detail: ArticleDetail | null = null;
+let issueInfo: IssueSummary | null = null;
+try {
+  const res = await fetch(`${apiBase}/corpus/${issue}/${article}`);
+  if (res.ok) detail = (await res.json()) as ArticleDetail;
+  const issueRes = await fetch(`${apiBase}/corpus/${issue}`);
+  if (issueRes.ok) issueInfo = (await issueRes.json()) as IssueSummary;
+} catch {
+  detail = null;
+}
+---
+
+<BaseLayout title={detail ? `${detail.title} — Conscience de classe` : "Article introuvable"}>
+  <div class="flex min-h-dvh flex-col bg-white dark:bg-black">
+    <header
+      class="flex shrink-0 items-center justify-between px-6 lg:px-10 py-5 border-b border-black dark:border-white"
+    >
+      <a
+        href="/corpus"
+        class="font-Scheherazade text-xs sm:text-sm uppercase tracking-[0.25em] text-black dark:text-white hover:text-darkpink transition-colors"
+      >
+        ← Corpus
+      </a>
+      <a
+        href="/"
+        class="font-Scheherazade text-sm uppercase tracking-[0.2em] text-black dark:text-white hover:text-darkpink transition-colors"
+      >
+        Conscience de classe
+      </a>
+      <ThemeToggle />
+    </header>
+
+    <main class="flex-1 px-6 md:px-12 lg:px-16 py-16 md:py-24">
+      <div class="mx-auto w-full max-w-3xl">
+        {detail ? (
+          <>
+            {issueInfo && (
+              <p class="font-Scheherazade text-xs sm:text-sm uppercase tracking-[0.25em] text-black dark:text-white mb-6">
+                {issueInfo.title}
+              </p>
+            )}
+            <h1 class="font-Scheherazade text-3xl sm:text-4xl md:text-5xl leading-tight text-black dark:text-white">
+              {detail.title}
+            </h1>
+            <p class="mt-3 font-Scheherazade italic text-base sm:text-lg text-black dark:text-white">
+              {detail.author.displayName}
+            </p>
+            <p class="mt-1 font-Scheherazade text-xs uppercase tracking-[0.25em] text-black dark:text-white">
+              {detail.ark}
+            </p>
+
+            <article class="mt-12 space-y-6">
+              {detail.paragraphs.map((p) => (
+                <p class="font-Scheherazade text-base sm:text-lg text-black dark:text-white leading-relaxed text-pretty">
+                  {p}
+                </p>
+              ))}
+            </article>
+          </>
+        ) : (
+          <div class="border-y border-black dark:border-white py-24 text-center">
+            <p class="font-Scheherazade italic text-lg sm:text-xl text-black dark:text-white">
+              Article introuvable.
+            </p>
+            <a
+              href="/corpus"
+              class="mt-6 inline-block font-Scheherazade text-sm sm:text-base text-black dark:text-white hover:text-darkpink underline"
+            >
+              Retour au corpus
+            </a>
+          </div>
+        )}
+      </div>
+    </main>
+  </div>
+</BaseLayout>

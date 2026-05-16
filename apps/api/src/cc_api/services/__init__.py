@@ -3,18 +3,46 @@
 
 from __future__ import annotations
 
+from cc_api.services.adhesion import AdhesionError, create_checkout, handle_stripe_event
+from cc_api.services.citation import (
+    CitationReport,
+    CitationVerdict,
+    SentenceVerdict,
+    split_sentences,
+    verify_response,
+    verify_sentence,
+)
 from cc_api.services.ingest import (
     COLLECTION,
     IngestSelfTestError,
-    WorkRef,
+    IssueRef,
     chunk_point_id,
-    ingest_tei,
+    ingest_issue,
+)
+from cc_api.services.rag import (
+    RagResult,
+    RerankedChunk,
+    RetrievedChunk,
+    answer_question,
 )
 
 __all__ = [
     "COLLECTION",
+    "AdhesionError",
+    "CitationReport",
+    "CitationVerdict",
     "IngestSelfTestError",
-    "WorkRef",
+    "IssueRef",
+    "RagResult",
+    "RerankedChunk",
+    "RetrievedChunk",
+    "SentenceVerdict",
+    "answer_question",
     "chunk_point_id",
-    "ingest_tei",
+    "create_checkout",
+    "handle_stripe_event",
+    "ingest_issue",
+    "split_sentences",
+    "verify_response",
+    "verify_sentence",
 ]

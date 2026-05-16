@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xmlns="http://www.tei-c.org/ns/1.0">
+  <teiHeader>
+    <fileDesc>
+      <titleStmt>
+        <title>Introduction</title>
+        <author>Fraction de Gauche du Parti communiste italien</author>
+      </titleStmt>
+      <publicationStmt>
+        <publisher>Conscience de classe</publisher>
+        <date when="1933-11-01">Novembre 1933</date>
+        <idno type="ARK">ark:/99999/bilan-001-introduction</idno>
+        <availability status="free">
+          <licence target="https://creativecommons.org/publicdomain/mark/1.0/">Domaine public — Bilan (1933-1938), revue de la Fraction de Gauche du Parti communiste italien. Auteurs et collaborateurs morts depuis plus de 70 ans.</licence>
+        </availability>
+      </publicationStmt>
+      <sourceDesc>
+        <p>Bilan, bulletin théorique mensuel de la Fraction de Gauche du Parti communiste italien, n°1, Novembre 1933. Transcription consultée sur archivesautonomies.org en mai 2026.</p>
+      </sourceDesc>
+    </fileDesc>
+  </teiHeader>
+  <text>
+    <body>
+      <p>Notre fraction en abordant la publication du présent bulletin ne croit pas pouvoir présenter des solutions définitives aux problèmes terribles qui se posent aux prolétariats de tous les pays.</p>
+      <p>Certes, notre fraction se réclame d'un long passé politique, d'une tradition profonde dans le mouvement italien et international ; d'un ensemble de positions politiques fondamentales. Mais elle n'entend pas se prévaloir de ses précédents politiques pour demander des adhésions aux solutions qu'elle préconise pour la situation actuelle. Bien au contraire, elle convie les révolutionnaires à soumettre à la vérification des évènements les positions qu'elle défend actuellement aussi bien que les positions politiques contenues dans ses documents de base.</p>
+      <p>Ce n'est pas un changement dans la situation historique qui a permis au capitalisme de traverser la tourmente des évènements d'après-guerre : en 1933, d'une façon analogue, et bien plus qu'en 1917, le capitalisme se trouve être définitivement condamné comme système d'organisation sociale. Ce qui a changé, de 1917 à 1933, c'est le rapport de force entre les deux classes fondamentales, entre les deux forces historiques qui agissent dans l'époque actuelle : le capitalisme et le prolétariat.</p>
+      <p>Octobre 1917 a été possible parce qu'en Russie existait un parti préparé de longue date, qui avait, au cours d'une série ininterrompue de luttes politiques, examiné toutes les questions qui se posèrent au prolétariat russe et mondial après la défaite de 1905. C'est de cette défaite que surgirent les cadres capables de diriger les batailles de 1917. Ces cadres se sont formés au feu d'une critique intense qui visait à rétablir les notions du marxisme dans tous les domaines de la connaissance, de l'économie, de la tactique, de l'organisation : aucun dogme n'arrêta l'oeuvre des bolcheviks et c'est justement pour cela qu'ils ont réussi dans leur mission.</p>
+      <p>Dans aucun autre pays le prolétariat n'avait pu faire l'oeuvre que les bolcheviks avaient réalisé en Russie. Et c'est précisément le défaut de cadres et d'un parti qui a déterminé la série de défaites essuyées par le prolétariat dans l'après-guerre.</p>
+      <p>Nous sommes aujourd'hui à un terme extrême de cette période : le prolétariat n'est peut-être plus en mesure d'opposer le triomphe de a révolution au déclenchement d'une nouvelle guerre impérialiste. Cependant, s'il reste des chances de reprise révolutionnaire immédiate, elles consistent uniquement dans la compréhension des défaites passées. Ceux qui opposent à ce travail indispensable d'analyse historique le cliché de la mobilisation immédiate des ouvriers, ne font que jeter de la confusion, qu'empêcher la reprise réelle des luttes prolétariennes.</p>
+      <p>Les cadres pour les nouveaux partis du prolétariat ne peuvent sortir que de la connaissance profonde des causes des défaites. Et cette connaissance ne peut supporter aucun interdit non plus qu'aucun ostracisme.</p>
+      <p>Tirer le bilan des évènements de l'après-guerre c'est donc établie les conditions pour la victoire du prolétariat dans tous les pays. Notre fraction aurait préféré qu'une telle oeuvre se fit par un organisme international, persuadée comme elle l'est de la nécessité de la confrontation politique entre ces groupes capables de représenter la classe prolétarienne de plusieurs pays. Aussi serons nous très heureux de pouvoir céder ce bulletin à une initiative internationale garantie par l'application de méthodes sérieuses de travail et par le souci de déterminer une saine polémique politique.</p>
+      <p>Notre bulletin paraît sous la responsabilité de la C. E. de la fraction de gauche du P. C. I. Le camarade Dumont qui accepte les positions de la Fraction et qui fait parti d'un groupe avec lequel notre fraction a constitué une communauté de travail, collabore activement à sa rédaction.</p>
+      <p>La fraction, tout en se réclamant de ses documents fondamentaux qui sont dus surtout au camarade Bordiga, ne peut nullement engager la responsabilité de ce camarade qui se trouve dans l'impossibilité de faire connaître ses opinions. La revue publiera plusieurs écrits du camarade Bordiga, ce qui permettra aux militants des autres pays de vérifier si les positions que nous défendons actuellement se relient avec celles que Bordiga a exprimé dans ses documents, ce qui constitue l'apport du prolétariat italien à la lutte du prolétariat international pour la victoire du socialisme dans tous les pays.</p>
+      <p>[1] Errata paru dans n°2 : ajout de « qui accepte les positions de la Fraction ».</p>
+    </body>
+  </text>
+</TEI>

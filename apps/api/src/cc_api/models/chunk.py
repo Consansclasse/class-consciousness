@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Modèle Chunk — unité vectorisable (1 paragraphe ou sous-fenêtre).
+"""Modèle Chunk — unité vectorisable d'un Article (1 paragraphe ou sous-fenêtre).
 
-Invariant règle d'or : char_start/char_end pointent dans le texte plat du body
-du work. qdrant_point_id est UUID v5 déterministe (`{ark}#{idx:08d}`).
+Invariant règle d'or : char_start/char_end pointent dans le texte plat de l'article.
+qdrant_point_id est UUID v5 déterministe (`{article_ark}#{idx:08d}`).
 """
 
 from __future__ import annotations
@@ -17,15 +17,15 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from cc_api.models.base import Base
 
 if TYPE_CHECKING:
-    from cc_api.models.work import Work
+    from cc_api.models.article import Article
 
 
 class Chunk(Base):
     __tablename__ = "chunks"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    work_id: Mapped[int] = mapped_column(
-        ForeignKey("works.id", ondelete="CASCADE"), nullable=False, index=True
+    article_id: Mapped[int] = mapped_column(
+        ForeignKey("articles.id", ondelete="CASCADE"), nullable=False, index=True
     )
     idx: Mapped[int] = mapped_column(Integer, nullable=False)
     text: Mapped[str] = mapped_column(Text, nullable=False)
@@ -37,4 +37,4 @@ class Chunk(Base):
         UUID(as_uuid=True), nullable=False, unique=True
     )
 
-    work: Mapped[Work] = relationship(back_populates="chunks")
+    article: Mapped[Article] = relationship(back_populates="chunks")
