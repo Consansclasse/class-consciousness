@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Moteur d'inférence Qwen3 — embeddings + reranking sur GPU.
+"""Moteur d'inférence Qwen3 — embeddings + reranking.
 
 Embeddings : Qwen3-Embedding, pooling du dernier token réel + normalisation L2,
 conformément à la fiche modèle officielle (padding à gauche, dernier état caché).
@@ -7,13 +7,13 @@ conformément à la fiche modèle officielle (padding à gauche, dernier état c
 Reranking : Qwen3-Reranker, modèle causal jugeant une paire (requête, document)
 par les logits « yes » / « no » du dernier token.
 
-Chargement paresseux : l'embedder est chargé au démarrage du serveur (lifespan),
-le reranker au premier appel `/rerank`. Sur RTX A2000 12 Go, l'embedder 8-bit
-(~9 Go) et le reranker 4-bit (~3 Go) ne cohabitent pas confortablement — le
-reranker n'est donc chargé qu'à la demande.
+En production le service tourne sur CPU (modèles 0.6B — voir
+docs/adr/0008-architecture-embedding-vps-cpu.md) ; `device=cuda` reste possible
+en développement local. Chargement paresseux : l'embedder est chargé au
+démarrage du serveur (lifespan), le reranker au premier appel `/rerank`.
 
-Les forward passes sont protégées par un verrou : un seul lot GPU à la fois,
-les requêtes HTTP concurrentes sont sérialisées plutôt que de risquer un OOM.
+Les forward passes sont protégées par un verrou : un seul lot à la fois, les
+requêtes HTTP concurrentes sont sérialisées.
 """
 
 from __future__ import annotations
@@ -81,12 +81,14 @@ class Embedder:
         self._lock = threading.Lock()
         log.info("embedder.loading", model=self.model_name, quant=settings.embed_quant)
         self.tokenizer = AutoTokenizer.from_pretrained(self.model_name, padding_side="left")
-        quant = _quant_config(settings.embed_quant)
+        # bitsandbytes ne quantifie que sur GPU : sur CPU, chargement fp32.
+        on_cpu = settings.device == "cpu"
+        quant = None if on_cpu else _quant_config(settings.embed_quant)
         self.model = AutoModel.from_pretrained(
             self.model_name,
             quantization_config=quant,
             device_map=settings.device,
-            dtype=torch.bfloat16,
+            dtype=torch.float32 if on_cpu else torch.bfloat16,
         )
         self.model.eval()
         self.dim = int(self.model.config.hidden_size)

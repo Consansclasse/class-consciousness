@@ -53,7 +53,7 @@ class RerankResponse(BaseModel):
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     # L'embedder est chargé dès le démarrage : l'ingestion en a besoin
-    # immédiatement et on veut échouer bruyamment si le GPU est indisponible.
+    # immédiatement et on veut échouer bruyamment si le modèle est introuvable.
     await anyio.to_thread.run_sync(get_embedder)
     yield
 

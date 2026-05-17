@@ -29,7 +29,7 @@ Phase 0 — projet pré-1.0. Toutes les versions taggées sont actives mais aucu
 - Vulnérabilités dans les dépendances que nous embarquons
 
 **Hors périmètre** (ne pas signaler) :
-- Vulnérabilités dans les services tiers (Anthropic, Voyage, Hetzner) — signaler directement chez eux
+- Vulnérabilités dans les services tiers (Anthropic, OVH) — signaler directement chez eux
 - Manque de header HTTP best-practice sans impact démontré
 - Rate-limit non strict sur endpoints lecture (par design : archive publique)
 - Engineering social, phishing visant des mainteneurs hors infrastructure projet
@@ -41,7 +41,7 @@ Pas de bug bounty pour l'instant (projet sans budget). Reconnaissance publique e
 ## Bonnes pratiques pour les déployeurs self-host
 
 - Lire [`docs/deploy/self-host.md`](./docs/deploy/self-host.md) en entier
-- Renouveler les clés API (Anthropic, Voyage) tous les 6 mois
+- Renouveler les clés API (Anthropic) tous les 6 mois
 - Activer 2FA sur les comptes mainteneurs
 - Garder Postgres + Qdrant + Redis derrière le réseau interne (jamais exposés sur Internet)
 - Mises à jour Dependabot acceptées sous 7 jours pour les niveaux high/critical

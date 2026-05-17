@@ -12,10 +12,11 @@ from __future__ import annotations
 
 from typing import cast
 
+from anthropic import APIError
 from fastapi import APIRouter, HTTPException, Request
 
 from cc_api.clients.anthropic import get_anthropic_client
-from cc_api.clients.embed import get_embed_client, get_rerank_client
+from cc_api.clients.embed import EmbedServerError, get_embed_client, get_rerank_client
 from cc_api.clients.qdrant import get_qdrant
 from cc_api.core.logging import get_logger
 from cc_api.core.ratelimit import limiter
@@ -97,13 +98,34 @@ async def post_qa(request: Request, payload: QaRequest) -> QaResponse:
     reranker = get_rerank_client()
     anthropic = get_anthropic_client()
 
-    result = await answer_question(
-        payload.question,
-        qdrant=qdrant,
-        embed=embed,
-        reranker=reranker,
-        anthropic=anthropic,
-    )
+    try:
+        result = await answer_question(
+            payload.question,
+            qdrant=qdrant,
+            embed=embed,
+            reranker=reranker,
+            anthropic=anthropic,
+        )
+    except EmbedServerError as exc:
+        # cc-embed injoignable : dégradation gracieuse (503), pas une 500 nue.
+        log.warning("qa.embed_unavailable", error=str(exc))
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Le service d'embedding est momentanément indisponible. "
+                "Réessaie dans un instant."
+            ),
+        ) from exc
+    except APIError as exc:
+        # Erreur côté API Anthropic (panne, quota, crédits épuisés) : 503 propre.
+        log.warning("qa.llm_unavailable", error=str(exc))
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Le service de génération est momentanément indisponible. "
+                "Réessaie dans un instant."
+            ),
+        ) from exc
     response = _build_response(result)
     if result.refused_reason is not None:
         log.info(

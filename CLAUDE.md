@@ -7,7 +7,7 @@ Archive open-source de la théorie marxiste avec RAG sourcé. Monorepo `pnpm` + 
 - **Backend** : FastAPI 0.115 + SQLAlchemy async + Alembic — `apps/api/` (port 8000).
 - **Frontend** : Astro 5 + îlots React — `apps/web/` (port 3000).
 - **DB** : Postgres 17 (`cc` / `class_consciousness`, port 5432).
-- **Vecteurs** : Qdrant (port 6333) — embeddings Voyage `voyage-4` + rerank `rerank-2.5`.
+- **Vecteurs** : Qdrant (port 6333) — embeddings + reranking via `cc-embed` (Qwen3-Embedding-0.6B / Qwen3-Reranker-0.6B, CPU).
 - **Cache** : Redis 7 (port 6379).
 - **LLM** : Anthropic Claude Opus 4.7 (`ANTHROPIC_MODEL`).
 - **Proxy** : Caddy (ports 80/443).

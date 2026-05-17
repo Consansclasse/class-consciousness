@@ -9,8 +9,8 @@ license = { text = "AGPL-3.0-or-later" }
 members = ["apps/api", "packages/corpus-tools", "apps/embed-server"]
 
 [[tool.uv.index]]
-name = "pytorch-cu124"
-url = "https://download.pytorch.org/whl/cu124"
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
 explicit = true
 
 [tool.ruff]
@@ -21,7 +21,7 @@ target-version = "py312"
 select = ["E", "F", "I", "N", "B", "UP", "S", "ASYNC", "RUF"]
 # S101 : assert toléré (tests).
 # ASYNC240 : pathlib dans async — non pertinent (on n'utilise pas anyio/trio.Path,
-# les I/O fichier sont locales et négligeables vs Voyage HTTP).
+# les I/O fichier sont locales et négligeables vs les I/O HTTP).
 ignore = ["S101", "ASYNC240"]
 
 [tool.ruff.lint.per-file-ignores]
@@ -44,5 +44,5 @@ testpaths = ["apps/api/tests", "packages/corpus-tools/tests"]
 addopts = "-ra --strict-markers --strict-config --import-mode=importlib -m 'not expensive'"
 asyncio_mode = "auto"
 markers = [
-    "expensive: tests qui consomment l'API Anthropic et/ou Voyage (eval RAG, exécutés en CI nightly seulement)",
+    "expensive: tests qui consomment l'API Anthropic (eval RAG, exécutés en CI nightly seulement)",
 ]

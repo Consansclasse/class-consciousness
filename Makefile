@@ -62,8 +62,8 @@ test-e2e:
 	cd apps/web && pnpm exec playwright test
 
 # Suites eval RAG (DeepEval + RAGAS sur 12 golden questions Bilan n°1).
-# Coûte ~$3-5 par run (Anthropic + Voyage). Marker @pytest.mark.expensive,
-# exclus du `make test` par défaut. Nécessite ANTHROPIC_API_KEY + VOYAGE_API_KEY.
+# Coûte ~$3-5 par run (API Anthropic). Marker @pytest.mark.expensive,
+# exclus du `make test` par défaut. Nécessite ANTHROPIC_API_KEY + cc-embed up.
 test-eval: agent-preflight
 	uv run pytest apps/api/tests/eval -v --no-cov -m expensive
 
@@ -76,9 +76,8 @@ test-eval-ragas: agent-preflight
 # Pre-flight : vérifie env vars + services up avant les tests coûteux.
 agent-preflight:
 	@test -n "$$ANTHROPIC_API_KEY" || (echo "❌ ANTHROPIC_API_KEY manquant (source .env ou export)"; exit 1)
-	@test -n "$$VOYAGE_API_KEY" || (echo "❌ VOYAGE_API_KEY manquant (source .env ou export)"; exit 1)
 	@$(COMPOSE) ps --status running --services 2>/dev/null | grep -q postgres || (echo "❌ Postgres down — lance 'make agent-bootstrap'"; exit 1)
-	@echo "✅ pre-flight OK : ANTHROPIC_API_KEY + VOYAGE_API_KEY présents, Postgres up"
+	@echo "✅ pre-flight OK : ANTHROPIC_API_KEY présent, Postgres up"
 
 smoke:
 	@echo "→ API /health"

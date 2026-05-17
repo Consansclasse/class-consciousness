@@ -19,7 +19,7 @@ Archive open-source de la théorie marxiste avec **RAG sourcé**. Greenfield à 
 ## Décisions verrouillées
 
 - **Licence** : AGPL-3.0-or-later (code), CC-BY-SA-4.0 (corpus original), licences respectives pour œuvres dérivées.
-- **Pile IA** : Anthropic Claude Opus 4.7 (génération, API). Embeddings + reranking **100 % auto-hébergés en local** sur GPU (RTX A2000 12 Go) — serveur `cc-embed` (`apps/embed-server`) : Qwen3-Embedding-8B 8-bit (embeddings, 4096 dims) et Qwen3-Reranker-0.6B (reranking). **Jamais Voyage, jamais OpenAI** : aucun service d'IA tiers hormis la génération Anthropic. Le code Voyage hérité (`clients/voyage*.py`) est à supprimer.
+- **Pile IA** : Anthropic Claude Opus 4.7 (génération, API). Embeddings + reranking **auto-hébergés** par le service `cc-embed` (`apps/embed-server`) : Qwen3-Embedding-0.6B (embeddings, 1024 dims) et Qwen3-Reranker-0.6B (reranking), **sur CPU** — conteneur du compose, aucun GPU requis (voir `docs/adr/0008-architecture-embedding-vps-cpu.md`). **Jamais Voyage, jamais OpenAI** : aucun service d'IA tiers hormis la génération Anthropic.
 - **Langues corpus** : français de référence, allemand et anglais en secondaire (sources primaires). Sortie système : français exclusivement.
 - **Vectoriel** : Qdrant (Apache 2.0), pas de Pinecone, pas de Weaviate, pas de pgvector.
 - **Déploiement** : self-hosted (OVH/Hetzner via Coolify), pas de SaaS managé.

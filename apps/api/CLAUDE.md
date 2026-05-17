@@ -8,7 +8,7 @@ Backend FastAPI Python 3.12. Toutes les opérations DB sont **async** (asyncpg +
 src/cc_api/
 ├── main.py            # app FastAPI, mount routers
 ├── core/              # settings, logging, sécurité, deps DI
-├── clients/           # qdrant.py, redis.py, anthropic.py, voyage.py
+├── clients/           # db.py, qdrant.py, redis.py, embed.py, anthropic.py, stripe.py
 ├── models/            # SQLAlchemy ORM
 ├── schemas/           # Pydantic v2
 ├── services/          # logique métier (RAG, ingestion, etc.)

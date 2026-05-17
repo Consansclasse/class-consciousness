@@ -9,7 +9,7 @@
 - Accès SSH au VPS (root ou utilisateur sudo, clé ou password initial OVH).
 - Login OVH Manager (specs VPS, Object Storage, zone DNS).
 - Owner du repo `Concsience/class-consciousness` (installer une GitHub App).
-- Clés API : `ANTHROPIC_API_KEY` (console.anthropic.com), `VOYAGE_API_KEY` (dash.voyageai.com). À conserver dans un manager de mots de passe, jamais dans le repo.
+- Clé API : `ANTHROPIC_API_KEY` (console.anthropic.com). À conserver dans un manager de mots de passe, jamais dans le repo. (Embeddings + reranking sont auto-hébergés par le service `cc-embed` — aucune clé externe.)
 
 ---
 
@@ -238,7 +238,6 @@ Renseigner uniquement les secrets externes ; les `SERVICE_PASSWORD_*` se génèr
 
 ```
 ANTHROPIC_API_KEY = sk-ant-...
-VOYAGE_API_KEY    = ...
 ```
 
 ### 5.4 FQDN par service
@@ -267,8 +266,9 @@ nmap -p 5432,6333,6334,6379 51.68.129.187        # tous filtered/closed
 ```
 
 Coolify UI > Resources > class-consciousness :
-- Tous services `Healthy`.
-- Logs sans erreur après 5 min.
+- Le service `migrate` s'exécute puis se termine (exit 0) — il applique les migrations Alembic avant que `api` ne démarre.
+- Les 6 services sont présents ; `cc-embed` peut rester quelques minutes avant d'être `Healthy` au 1er démarrage (téléchargement des modèles Qwen3-0.6B) — suivre ses logs.
+- `api` et `web` `Healthy`, logs sans erreur après 5 min.
 
 ---
 
@@ -286,18 +286,57 @@ Voir `coolify-backup-restore.md` pour la procédure complète. Résumé :
 
 ---
 
-## Phase 8 — Ce qui reste à faire après ce runbook
+## Phase 8 — Ingestion du corpus
 
-Hors scope de ce runbook (à tracer en issues GitHub) :
+Le déploiement applique les migrations automatiquement (service `migrate`, qui
+s'exécute avant `api`) et démarre `cc-embed`. Mais **Qdrant démarre vide** : il
+faut ingérer le corpus une fois, puis à chaque mise à jour.
 
-- Migrations Alembic du schéma DB (déjà la trajectoire `apps/api/alembic/`).
-- Premier ingest TEI test.
-- Ajout du middleware CORS `apps/api/src/cc_api/main.py` à la 1re route consommée par le navigateur depuis `consciencedeclasse.com`.
-- Build arg Astro `PUBLIC_API_URL` côté `infra/Dockerfile.web` (à ajouter dans le stage `build` au moment du 1er fetch côté client).
-- Workers uvicorn multi-process (`gunicorn -k uvicorn.workers.UvicornWorker`).
-- Pin de version Postgres mineure (`postgres:17.x`) avant la 1re donnée réelle.
+Le corpus vit dans le dépôt public `class-consciousness-corpus`. Sur le VPS, en SSH :
+
+```sh
+# 1. Cloner le dépôt corpus (public, CC-BY-SA — clone HTTPS anonyme)
+git clone https://github.com/Consansclasse/class-consciousness-corpus.git /tmp/cc-corpus
+
+# 2. Se placer dans le dossier du compose déployé par Coolify
+cd /data/coolify/applications/<id-ressource>   # [VÉRIFIER] l'id dans l'UI Coolify
+
+# 3. Ingestion via un conteneur jetable basé sur le service `api` (même image,
+#    même environnement → joint postgres + qdrant + cc-embed)
+docker compose -f docker-compose.prod.yml run --rm \
+  -v /tmp/cc-corpus:/corpus:ro \
+  api python scripts/ingest_corpus.py "/corpus/bilan/bilan-[0-9][0-9][0-9].tei.xml"
+
+# 4. Nettoyer
+rm -rf /tmp/cc-corpus
+```
+
+- Le glob `bilan-[0-9][0-9][0-9].tei.xml` ingère les 46 numéros monolithiques et
+  ignore les fichiers `bilan-001-*.tei.xml` (articles séparés du n°1).
+- Le script est idempotent (dédup SHA256) : le relancer ne ré-ingère pas un
+  numéro déjà connu.
+- Après ingestion, **redéployer le service `web`** : son build statique liste le
+  corpus au moment du build.
+
+Vérification finale :
+
+```sh
+curl https://api.cdc.consciencedeclasse.com/corpus      # liste non vide
+curl -X POST https://api.cdc.consciencedeclasse.com/qa \
+  -H 'Content-Type: application/json' \
+  -d '{"question":"Que dit Bilan sur la nature de la guerre ?"}'   # réponse sourcée
+```
+
+---
+
+## Phase 9 — Reste à faire (issues GitHub)
+
+- Workers uvicorn multi-process (`gunicorn -k uvicorn.workers.UvicornWorker`) — et
+  alors seulement, basculer le rate-limiter slowapi sur Redis.
 - Uptime Kuma externe (monitoring tiers indépendant).
-- ADR-0001 mention « Hetzner/Scaleway » à mettre à jour pour pointer vers ADR-0006.
+- ADR-0001 mention « Hetzner/Scaleway » à aligner sur ADR-0006.
+- Dérive de version ruff : la CI échoue sur `ruff format --check` (pre-commit
+  épingle `v0.6.9`, le dev-dep résout vers 0.15.x) — épingler ruff et reformater.
 
 ---
 

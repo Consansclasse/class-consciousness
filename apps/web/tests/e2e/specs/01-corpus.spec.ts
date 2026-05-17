@@ -11,14 +11,14 @@ test.describe("corpus — page liste", () => {
 
     await page.goto("/corpus");
     await expect(page.getByText("( à faire )")).toBeVisible();
-    await expect(page.getByText(/0 textes? indexés?/)).toBeVisible();
+    await expect(page.getByText(/0 numéros? indexés?/)).toBeVisible();
   });
 
   test("affiche au moins une entrée après seed", async ({ page, seededCorpus }) => {
     void seededCorpus;
     await page.goto("/corpus");
     // Compteur > 0 et au moins 1 item dans la liste
-    await expect(page.getByText(/\d+ textes? indexés?/)).toBeVisible();
+    await expect(page.getByText(/\d+ numéros? indexés?/)).toBeVisible();
     await expect(page.getByText("Fixture de test — pipeline ingestion")).toBeVisible();
   });
 

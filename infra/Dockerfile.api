@@ -21,6 +21,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 FROM deps AS dev
 COPY apps/api /app/apps/api
 COPY packages/corpus-tools /app/packages/corpus-tools
+COPY scripts /app/scripts
 ENV PATH="/app/.venv/bin:$PATH"
 EXPOSE 8000
 # --proxy-headers : derrière Caddy/Traefik, uvicorn doit honorer X-Forwarded-For
@@ -31,6 +32,9 @@ CMD ["uvicorn", "cc_api.main:app", "--host", "0.0.0.0", "--port", "8000", "--pro
 FROM deps AS prod
 COPY apps/api /app/apps/api
 COPY packages/corpus-tools /app/packages/corpus-tools
+# scripts/ embarque ingest_corpus.py : l'ingestion du corpus en prod tourne via
+# `docker compose run api python scripts/ingest_corpus.py …` (cf. runbook).
+COPY scripts /app/scripts
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --package cc-api \
     && chown -R 1000:1000 /app/.venv

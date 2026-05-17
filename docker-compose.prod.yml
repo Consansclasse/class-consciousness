@@ -6,9 +6,15 @@
 # - aucune section `networks:` (gotcha : casse l'HTTPS Traefik)
 # - pas de `ports:` sur postgres/qdrant/redis (privés au réseau Coolify)
 # - magic vars `SERVICE_PASSWORD_*` pour secrets, `SERVICE_FQDN_*_<port>` pour les FQDN
-# - build target `prod` sur api et web
-# - `ANTHROPIC_API_KEY` et `VOYAGE_API_KEY` injectés via Coolify Settings (pas en dur)
+# - build target `prod` sur api, web et cc-embed
+# - `ANTHROPIC_API_KEY` injecté via Coolify Settings
 name: class-consciousness
+
+# Image API partagée par les services `migrate` et `api` (un seul build).
+x-api-build: &api-build
+  context: .
+  dockerfile: infra/Dockerfile.api
+  target: prod
 
 services:
   postgres:
@@ -50,11 +56,44 @@ services:
       retries: 5
     restart: unless-stopped
 
-  api:
+  # Serveur d'embedding + reranking (Qwen3 0.6B, CPU). Joint par l'API via le
+  # réseau Docker interne — aucun port public. Voir docs/adr/0008.
+  cc-embed:
     build:
       context: .
-      dockerfile: infra/Dockerfile.api
+      dockerfile: infra/Dockerfile.embed
       target: prod
+    volumes:
+      - cc_embed_models:/app/hf-cache
+    healthcheck:
+      test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:8001/health\").read()'"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      # start_period long : au 1er démarrage cc-embed télécharge les modèles 0.6B.
+      start_period: 600s
+    restart: unless-stopped
+
+  # Applique les migrations Alembic puis s'arrête. `api` attend sa complétion
+  # (depends_on: service_completed_successfully) : le schéma est toujours à jour
+  # avant que l'API ne serve une requête. Idempotent — sûr à chaque déploiement.
+  migrate:
+    build: *api-build
+    working_dir: /app/apps/api
+    command: ["alembic", "upgrade", "head"]
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: cc
+      POSTGRES_PASSWORD: ${SERVICE_PASSWORD_POSTGRES}
+      POSTGRES_DB: cc
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    build: *api-build
     environment:
       SERVICE_FQDN_API_8000: api.cdc.consciencedeclasse.com
       CC_API_ENV: prod
@@ -70,24 +109,31 @@ services:
       # publie aucun port (seul le proxy peut l'atteindre).
       FORWARDED_ALLOW_IPS: "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
       CC_API_CORS_ORIGINS: https://consciencedeclasse.com
-      CC_POSTGRES_HOST: postgres
-      CC_POSTGRES_PORT: "5432"
-      CC_POSTGRES_USER: cc
-      CC_POSTGRES_PASSWORD: ${SERVICE_PASSWORD_POSTGRES}
-      CC_POSTGRES_DB: cc
-      CC_REDIS_HOST: redis
-      CC_REDIS_PORT: "6379"
-      CC_REDIS_PASSWORD: ${SERVICE_PASSWORD_REDIS}
-      CC_QDRANT_URL: http://qdrant:6333
-      CC_QDRANT_API_KEY: ${SERVICE_PASSWORD_QDRANT}
+      # Identifiants des services : noms lus VERBATIM par core/settings.py et
+      # alembic/env.py — surtout PAS de préfixe `CC_`, sinon l'API retombe sur
+      # ses défauts (mot de passe `changeme`, pas de clé Qdrant).
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: cc
+      POSTGRES_PASSWORD: ${SERVICE_PASSWORD_POSTGRES}
+      POSTGRES_DB: cc
+      REDIS_URL: redis://:${SERVICE_PASSWORD_REDIS}@redis:6379/0
+      QDRANT_URL: http://qdrant:6333
+      QDRANT_API_KEY: ${SERVICE_PASSWORD_QDRANT}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
-      VOYAGE_API_KEY: ${VOYAGE_API_KEY}
+      # Serveur d'embedding cc-embed (Qwen3 0.6B, CPU) — service du compose,
+      # joint via le réseau Docker interne.
+      CC_API_EMBED_SERVER_URL: http://cc-embed:8001
     depends_on:
+      migrate:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
       qdrant:
+        condition: service_started
+      cc-embed:
         condition: service_started
     healthcheck:
       test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:8000/health\").read()'"]
@@ -103,7 +149,7 @@ services:
       dockerfile: infra/Dockerfile.web
       target: prod
       args:
-        PUBLIC_API_URL: https://api.cdc.consciencedeclasse.com
+        PUBLIC_API_BASE_URL: https://api.cdc.consciencedeclasse.com
         PUBLIC_MATOMO_URL: https://matomo.consciencedeclasse.com
         PUBLIC_MATOMO_SITE_ID: "1"
     environment:
@@ -116,3 +162,4 @@ volumes:
   postgres_data:
   qdrant_data:
   redis_data:
+  cc_embed_models:

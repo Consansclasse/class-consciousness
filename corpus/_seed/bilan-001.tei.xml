@@ -21,7 +21,7 @@
   </teiHeader>
   <text>
     <body>
-      <p>Premier paragraphe de la fixture de test. Il valide le parsing TEI P5 et la préservation des offsets caractères dans le pipeline d'ingestion vers Postgres et Qdrant. Ce paragraphe contient suffisamment de mots pour produire un embedding vectoriel non dégénéré via Voyage AI.</p>
+      <p>Premier paragraphe de la fixture de test. Il valide le parsing TEI P5 et la préservation des offsets caractères dans le pipeline d'ingestion vers Postgres et Qdrant. Ce paragraphe contient suffisamment de mots pour produire un embedding vectoriel non dégénéré.</p>
       <p>Deuxième paragraphe. Il contient une terminologie distincte du premier : matérialisme historique, lutte des classes, plus-value, mode de production. Le self-test post-ingest doit pouvoir retrouver ce paragraphe par recherche sémantique sur la collection Qdrant nommée bilan.</p>
       <p>Troisième paragraphe. Sa fonction est de garantir qu'au moins trois chunks distincts seront produits par le chunker, et que le test d'idempotence peut comparer N versus 2N chunks après deux exécutions consécutives du même fichier source.</p>
     </body>

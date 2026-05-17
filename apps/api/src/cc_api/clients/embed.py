@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Clients HTTP du serveur cc-embed local (Qwen3 sur GPU).
+"""Clients HTTP du serveur cc-embed (Qwen3 0.6B, CPU).
 
 `LocalEmbedClient` et `LocalRerankClient` parlent au serveur `cc-embed`
 (`apps/embed-server`). Les protocoles `EmbedClient` / `RerankClient` typent

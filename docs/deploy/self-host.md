@@ -8,7 +8,7 @@
 - Docker ≥ 24 + Docker Compose v2
 - 4 vCPU, 8 GB RAM minimum (16 GB recommandé pour Qdrant + corpus complet)
 - Domaine + accès DNS (pour la production)
-- Clés API : Anthropic, Voyage AI
+- Clé API : Anthropic (génération LLM ; embeddings auto-hébergés via cc-embed)
 
 ## Dev local
 
@@ -52,7 +52,6 @@ Cible : VPS Hetzner CCX23/CCX33 ou Scaleway équivalent (UE).
 | Backups S3-compatible | 5-10 € | Backblaze B2, Scaleway |
 | Domaine + DNS | 5 € | |
 | API Claude (Opus 4.7) | 200-1500 € | très variable, prompt caching essentiel |
-| API Voyage AI | 50-200 € | embeddings + rerank |
 | Plausible analytics | 0-15 € | self-host gratuit |
 
 [VÉRIFIER tarifs avril 2026 avant déploiement]

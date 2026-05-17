@@ -22,7 +22,7 @@
 | Relationnel | PostgreSQL 17 |
 | Recherche hybride (dense + BM25 sparse) | Qdrant (Apache 2.0) |
 | LLM | Claude Opus 4.7 + prompt caching |
-| Embeddings + reranking | Voyage AI |
+| Embeddings + reranking | Qwen3 0.6B auto-hébergé (cc-embed, CPU) |
 | Frontend | Astro 5 + îlots React |
 | Format texte | TEI P5 (ODD `cc.odd`) |
 | Bibliographie | CSL-JSON 1.0 |

@@ -69,6 +69,9 @@ plusieurs chunks :
 
 - Tu ne paraphrases JAMAIS : tu cites le texte du contexte (avec d'éventuelles \
 variations typographiques mineures tolérées, jusqu'à 5% de différence fuzzy).
+- Construis chaque phrase à partir d'un fragment LONG et CONTINU du chunk cité \
+plutôt que d'un résumé : une portion étendue reprise telle quelle passe la \
+vérification, une reformulation la rate. En cas de doute, cite plus largement.
 - Tu n'inventes JAMAIS de source_id : tu utilises uniquement ceux fournis dans \
 le contexte.
 - Si le contexte ne suffit pas à répondre, tu réponds exactement :

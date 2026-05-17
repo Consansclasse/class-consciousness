@@ -11,7 +11,7 @@ cc-embed démarré (`python -m cc_embed`, CC_API_EMBED_SERVER_URL).
 
 Usage :
     set -a && source .env && set +a
-    uv run python scripts/ingest_corpus.py ../class-consciousness-corpus/bilan/bilan-[0-9][0-9][0-9].tei.xml
+    uv run python scripts/ingest_corpus.py ../class-consciousness-corpus/bilan/*.tei.xml
 """
 
 from __future__ import annotations
@@ -64,40 +64,22 @@ async def _ingest_one(
     )
 
 
-def _is_empty_tei(path: Path) -> bool:
-    """Détecte les TEI sans `<div type="article">` (scrape échoué)."""
-    try:
-        text = path.read_text(encoding="utf-8")
-    except OSError:
-        return True
-    return '<div type="article"' not in text
-
-
 async def main(patterns: list[str]) -> int:
     from cc_api.clients.embed import get_embed_client
     from cc_api.clients.qdrant import get_qdrant
 
-    # Expand globs + filtrer les TEI vides (scrape échoué).
-    raw_files: list[Path] = []
+    # Expand globs. La validité du TEI est tranchée par `parse_issue` lui-même
+    # (un fichier malformé → erreur d'ingestion isolée, le batch continue) :
+    # pas de pré-filtre, qui rejetait à tort les numéros mono-article.
+    files: list[Path] = []
     for pat in patterns:
         for m in glob.glob(pat, recursive=True) or [pat]:
             p = Path(m).resolve()
             if p.is_file():
-                raw_files.append(p)
-    raw_files = sorted(set(raw_files))
-    files: list[Path] = []
-    skipped_empty: list[Path] = []
-    for f in raw_files:
-        if _is_empty_tei(f):
-            skipped_empty.append(f)
-        else:
-            files.append(f)
-    if skipped_empty:
-        print(f"⚠ {len(skipped_empty)} fichier(s) TEI vide(s) ignoré(s) :", file=sys.stderr)
-        for f in skipped_empty:
-            print(f"   - {f.name}", file=sys.stderr)
+                files.append(p)
+    files = sorted(set(files))
     if not files:
-        print(f"Aucun fichier valide à ingérer pour : {patterns}", file=sys.stderr)
+        print(f"Aucun fichier à ingérer pour : {patterns}", file=sys.stderr)
         return 1
 
     # Clients partagés pour tout le batch (le service ingest_issue ne ferme pas
@@ -144,8 +126,6 @@ async def main(patterns: list[str]) -> int:
     print(f"  Ingérés     : {n_ingested} (articles={total_articles}, chunks={total_chunks})")
     print(f"  Doublons    : {n_duplicate}")
     print(f"  Échecs      : {n_error}")
-    if skipped_empty:
-        print(f"  TEI vides   : {len(skipped_empty)} (scrape à relancer)")
     return 0 if n_error == 0 else 2
 
 

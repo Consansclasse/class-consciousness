@@ -2,6 +2,7 @@
 from collections.abc import Awaitable, Callable
 
 from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
@@ -58,6 +59,17 @@ async def _recursion_handler(request: Request, exc: RecursionError) -> JSONRespo
 
 app.add_exception_handler(RateLimitExceeded, _rate_limit_handler)  # type: ignore[arg-type]
 app.add_exception_handler(RecursionError, _recursion_handler)  # type: ignore[arg-type]
+
+# CORS — le chat RAG (page web) appelle l'API depuis un autre sous-domaine.
+# Ajouté en dernier → middleware le plus externe : les en-têtes CORS sont
+# présents même sur les réponses d'erreur et les préflights OPTIONS.
+if settings.cors_origin_list:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.cors_origin_list,
+        allow_methods=["GET", "POST"],
+        allow_headers=["Content-Type"],
+    )
 
 
 @app.get("/health")

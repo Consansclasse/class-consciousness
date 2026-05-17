@@ -1,14 +1,13 @@
 [project]
 name = "cc-embed"
 version = "0.0.1"
-description = "Service de serving local : embeddings Qwen3-Embedding-8B + reranking Qwen3-Reranker-4B sur GPU."
+description = "Service de serving : embeddings Qwen3-Embedding-0.6B + reranking Qwen3-Reranker-0.6B (CPU)."
 requires-python = ">=3.12"
 license = { text = "AGPL-3.0-or-later" }
 dependencies = [
     "torch>=2.6",
     "transformers>=4.51",
     "accelerate>=1.2",
-    "bitsandbytes>=0.45",
     "fastapi>=0.115",
     "uvicorn[standard]>=0.34",
     "pydantic>=2.10",
@@ -17,7 +16,7 @@ dependencies = [
 ]
 
 [tool.uv.sources]
-torch = { index = "pytorch-cu124" }
+torch = { index = "pytorch-cpu" }
 
 [build-system]
 requires = ["hatchling"]

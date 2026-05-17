@@ -11,6 +11,10 @@ class Settings(BaseSettings):
     port: int = Field(default=8000)
     log_level: str = Field(default="INFO")
 
+    # CORS — origines navigateur autorisées (le chat RAG appelle l'API depuis
+    # le sous-domaine web). Liste séparée par des virgules ; vide = CORS off.
+    cors_origins: str = Field(default="", alias="CC_API_CORS_ORIGINS")
+
     postgres_host: str = Field(default="postgres", alias="POSTGRES_HOST")
     postgres_port: int = Field(default=5432, alias="POSTGRES_PORT")
     postgres_db: str = Field(default="class_consciousness", alias="POSTGRES_DB")
@@ -22,14 +26,17 @@ class Settings(BaseSettings):
 
     redis_url: str = Field(default="redis://redis:6379/0", alias="REDIS_URL")
 
-    # Serveur d'embedding + reranking local (cc-embed, Qwen3 sur GPU — voir
-    # apps/embed-server). Les vecteurs du corpus sont en dimension `embed_dim` ;
-    # changer de modèle d'embedding impose une ré-ingestion complète.
+    # Serveur d'embedding + reranking cc-embed (Qwen3 0.6B sur CPU — voir
+    # apps/embed-server et docs/adr/0008-architecture-embedding-vps-cpu.md).
+    # Les vecteurs du corpus sont en dimension `embed_dim` ; changer de modèle
+    # d'embedding impose une ré-ingestion complète.
     embed_server_url: str = Field(
         default="http://127.0.0.1:8001", alias="CC_API_EMBED_SERVER_URL"
     )
-    embed_dim: int = Field(default=4096, alias="CC_API_EMBED_DIM")
-    embed_model: str = Field(default="Qwen/Qwen3-Embedding-8B", alias="CC_API_EMBED_MODEL")
+    embed_dim: int = Field(default=1024, alias="CC_API_EMBED_DIM")
+    embed_model: str = Field(
+        default="Qwen/Qwen3-Embedding-0.6B", alias="CC_API_EMBED_MODEL"
+    )
 
     anthropic_api_key: str | None = Field(default=None, alias="ANTHROPIC_API_KEY")
     anthropic_model: str = Field(default="claude-opus-4-7", alias="ANTHROPIC_MODEL")
@@ -66,6 +73,10 @@ class Settings(BaseSettings):
     @property
     def is_dev(self) -> bool:
         return self.env == "dev"
+
+    @property
+    def cors_origin_list(self) -> list[str]:
+        return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
 
 
 settings = Settings()
