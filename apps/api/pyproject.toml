@@ -23,6 +23,7 @@ dependencies = [
     "rapidfuzz>=3.10",
     "tiktoken>=0.8",
     "stripe>=11.4",
+    "cc-corpus",
 ]
 
 [project.optional-dependencies]
@@ -41,6 +42,11 @@ dev = [
     "ragas>=0.2",
     "langchain-anthropic>=0.3",
 ]
+
+[tool.uv.sources]
+# cc-api importe cc_corpus (services/ingest.py, services/rag.py) : dépendance
+# de workspace — sinon `uv sync --package cc-api` ne l'installe pas dans l'image.
+cc-corpus = { workspace = true }
 
 [build-system]
 requires = ["hatchling"]

@@ -26,9 +26,12 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     && chown -R 1000:1000 /app/.venv /app/hf-cache
 # HF_HOME pointe sur un volume monté : les poids des modèles ne sont téléchargés
 # qu'une fois. CC_EMBED_HOST=0.0.0.0 : joignable par l'API sur le réseau Docker.
+# USER : l'image tourne en uid 1000 sans entrée /etc/passwd ; torch appelle
+# getpass.getuser() au chargement → on fixe USER pour éviter le lookup pwd raté.
 ENV PATH="/app/.venv/bin:$PATH" \
     HF_HOME=/app/hf-cache \
-    CC_EMBED_HOST=0.0.0.0
+    CC_EMBED_HOST=0.0.0.0 \
+    USER=ccembed
 EXPOSE 8001
 USER 1000:1000
 CMD ["python", "-m", "cc_embed"]
