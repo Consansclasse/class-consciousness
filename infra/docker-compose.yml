@@ -27,7 +27,7 @@ services:
       retries: 10
 
   qdrant:
-    image: qdrant/qdrant:latest
+    image: qdrant/qdrant:v1.12.0
     restart: unless-stopped
     logging: *default-logging
     ports:
