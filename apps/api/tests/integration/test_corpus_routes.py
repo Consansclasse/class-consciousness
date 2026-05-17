@@ -268,3 +268,36 @@ def test_admin_ingest_refused_outside_dev(client: Any, monkeypatch: Any) -> None
     # - 403 si la dépendance bloque avant le handler.
     # - 404 si le router n'est pas monté (env prod au boot).
     assert resp.status_code in (403, 404)
+
+
+async def test_admin_ingest_non_xml_file_returns_422(
+    http_client: httpx.AsyncClient,
+    patched_db: None,
+    patched_qdrant: None,
+    patched_embed: None,
+    clean_db: None,
+    clean_qdrant: None,
+    tmp_path: Path,
+) -> None:
+    """Un chemin pointant vers un fichier non-XML → 422, pas 500.
+
+    Régression robustesse : `etree.parse` lève `XMLSyntaxError` (et non
+    `ValueError`) sur du non-XML ; sans le catch élargi, c'était un 500 nu.
+    """
+    junk = tmp_path / "pas-du-tei.tei.xml"
+    junk.write_text("root:x:0:0:root:/root:/bin/bash\ndaemon:x:1:1:\n")
+    resp = await http_client.post("/admin/ingest", json={"path": str(junk)})
+    assert resp.status_code == 422, resp.text
+    assert "tei invalide" in resp.text.lower()
+
+
+def test_nul_byte_in_path_returns_400(client: Any) -> None:
+    """Un octet NUL (`%00`) dans le chemin est rejeté en 400 par le middleware.
+
+    Régression robustesse : sans garde-fou, le `\\x00` atteignait asyncpg qui
+    levait un `ValueError` non capturé → 500 nu. Vrai pour toute route.
+    """
+    for path in ("/adhesions/intent/tok%00en", "/corpus/abc%00def"):
+        resp = client.get(path)
+        assert resp.status_code == 400, f"{path} -> {resp.status_code}"
+        assert "nul" in resp.json()["detail"].lower()

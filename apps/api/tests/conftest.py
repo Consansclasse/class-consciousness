@@ -115,8 +115,8 @@ async def clean_db(migrated_db: str) -> AsyncIterator[None]:
     try:
         async with engine.begin() as conn:
             await conn.exec_driver_sql(
-                "TRUNCATE chunks, articles, issues, authors, auth_tokens, memberships, users "
-                "RESTART IDENTITY CASCADE"
+                "TRUNCATE chunks, articles, issues, authors, auth_tokens, "
+                "abonnements, memberships, users RESTART IDENTITY CASCADE"
             )
     finally:
         await engine.dispose()
@@ -234,10 +234,19 @@ def canonical_tei_path() -> Path:
 
 @pytest.fixture
 def app(monkeypatch: pytest.MonkeyPatch) -> Any:
-    """Instance FastAPI avec env de test (CC_API_ENV=dev forcé)."""
+    """Instance FastAPI avec env de test (CC_API_ENV=dev forcé).
+
+    Le rate limiter slowapi est désactivé : sous TestClient toutes les requêtes
+    partagent l'IP `testclient`, donc un même bucket — laissé actif, il ferait
+    échouer de façon non déterministe les tests qui appellent plusieurs fois un
+    endpoint limité (`/qa`, `/adhesions/checkout`). Le limiter est vérifié
+    séparément par la config proxy-headers du déploiement.
+    """
     monkeypatch.setenv("CC_API_ENV", "dev")
+    from cc_api.core.ratelimit import limiter
     from cc_api.main import app as fastapi_app
 
+    monkeypatch.setattr(limiter, "enabled", False)
     return fastapi_app
 
 

@@ -182,7 +182,9 @@ async def test_checkout_standard_creates_intent_and_user(
     res = client.post("/adhesions/checkout", json=payload)
     assert res.status_code == 201, res.text
     body = res.json()
-    assert "intent_id" in body
+    assert "public_token" in body
+    # L'id séquentiel ne doit JAMAIS être exposé (vecteur d'énumération IDOR).
+    assert "intent_id" not in body
     assert body["redirect_url"].startswith("http"), body
     assert "expires_at" in body
 
@@ -197,7 +199,9 @@ async def test_checkout_standard_creates_intent_and_user(
     # AdhesionIntent en PENDING.
     intent = (
         await db_session.execute(
-            select(AdhesionIntent).where(AdhesionIntent.id == body["intent_id"])
+            select(AdhesionIntent).where(
+                AdhesionIntent.public_token == body["public_token"]
+            )
         )
     ).scalar_one()
     assert intent.status == AdhesionIntentStatus.PENDING
@@ -244,7 +248,9 @@ async def test_checkout_solidaire_creates_membership_immediately(
 
     intent = (
         await db_session.execute(
-            select(AdhesionIntent).where(AdhesionIntent.id == body["intent_id"])
+            select(AdhesionIntent).where(
+                AdhesionIntent.public_token == body["public_token"]
+            )
         )
     ).scalar_one()
     assert intent.status == AdhesionIntentStatus.COMPLETED
@@ -292,11 +298,11 @@ async def test_webhook_completed_creates_membership(
     }
     res = client.post("/adhesions/checkout", json=payload)
     assert res.status_code == 201
-    intent_id = res.json()["intent_id"]
+    token = res.json()["public_token"]
 
     intent = (
         await db_session.execute(
-            select(AdhesionIntent).where(AdhesionIntent.id == intent_id)
+            select(AdhesionIntent).where(AdhesionIntent.public_token == token)
         )
     ).scalar_one()
     session_id = intent.stripe_session_id
@@ -321,7 +327,7 @@ async def test_webhook_completed_creates_membership(
     async with maker() as fresh:
         intent_after = (
             await fresh.execute(
-                select(AdhesionIntent).where(AdhesionIntent.id == intent_id)
+                select(AdhesionIntent).where(AdhesionIntent.public_token == token)
             )
         ).scalar_one()
         assert intent_after.status == AdhesionIntentStatus.COMPLETED
@@ -353,10 +359,10 @@ async def test_webhook_idempotent_on_replay(
         "consent_newsletter": False,
     }
     res = client.post("/adhesions/checkout", json=payload)
-    intent_id = res.json()["intent_id"]
+    token = res.json()["public_token"]
     intent = (
         await db_session.execute(
-            select(AdhesionIntent).where(AdhesionIntent.id == intent_id)
+            select(AdhesionIntent).where(AdhesionIntent.public_token == token)
         )
     ).scalar_one()
     session_id = intent.stripe_session_id
@@ -385,3 +391,73 @@ async def test_webhook_idempotent_on_replay(
         ).scalar_one()
         assert mem_count == 1
     await fresh_engine.dispose()
+
+
+# ── Tests GET /intent — anti-IDOR ────────────────────────────────────────────
+
+
+async def test_get_intent_by_token_returns_status(
+    stripe_env: None,
+    clean_db: None,
+    client: Any,
+) -> None:
+    """GET /adhesions/intent/{token} renvoie l'état via le jeton opaque."""
+    payload = {
+        "email": "dora@example.org",
+        "tier": "INDIVIDUAL",
+        "solidaire": False,
+        "consent_data": True,
+        "consent_newsletter": False,
+    }
+    res = client.post("/adhesions/checkout", json=payload)
+    assert res.status_code == 201, res.text
+    token = res.json()["public_token"]
+
+    res = client.get(f"/adhesions/intent/{token}")
+    assert res.status_code == 200, res.text
+    body = res.json()
+    assert body["public_token"] == token
+    assert body["status"] == "PENDING"
+    assert body["tier"] == "INDIVIDUAL"
+    assert body["amount_eur_cents"] == 900
+    # L'id séquentiel ne fuit jamais dans la réponse.
+    assert "intent_id" not in body
+
+
+async def test_get_intent_rejects_sequential_id_enumeration(
+    stripe_env: None,
+    clean_db: None,
+    client: Any,
+    db_session: AsyncSession,
+) -> None:
+    """L'IDOR est fermé : énumérer l'id entier ou deviner un jeton → 404.
+
+    Régression du correctif sécurité : avant le jeton opaque, GET /intent/{id}
+    indexé par l'entier auto-incrément exposait tout le registre d'adhésions.
+    """
+    payload = {
+        "email": "eve@example.org",
+        "tier": "MECENE",
+        "solidaire": False,
+        "consent_data": True,
+        "consent_newsletter": False,
+    }
+    res = client.post("/adhesions/checkout", json=payload)
+    assert res.status_code == 201, res.text
+    token = res.json()["public_token"]
+
+    # L'intent existe bien — on récupère son id séquentiel réel en base.
+    intent = (
+        await db_session.execute(
+            select(AdhesionIntent).where(AdhesionIntent.public_token == token)
+        )
+    ).scalar_one()
+
+    # Énumérer l'entier séquentiel ne résout plus rien.
+    res = client.get(f"/adhesions/intent/{intent.id}")
+    assert res.status_code == 404, res.text
+    # Pas davantage en balayant les premiers entiers.
+    for guess in (1, 2, 3):
+        assert client.get(f"/adhesions/intent/{guess}").status_code == 404
+    # Un jeton inventé est rejeté.
+    assert client.get("/adhesions/intent/jeton-bidon-inexistant").status_code == 404

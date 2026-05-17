@@ -17,6 +17,7 @@ Pas de mock Stripe ici : les tests utilisent stripe-mock containerisé.
 
 from __future__ import annotations
 
+import secrets
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
@@ -105,6 +106,9 @@ async def create_checkout(
     COMPLETED tout de suite. Stripe refuse les paiements à 0 € de toute façon.
     """
     amount = _resolve_amount(payload)
+    # Jeton public opaque — identifiant de l'intent dans les URLs de retour et
+    # le lookup public, à la place de l'id séquentiel énumérable.
+    public_token = secrets.token_urlsafe(24)
 
     user = await _upsert_user(
         session,
@@ -135,6 +139,7 @@ async def create_checkout(
             tier=payload.tier,
             amount_eur_cents=0,
             solidaire=True,
+            public_token=public_token,
             stripe_session_id=f"solidaire_{user.id}_{int(datetime.now(UTC).timestamp())}",
             stripe_redirect_url=f"{settings.public_web_base}/adherer/merci?solidaire=1",
             status=AdhesionIntentStatus.COMPLETED,
@@ -154,6 +159,7 @@ async def create_checkout(
         tier=payload.tier,
         amount_eur_cents=amount,
         solidaire=payload.solidaire,
+        public_token=public_token,
         # Placeholder unique avant l'appel Stripe — sera remplacé.
         stripe_session_id=f"pending_{user.id}_{int(datetime.now(UTC).timestamp() * 1000)}",
         stripe_redirect_url="",
@@ -166,11 +172,11 @@ async def create_checkout(
 
     success_url = (
         f"{settings.public_web_base}/adherer/merci"
-        f"?intent={intent.id}&session_id={{CHECKOUT_SESSION_ID}}"
+        f"?intent={public_token}&session_id={{CHECKOUT_SESSION_ID}}"
     )
     cancel_url = (
         f"{settings.public_web_base}/adherer/erreur"
-        f"?intent={intent.id}&session_id={{CHECKOUT_SESSION_ID}}"
+        f"?intent={public_token}&session_id={{CHECKOUT_SESSION_ID}}"
     )
 
     try:
@@ -239,8 +245,15 @@ async def handle_stripe_event(
         log.warning("stripe.webhook.missing_session_id", event_id=event.id)
         return None
 
+    # `with_for_update` : verrou de ligne le temps de la transaction. Stripe peut
+    # livrer le même webhook deux fois quasi simultanément ; sans ce verrou, deux
+    # exécutions liraient toutes deux `status=PENDING`, passeraient le contrôle
+    # d'idempotence et créeraient CHACUNE une Membership (double adhésion pour un
+    # seul paiement). Le verrou sérialise : la 2e attend, relit `COMPLETED`, sort.
     result = await session.execute(
-        select(AdhesionIntent).where(AdhesionIntent.stripe_session_id == stripe_session_id)
+        select(AdhesionIntent)
+        .where(AdhesionIntent.stripe_session_id == stripe_session_id)
+        .with_for_update()
     )
     intent = result.scalar_one_or_none()
     if intent is None:

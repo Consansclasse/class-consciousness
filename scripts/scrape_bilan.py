@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import argparse
 import html
+import os
 import re
 import sys
 import time
@@ -32,7 +33,12 @@ from pathlib import Path
 from xml.sax.saxutils import escape as xml_escape
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-CORPUS_DIR = REPO_ROOT / "corpus" / "bilan"
+# Le scraper écrit dans le dépôt corpus séparé `class-consciousness-corpus`
+# (voisin du repo code par défaut, surchargeable via CC_CORPUS_DIR).
+CORPUS_DIR = (
+    Path(os.environ.get("CC_CORPUS_DIR") or REPO_ROOT.parent / "class-consciousness-corpus")
+    / "bilan"
+)
 CACHE_DIR = Path("/tmp/bilan_cache")
 INDEX_URL = "https://archivesautonomies.org/spip.php?article29"
 ARTICLE_URL_TMPL = "https://archivesautonomies.org/spip.php?article{id}"

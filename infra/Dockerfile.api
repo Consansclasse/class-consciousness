@@ -23,7 +23,10 @@ COPY apps/api /app/apps/api
 COPY packages/corpus-tools /app/packages/corpus-tools
 ENV PATH="/app/.venv/bin:$PATH"
 EXPOSE 8000
-CMD ["uvicorn", "cc_api.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+# --proxy-headers : derrière Caddy/Traefik, uvicorn doit honorer X-Forwarded-For
+# pour que request.client.host soit la vraie IP client (clé du rate limiter).
+# La liste des proxys de confiance est fournie par FORWARDED_ALLOW_IPS (compose).
+CMD ["uvicorn", "cc_api.main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers", "--reload"]
 
 FROM deps AS prod
 COPY apps/api /app/apps/api
@@ -34,4 +37,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 ENV PATH="/app/.venv/bin:$PATH"
 EXPOSE 8000
 USER 1000:1000
-CMD ["uvicorn", "cc_api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# --proxy-headers : voir le commentaire de l'étape dev. FORWARDED_ALLOW_IPS est
+# injecté par docker-compose.prod.yml (le conteneur ne publie aucun port → seul
+# le proxy peut l'atteindre, faire confiance à ses en-têtes est sûr).
+CMD ["uvicorn", "cc_api.main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers"]

@@ -64,7 +64,7 @@ tests/rag-eval/     # test set red-team RAG
 ## Contribuer
 
 - Code : voir [`CONTRIBUTING.md`](./CONTRIBUTING.md). DCO `Signed-off-by:` requis.
-- Corpus : ouvrir une PR avec un fichier TEI dans `corpus/<auteur>/<œuvre>/editions/<édition>.tei.xml` + `_work.csl.json`. Validation par mainteneur avant merge.
+- Corpus : le corpus encodé vit dans le dépôt séparé [`class-consciousness-corpus`](https://github.com/Consansclasse/class-consciousness-corpus). Ouvrir une PR là-bas avec un fichier TEI P5. Validation par mainteneur avant merge.
 - Bug / feature : utiliser les templates GitHub.
 - Vulnérabilité : voir [`SECURITY.md`](./SECURITY.md). Contact PGP.
 

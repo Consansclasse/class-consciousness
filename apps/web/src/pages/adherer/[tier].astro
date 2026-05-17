@@ -343,7 +343,9 @@ const apiBase = import.meta.env.PUBLIC_API_BASE_URL ?? "http://localhost:8000";
       const data = await res.json();
       // Cas tarif solidaire 0 € : pas de redirection Stripe.
       if (data.redirect_url?.includes("solidaire=1")) {
-        window.location.assign(`/adherer/merci?intent=${data.intent_id}&solidaire=1`);
+        window.location.assign(
+          `/adherer/merci?intent=${data.public_token}&solidaire=1`,
+        );
         return;
       }
       window.location.assign(data.redirect_url);

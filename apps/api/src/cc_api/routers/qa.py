@@ -13,17 +13,15 @@ from __future__ import annotations
 from typing import cast
 
 from fastapi import APIRouter, HTTPException, Request
-from slowapi import Limiter
-from slowapi.util import get_remote_address
 
 from cc_api.clients.anthropic import get_anthropic_client
 from cc_api.clients.embed import get_embed_client, get_rerank_client
 from cc_api.clients.qdrant import get_qdrant
 from cc_api.core.logging import get_logger
+from cc_api.core.ratelimit import limiter
 from cc_api.schemas.qa import Citation, QaRequest, QaResponse, Sentence
 from cc_api.services.rag import RagResult, answer_question
 
-limiter = Limiter(key_func=get_remote_address)
 router = APIRouter(prefix="/qa", tags=["qa"])
 log = get_logger(__name__)
 

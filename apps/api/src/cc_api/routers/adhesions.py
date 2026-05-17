@@ -22,6 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from cc_api.clients.db import get_session_maker
 from cc_api.clients.stripe import get_stripe_client
 from cc_api.core.logging import get_logger
+from cc_api.core.ratelimit import limiter
 from cc_api.models.adhesion_intent import AdhesionIntent
 from cc_api.schemas.adhesion import (
     AdhesionCheckoutIn,
@@ -44,11 +45,21 @@ async def _session() -> AsyncSession:
     status_code=201,
     responses={
         422: {"description": "Données invalides ou consentement manquant"},
+        429: {"description": "Trop de créations de session — rate limit"},
         502: {"description": "Stripe a refusé la création de la session"},
     },
 )
-async def post_checkout(payload: AdhesionCheckoutIn) -> AdhesionCheckoutOut:
-    """Crée une intention d'adhésion + Stripe Checkout Session."""
+@limiter.limit("20/minute")
+async def post_checkout(
+    request: Request, payload: AdhesionCheckoutIn
+) -> AdhesionCheckoutOut:
+    """Crée une intention d'adhésion + Stripe Checkout Session.
+
+    Endpoint anonyme : chaque appel insère un User/AdhesionIntent et crée une
+    Checkout Session Stripe réelle. Le rate limit (20/min par IP) borne le spam
+    de sessions Stripe et la pollution des tables. `request` est requis par
+    slowapi pour extraire l'IP du client.
+    """
     stripe_client = get_stripe_client()
     async with await _session() as session:
         try:
@@ -59,7 +70,7 @@ async def post_checkout(payload: AdhesionCheckoutIn) -> AdhesionCheckoutOut:
             log.warning("adhesions.checkout.error", error=str(exc))
             raise HTTPException(status_code=502, detail=str(exc)) from exc
     return AdhesionCheckoutOut(
-        intent_id=intent.id,
+        public_token=intent.public_token,
         redirect_url=intent.stripe_redirect_url,
         expires_at=intent.expires_at,
     )
@@ -70,6 +81,7 @@ async def post_checkout(payload: AdhesionCheckoutIn) -> AdhesionCheckoutOut:
     status_code=200,
     responses={
         400: {"description": "Signature Stripe invalide ou payload illisible"},
+        503: {"description": "Webhook Stripe non configuré côté serveur"},
     },
 )
 async def post_stripe_webhook(
@@ -86,12 +98,20 @@ async def post_stripe_webhook(
         raise HTTPException(status_code=400, detail="header Stripe-Signature manquant")
 
     payload = await request.body()
-    stripe_client = get_stripe_client()
     try:
+        stripe_client = get_stripe_client()
         event = stripe_client.construct_event(payload, stripe_signature)
     except (stripe.SignatureVerificationError, ValueError) as exc:
         log.warning("adhesions.webhook.invalid_signature", error=str(exc))
         raise HTTPException(status_code=400, detail="signature invalide") from exc
+    except RuntimeError as exc:
+        # Clés Stripe absentes du déploiement → impossible de vérifier la
+        # signature. Faute de configuration serveur, pas du client : 503
+        # explicite et journalisé plutôt qu'un 500 nu.
+        log.error("adhesions.webhook.stripe_unconfigured", error=str(exc))
+        raise HTTPException(
+            status_code=503, detail="webhook Stripe non configuré"
+        ) from exc
 
     async with await _session() as session:
         intent = await handle_stripe_event(session, event=event)
@@ -103,22 +123,24 @@ async def post_stripe_webhook(
     }
 
 
-@router.get("/intent/{intent_id}", response_model=AdhesionIntentStatusOut)
-async def get_intent(intent_id: int) -> AdhesionIntentStatusOut:
+@router.get("/intent/{token}", response_model=AdhesionIntentStatusOut)
+async def get_intent(token: str) -> AdhesionIntentStatusOut:
     """État d'une intention — utilisé par /adherer/merci pour confirmation.
 
-    Pas d'auth : on expose uniquement statut + montant + tier, rien d'identifiant
-    au-delà de l'id séquentiel (déjà connu de l'utilisateur via Stripe redirect).
+    Pas d'auth, mais indexé par un jeton opaque non devinable (192 bits) et non
+    par l'id séquentiel : sans cela l'endpoint serait énumérable et exposerait
+    tout le registre des adhésions (statuts, montants, dates). Le jeton n'est
+    connu que de l'adhérent, transmis dans l'URL de retour Stripe.
     """
     async with await _session() as session:
         result = await session.execute(
-            select(AdhesionIntent).where(AdhesionIntent.id == intent_id)
+            select(AdhesionIntent).where(AdhesionIntent.public_token == token)
         )
         intent = result.scalar_one_or_none()
     if intent is None:
         raise HTTPException(status_code=404, detail="intent inconnu")
     return AdhesionIntentStatusOut(
-        intent_id=intent.id,
+        public_token=intent.public_token,
         status=intent.status,
         tier=intent.tier,
         amount_eur_cents=intent.amount_eur_cents,

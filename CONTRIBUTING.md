@@ -19,7 +19,10 @@ Merci de votre intérêt. Ce projet vise une rigueur académique au standard des
 
 ### Corpus
 
-Pour ajouter un texte, ouvrez une PR avec :
+Le corpus encodé vit dans le dépôt séparé
+[`class-consciousness-corpus`](https://github.com/Consansclasse/class-consciousness-corpus)
+(CC-BY-SA 4.0) ; le repo code n'embarque que la fixture `corpus/_seed/`. Les
+contributions de corpus s'y font — ouvrez-y une PR avec :
 
 ```
 corpus/<auteur-slug>/<œuvre-slug>/

@@ -59,6 +59,16 @@ services:
       SERVICE_FQDN_API_8000: api.cdc.consciencedeclasse.com
       CC_API_ENV: prod
       CC_API_LOG_LEVEL: INFO
+      # Proxys de confiance pour X-Forwarded-For — JAMAIS `*`.
+      # Avec `*`, uvicorn considère TOUS les sauts XFF comme fiables et retient
+      # l'IP la PLUS À GAUCHE — celle que le client peut falsifier : le rate
+      # limiter devient contournable (un en-tête XFF bidon = bucket neuf).
+      # Avec les plages privées RFC1918 (le proxy Coolify/Traefik est toujours
+      # sur un réseau Docker privé), uvicorn parcourt XFF de droite à gauche,
+      # ignore les sauts privés et retient la 1re IP publique = le vrai client,
+      # non falsifiable car ajoutée par le proxy. Sûr car le conteneur ne
+      # publie aucun port (seul le proxy peut l'atteindre).
+      FORWARDED_ALLOW_IPS: "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
       CC_API_CORS_ORIGINS: https://consciencedeclasse.com
       CC_POSTGRES_HOST: postgres
       CC_POSTGRES_PORT: "5432"

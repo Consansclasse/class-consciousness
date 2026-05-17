@@ -23,7 +23,10 @@ import pytest
 import pytest_asyncio
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
-BILAN_REAL_CORPUS = REPO_ROOT / "corpus" / "bilan" / "bilan-001.tei.xml"
+# Le corpus Bilan vit dans le dépôt séparé `class-consciousness-corpus`
+# (voisin du repo code par défaut, surchargeable via CC_CORPUS_DIR).
+CORPUS_REPO = Path(os.environ.get("CC_CORPUS_DIR") or REPO_ROOT.parent / "class-consciousness-corpus")
+BILAN_REAL_CORPUS = CORPUS_REPO / "bilan" / "bilan-001.tei.xml"
 GOLDEN_QUESTIONS_PATH = Path(__file__).parent / "golden_questions.json"
 
 
@@ -52,7 +55,11 @@ def golden_questions() -> dict[str, Any]:
 @pytest.fixture(scope="session")
 def bilan_corpus_path() -> Path:
     """Chemin vers le corpus réel Bilan n°1 (5 articles)."""
-    assert BILAN_REAL_CORPUS.exists(), f"corpus Bilan absent : {BILAN_REAL_CORPUS}"
+    if not BILAN_REAL_CORPUS.exists():
+        pytest.skip(
+            f"corpus Bilan absent ({BILAN_REAL_CORPUS}) — clone le dépôt "
+            "class-consciousness-corpus ou définis CC_CORPUS_DIR."
+        )
     return BILAN_REAL_CORPUS
 
 

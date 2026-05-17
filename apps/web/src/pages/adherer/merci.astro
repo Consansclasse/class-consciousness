@@ -9,7 +9,7 @@ const intentParam = Astro.url.searchParams.get("intent");
 const solidaire = Astro.url.searchParams.get("solidaire") === "1";
 
 type IntentOut = {
-  intent_id: number;
+  public_token: string;
   status: "PENDING" | "COMPLETED" | "EXPIRED" | "FAILED";
   tier: "INDIVIDUAL" | "STRUCTURE" | "MECENE";
   amount_eur_cents: number;

@@ -11,7 +11,7 @@ cc-embed démarré (`python -m cc_embed`, CC_API_EMBED_SERVER_URL).
 
 Usage :
     set -a && source .env && set +a
-    uv run python scripts/ingest_corpus.py corpus/bilan/bilan-[0-9][0-9][0-9].tei.xml
+    uv run python scripts/ingest_corpus.py ../class-consciousness-corpus/bilan/bilan-[0-9][0-9][0-9].tei.xml
 """
 
 from __future__ import annotations

@@ -19,6 +19,7 @@ Membership est créée.
 from __future__ import annotations
 
 import enum
+import secrets
 from datetime import datetime
 from typing import TYPE_CHECKING
 
@@ -45,6 +46,18 @@ class AdhesionIntent(Base):
     __tablename__ = "adhesion_intents"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    # Jeton public opaque — identifiant exposé dans les URLs de retour Stripe et
+    # dans GET /adhesions/intent/{token}. JAMAIS l'id séquentiel : un entier
+    # auto-incrément servi sans authentification serait énumérable et révélerait
+    # tout le registre des adhésions (nombre d'adhérents, montants des dons).
+    # 24 octets url-safe = 192 bits d'entropie, non devinable.
+    public_token: Mapped[str] = mapped_column(
+        String(64),
+        nullable=False,
+        unique=True,
+        index=True,
+        default=lambda: secrets.token_urlsafe(24),
+    )
     user_id: Mapped[int | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
     )

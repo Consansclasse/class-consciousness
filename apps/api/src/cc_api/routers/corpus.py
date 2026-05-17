@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from lxml import etree
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
@@ -179,8 +180,12 @@ async def admin_ingest(payload: IngestRequest) -> IngestResult:
         raise HTTPException(status_code=422, detail=f"pas un fichier : {path}")
     try:
         ref = await ingest_issue(path)
-    except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except (ValueError, etree.XMLSyntaxError) as exc:
+        # XML/TEI malformé (chemin pointant vers un fichier non-TEI) ou
+        # structure invalide : faute de requête (422), pas erreur serveur.
+        raise HTTPException(
+            status_code=422, detail=f"fichier TEI invalide : {exc}"
+        ) from exc
 
     return IngestResult(
         issue_id=ref.issue_id,

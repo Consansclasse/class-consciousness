@@ -76,6 +76,12 @@ services:
       POSTGRES_PORT: 5432
       QDRANT_URL: http://qdrant:6333
       REDIS_URL: redis://redis:6379/0
+      # Proxys de confiance pour X-Forwarded-For — JAMAIS `*` (voir l'explication
+      # détaillée dans docker-compose.prod.yml). `*` rend le rate limiter
+      # contournable : uvicorn retiendrait l'IP XFF la plus à gauche, falsifiable
+      # par le client. Les plages privées RFC1918 couvrent le réseau Docker de
+      # Caddy ; uvicorn retient alors la vraie IP client.
+      FORWARDED_ALLOW_IPS: "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
     ports: ["8000:8000"]
     depends_on:
       postgres: { condition: service_healthy }

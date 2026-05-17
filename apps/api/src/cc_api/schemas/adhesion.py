@@ -55,7 +55,8 @@ class AdhesionCheckoutIn(BaseModel):
 class AdhesionCheckoutOut(BaseModel):
     """URL Stripe vers laquelle rediriger immédiatement le navigateur."""
 
-    intent_id: int
+    # Jeton opaque, jamais l'id séquentiel — sert d'identifiant à /adherer/merci.
+    public_token: str
     redirect_url: str
     expires_at: datetime
 
@@ -63,7 +64,7 @@ class AdhesionCheckoutOut(BaseModel):
 class AdhesionIntentStatusOut(BaseModel):
     """État courant d'une intention — la page /adherer/merci la lit."""
 
-    intent_id: int
+    public_token: str
     status: AdhesionIntentStatus
     tier: MembershipTier
     amount_eur_cents: int

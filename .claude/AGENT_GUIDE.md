@@ -28,6 +28,10 @@ Archive open-source de la théorie marxiste avec **RAG sourcé**. Greenfield à 
 
 ## Sources de corpus prévues
 
+> Le corpus encodé vit dans le dépôt **séparé** `class-consciousness-corpus`
+> (CC-BY-SA 4.0). Le repo code n'embarque que la fixture `corpus/_seed/` et le
+> consomme via `CC_CORPUS_DIR`. Voir `[[project_economic_model]]`.
+
 - **Gallica** (BnF) — domaine public français.
 - **Marxists Internet Archive (fr)** — politique de licence variable, vérifier au cas par cas.
 - **Wikisource (fr)** — CC-BY-SA-4.0 ou domaine public.
