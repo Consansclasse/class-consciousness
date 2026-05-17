@@ -42,6 +42,7 @@ def test_base_metadata_lists_all_tables() -> None:
         "memberships",
         "auth_tokens",
         "adhesion_intents",
+        "abonnements",
     }
 
 
