@@ -83,13 +83,15 @@ class AnthropicClient:
         context: str,
         question: str,
         max_tokens: int = 1024,
-        temperature: float = 0.0,
     ) -> GenerationResult:
-        """Génère une réponse à `question` avec `system` + `context` mis en cache."""
+        """Génère une réponse à `question` avec `system` + `context` mis en cache.
+
+        Pas de paramètre `temperature` : `claude-opus-4-7` l'a déprécié — l'API
+        renvoie 400 si on le transmet.
+        """
         response = await self._client.messages.create(
             model=self.model,
             max_tokens=max_tokens,
-            temperature=temperature,
             system=[
                 {
                     "type": "text",
