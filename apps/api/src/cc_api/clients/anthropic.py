@@ -254,7 +254,7 @@ class AnthropicClient:
         system: str,
         context: str,
         question: str,
-        max_tokens: int = 16000,
+        max_tokens: int = 8000,
     ) -> GeneratedAnswer:
         """Génère la dissertation en sortie structurée (tool-use forcé).
 

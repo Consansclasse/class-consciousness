@@ -10,10 +10,14 @@ Rate limit : 10 req/min par IP via slowapi.
 
 from __future__ import annotations
 
-from typing import cast
+import asyncio
+import json
+from collections.abc import AsyncIterator
+from typing import Any, cast
 
 from anthropic import APIError
 from fastapi import APIRouter, HTTPException, Request
+from fastapi.responses import StreamingResponse
 
 from cc_api.clients.anthropic import AnthropicError, get_anthropic_client
 from cc_api.clients.db import get_session_maker
@@ -157,3 +161,95 @@ async def post_qa(request: Request, payload: QaRequest) -> QaResponse:
         n_sentences=len(response.sentences),
     )
     return response
+
+
+def _sse(event: str, data: dict[str, Any]) -> str:
+    """Sérialise un évènement Server-Sent Events."""
+    return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
+
+
+@router.post("/stream")
+@limiter.limit("10/minute")
+async def post_qa_stream(request: Request, payload: QaRequest) -> StreamingResponse:
+    """Pipeline RAG en Server-Sent Events.
+
+    Le pipeline prend des dizaines de secondes (3 appels LLM + reranking). Un
+    `/qa` synchrone serait coupé par le proxy. Ici on émet, au fil de l'eau :
+    - `event: stage`  — progression (« Rédaction de la dissertation… ») ;
+    - des commentaires `: ping` toutes les 10 s — garde la connexion vivante ;
+    - `event: result` — la `QaResponse` finale (vérifiée) ;
+    - `event: error`  — message d'erreur lisible.
+
+    Aucune phrase non vérifiée n'est jamais streamée : seule la réponse finale,
+    déjà passée par la vérification d'ancrage, est envoyée — la règle d'or tient.
+    """
+
+    async def event_stream() -> AsyncIterator[str]:
+        queue: asyncio.Queue[tuple[str, Any]] = asyncio.Queue()
+
+        async def on_stage(label: str) -> None:
+            await queue.put(("stage", label))
+
+        async def run() -> None:
+            try:
+                async with get_session_maker()() as session:
+                    result = await answer_question(
+                        payload.question,
+                        qdrant=get_qdrant(),
+                        embed=get_embed_client(),
+                        reranker=get_rerank_client(),
+                        anthropic=get_anthropic_client(),
+                        session=session,
+                        on_stage=on_stage,
+                    )
+                await queue.put(("result", result))
+            except EmbedServerError as exc:
+                log.warning("qa.stream_embed_unavailable", error=str(exc))
+                await queue.put((
+                    "error",
+                    "Le service d'embedding est momentanément indisponible.",
+                ))
+            except (APIError, AnthropicError) as exc:
+                log.warning("qa.stream_llm_unavailable", error=str(exc))
+                await queue.put((
+                    "error",
+                    "Le service de génération est momentanément indisponible.",
+                ))
+            except Exception as exc:  # garde-fou : jamais de 500 nu dans le flux
+                log.warning("qa.stream_error", error=str(exc))
+                await queue.put(("error", "Une erreur interne est survenue."))
+            finally:
+                await queue.put(("__done__", None))
+
+        async def heartbeat() -> None:
+            while True:
+                await asyncio.sleep(10)
+                await queue.put(("ping", None))
+
+        run_task = asyncio.create_task(run())
+        hb_task = asyncio.create_task(heartbeat())
+        try:
+            while True:
+                kind, value = await queue.get()
+                if kind == "__done__":
+                    break
+                if kind == "ping":
+                    yield ": ping\n\n"
+                elif kind == "stage":
+                    yield _sse("stage", {"label": value})
+                elif kind == "result":
+                    response = _build_response(value)
+                    log.info(
+                        "qa.stream_answered",
+                        question=payload.question[:80],
+                        refused=value.refused_reason,
+                        incomplete=value.incomplete,
+                    )
+                    yield _sse("result", response.model_dump(by_alias=True, mode="json"))
+                elif kind == "error":
+                    yield _sse("error", {"detail": value})
+        finally:
+            hb_task.cancel()
+            await run_task
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")

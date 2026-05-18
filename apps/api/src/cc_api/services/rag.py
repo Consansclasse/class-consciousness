@@ -30,6 +30,7 @@ Trois issues possibles :
 from __future__ import annotations
 
 import time
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -313,6 +314,7 @@ async def answer_question(
     k_retrieve: int | None = None,
     k_rerank: int | None = None,
     fuzzy_threshold: int | None = None,
+    on_stage: Callable[[str], Awaitable[None]] | None = None,
 ) -> RagResult:
     """Exécute le pipeline RAG complet pour une question utilisateur.
 
@@ -320,7 +322,16 @@ async def answer_question(
     qu'on accepte ou qu'on refuse la réponse. Le refus est explicite via
     `refused_reason ∈ {None, "no_chunks_retrieved", "no_relevant_chunks",
     "unverified_citations"}`.
+
+    `on_stage`, s'il est fourni, est appelé au début de chaque grande phase
+    avec un libellé lisible — utilisé par l'endpoint SSE `/qa/stream` pour
+    afficher la progression sans laisser l'interface figée.
     """
+
+    async def _stage(label: str) -> None:
+        if on_stage is not None:
+            await on_stage(label)
+
     started_at = time.monotonic()
     latencies: dict[str, int] = {}
     k_retrieve_eff = k_retrieve if k_retrieve is not None else settings.rag_k_retrieve
@@ -329,6 +340,7 @@ async def answer_question(
     )
 
     log.info("rag.start", question_len=len(question), k_retrieve=k_retrieve_eff)
+    await _stage("Analyse de la question…")
 
     # 0. Décomposition : on cherche pour la question ET pour des sous-questions
     # couvrant ses différents angles. Échec gracieux → la seule question.
@@ -345,6 +357,7 @@ async def answer_question(
     latencies["decompose_ms"] = int((time.monotonic() - t0) * 1000)
     log.info("rag.decompose", n_queries=len(search_queries))
 
+    await _stage("Recherche dans le corpus sourcé…")
     # 1. Embedding de toutes les requêtes de recherche (un seul appel batch).
     t0 = time.monotonic()
     embeddings = await embed.embed_batch(search_queries, input_type="query")
@@ -393,7 +406,8 @@ async def answer_question(
             n_keyword_lists += 1
 
     rrf = _reciprocal_rank_fusion(ranked_lists)
-    fused = sorted(rrf, key=lambda p: rrf[p], reverse=True)[: max(k_retrieve_eff, 64)]
+    # Pool de rerank borné : le reranking CPU est un goulot de latence en prod.
+    fused = sorted(rrf, key=lambda p: rrf[p], reverse=True)[:32]
 
     # Chunks issus uniquement des mots-clés : leur payload n'est pas encore connu.
     missing = [pid for pid in fused if pid not in payloads]
@@ -497,6 +511,7 @@ async def answer_question(
     chunks_by_source_id = {c.source_id: c.text for c in reranked}
     latencies["assemble_ms"] = int((time.monotonic() - t0) * 1000)
 
+    await _stage("Rédaction de la dissertation…")
     # 5. Génération LLM.
     t0 = time.monotonic()
     generation = await anthropic.generate(
@@ -514,6 +529,7 @@ async def answer_question(
         model=generation.model,
     )
 
+    await _stage("Vérification des citations…")
     # 6 + 7. Vérification d'ancrage par phrase (littéral + juge sémantique).
     # La réponse est déjà découpée en phrases par la génération structurée.
     t0 = time.monotonic()

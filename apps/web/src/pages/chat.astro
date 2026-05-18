@@ -219,46 +219,87 @@ import BaseLayout from "../layouts/BaseLayout.astro";
       return html;
     };
 
+    // Affiche la réponse finale (vérifiée) ou le message de refus adéquat.
+    const renderResult = (data: QaResponse, slot: HTMLElement) => {
+      const sentences = data.sentences ?? [];
+      const hasAnswer = !!data.answer && sentences.some((s) => s.verified);
+      if (!hasAnswer) {
+        slot.innerHTML = noteHtml(
+          data.refusedReason === "no_relevant_chunks"
+            ? "Le corpus disponible ne couvre pas cette question."
+            : "Je ne peux pas répondre à partir des sources disponibles.",
+        );
+        return;
+      }
+      let html = renderAnswer(sentences, data.citedChunks ?? []);
+      if (data.incomplete) {
+        html += noteHtml(
+          "Réponse partielle : les phrases non adossées à une citation vérifiée ont été retirées.",
+        );
+      }
+      slot.innerHTML = html;
+    };
+
     const ask = async (q: string) => {
       const li = document.createElement("li");
       li.className = "space-y-4 py-8 first:pt-0 last:pb-0";
       li.innerHTML = `
         <p class="font-Scheherazade text-xl sm:text-2xl leading-snug text-black dark:text-white text-pretty">${escapeHtml(q)}</p>
-        <div class="answer">${noteHtml("Recherche dans le corpus sourcé…")}</div>
+        <div class="answer">${noteHtml("Analyse de la question…")}</div>
       `;
       list.appendChild(li);
       scrollDown();
       const slot = li.querySelector(".answer") as HTMLElement;
 
+      // Le pipeline RAG prend des dizaines de secondes (3 appels LLM). On
+      // consomme le flux Server-Sent Events de `/qa/stream` : les évènements
+      // `stage` affichent la progression, `result` porte la réponse vérifiée.
       try {
-        const res = await fetch(`${API_BASE}/qa`, {
+        const res = await fetch(`${API_BASE}/qa/stream`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ question: q }),
         });
-        if (res.status === 503) {
+        if (!res.ok || !res.body) {
           slot.innerHTML = noteHtml(
             "Le service est momentanément indisponible. Réessaie dans un instant.",
           );
-        } else {
-          const data = (await res.json()) as QaResponse;
-          const sentences = data.sentences ?? [];
-          const hasAnswer =
-            !!data.answer && sentences.some((s) => s.verified);
-          if (!hasAnswer) {
-            slot.innerHTML = noteHtml(
-              data.refusedReason === "no_relevant_chunks"
-                ? "Le corpus disponible ne couvre pas cette question."
-                : "Je ne peux pas répondre à partir des sources disponibles.",
-            );
-          } else {
-            let html = renderAnswer(sentences, data.citedChunks ?? []);
-            if (data.incomplete) {
-              html += noteHtml(
-                "Réponse partielle : les phrases non adossées à une citation vérifiée ont été retirées.",
-              );
+          scrollDown();
+          return;
+        }
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buf = "";
+        let finished = false;
+        while (!finished) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buf += decoder.decode(value, { stream: true });
+          const blocks = buf.split("\n\n");
+          buf = blocks.pop() ?? "";
+          for (const block of blocks) {
+            const trimmed = block.trim();
+            if (!trimmed || trimmed.startsWith(":")) continue; // ping / commentaire
+            let event = "message";
+            let data = "";
+            for (const line of block.split("\n")) {
+              if (line.startsWith("event:")) event = line.slice(6).trim();
+              else if (line.startsWith("data:")) data += line.slice(5).trim();
             }
-            slot.innerHTML = html;
+            if (event === "stage") {
+              slot.innerHTML = noteHtml(
+                (JSON.parse(data) as { label: string }).label,
+              );
+              scrollDown();
+            } else if (event === "result") {
+              renderResult(JSON.parse(data) as QaResponse, slot);
+              finished = true;
+            } else if (event === "error") {
+              slot.innerHTML = noteHtml(
+                (JSON.parse(data) as { detail: string }).detail,
+              );
+              finished = true;
+            }
           }
         }
       } catch {
