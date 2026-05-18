@@ -42,10 +42,12 @@ class Settings(BaseSettings):
     # Sonnet 4.6 par défaut — Opus 4.7 est trop coûteux pour le volume RAG.
     anthropic_model: str = Field(default="claude-sonnet-4-6", alias="ANTHROPIC_MODEL")
     # Modèle du 2ᵉ passage « juge » qui vérifie l'ancrage sémantique (entailment)
-    # de chaque phrase analytique. Sonnet 4.6 également — bon compromis
-    # rigueur / coût pour ce contrôle.
+    # de chaque phrase analytique. Haiku 4.5 : la tâche est une classification
+    # ENTAILED / NOT_ENTAILED / CONTRADICTED, bien dans ses cordes — il divise
+    # nettement la latence du contrôle face à Sonnet. La rigueur du juge reste
+    # à surveiller via /debug-rag (cf. .claude/rules/citation-honest-vs-literal.md).
     anthropic_judge_model: str = Field(
-        default="claude-sonnet-4-6", alias="ANTHROPIC_JUDGE_MODEL"
+        default="claude-haiku-4-5", alias="ANTHROPIC_JUDGE_MODEL"
     )
 
     # Stripe — paiement de la cotisation associative.
@@ -69,7 +71,7 @@ class Settings(BaseSettings):
     # est refusée (`no_relevant_chunks`) : le corpus ne couvre pas la question.
     rag_rerank_min_score: float = Field(default=0.3, alias="CC_API_RAG_RERANK_MIN_SCORE")
     rag_k_rerank_min: int = Field(default=4, alias="CC_API_RAG_K_RERANK_MIN")
-    rag_k_rerank_max: int = Field(default=6, alias="CC_API_RAG_K_RERANK_MAX")
+    rag_k_rerank_max: int = Field(default=8, alias="CC_API_RAG_K_RERANK_MAX")
     # Nombre de passages soumis au reranker. Le reranking CPU coûte ~4 s/passage
     # sur le VPS prod : ce plafond borne directement la latence du pipeline.
     rag_rerank_pool: int = Field(default=16, alias="CC_API_RAG_RERANK_POOL")

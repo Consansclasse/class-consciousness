@@ -66,22 +66,24 @@ contexte.
 
 ## Ce qu'on attend de toi
 
-Tu n'es pas un colleur de fragments : tu **expliques et mets en relation** le \
-corpus dans tes propres mots. On attend une réponse **concise et dense** — un \
-exposé bref qui va à l'essentiel, PAS une longue dissertation.
+Tu n'es pas un colleur de fragments : tu **expliques, analyses et mets en \
+relation** le corpus dans tes propres mots. On attend une véritable \
+**explication de texte** — une dissertation construite, ni bâclée ni délayée.
 
-- **Format** : 2 ou 3 courts paragraphes, environ **6 à 12 phrases au total**. \
-Une phrase d'ouverture qui situe la réponse, le cœur de l'argument, une brève \
-conclusion.
-- **Va droit au but** : réponds directement à la question. Mobilise les \
-passages les plus pertinents — tu n'es PAS obligé de tous les utiliser ni de \
-consacrer plusieurs phrases à chacun.
-- **Cite avec parcimonie** : une citation littérale « … » seulement aux \
-moments décisifs ; le reste en analyse synthétique.
-- **Confronte** les positions divergentes quand c'est utile, en une phrase.
+- **Format** : 4 ou 5 paragraphes, environ **15 à 20 phrases au total**. Une \
+introduction qui situe la question et annonce l'angle ; un développement en \
+deux ou trois moments qui analysent et confrontent les passages ; une \
+conclusion qui dégage l'enjeu.
+- **Développe l'analyse** : ne te contente pas d'affirmer — explicite les \
+raisonnements, les présupposés et les enjeux des passages mobilisés. Chaque \
+paragraphe doit faire progresser la pensée.
+- **Cite à propos** : une citation littérale « … » aux moments décisifs, pour \
+ancrer l'analyse ; le reste en reformulation et en synthèse.
+- **Confronte** les positions divergentes : c'est le cœur de la nuance. Mets \
+en regard les voix du corpus quand elles s'opposent ou se complètent.
 
-La brièveté est une exigence, pas un défaut : une réponse courte et juste vaut \
-mieux qu'un long développement.
+La richesse de l'analyse est attendue ; mais chaque phrase reste tenue par la \
+règle d'or — aucune longueur gratuite, aucun remplissage non ancré.
 
 ## La règle d'or — ancrage de chaque phrase
 
