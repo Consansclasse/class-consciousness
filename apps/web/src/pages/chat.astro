@@ -151,6 +151,69 @@ import BaseLayout from "../layouts/BaseLayout.astro";
     const noteHtml = (text: string) =>
       `<p class="font-Scheherazade italic text-sm sm:text-base leading-relaxed text-black dark:text-white">${escapeHtml(text)}</p>`;
 
+    // Estimation de latence du pipeline RAG, mesurée bout-en-bout (~70 s :
+    // génération ~52 s + vérification d'ancrage ~19 s). Sert de cible au
+    // minuteur — informative, jamais bloquante.
+    const ESTIMATE_S = 70;
+
+    // `83` → `1:23` (minutes:secondes), format minuteur.
+    const fmtClock = (s: number) =>
+      `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, "0")}`;
+
+    // Indicateur d'attente : libellé d'étape courante + barre de progression +
+    // minuteur (temps écoulé / estimation). Le pipeline RAG prenant ~1 min, une
+    // attente muette serait anxiogène — on rend la progression lisible. Renvoie
+    // `setLabel` (maj du libellé d'étape) et `stop` (arrêt du minuteur).
+    const startWaiter = (slot: HTMLElement) => {
+      slot.innerHTML = `
+        <div class="space-y-2.5">
+          <p data-label class="font-Scheherazade italic text-sm sm:text-base leading-relaxed text-black dark:text-white">Analyse de la question…</p>
+          <div
+            data-bar
+            role="progressbar"
+            aria-label="Progression de la réponse"
+            aria-valuemin="0"
+            aria-valuemax="100"
+            aria-valuenow="0"
+            class="h-2 w-full border border-black dark:border-white"
+          >
+            <div
+              data-fill
+              class="h-full bg-darkpink transition-[width] duration-1000 ease-linear"
+              style="width:0%"
+            ></div>
+          </div>
+          <p
+            data-time
+            class="font-Scheherazade text-xs uppercase tracking-[0.15em] text-black dark:text-white opacity-70"
+          >0:00 écoulé · estimation ≈ ${fmtClock(ESTIMATE_S)}</p>
+        </div>`;
+      const label = slot.querySelector("[data-label]") as HTMLElement;
+      const bar = slot.querySelector("[data-bar]") as HTMLElement;
+      const fill = slot.querySelector("[data-fill]") as HTMLElement;
+      const time = slot.querySelector("[data-time]") as HTMLElement;
+      const t0 = Date.now();
+      const tick = () => {
+        const el = Math.round((Date.now() - t0) / 1000);
+        // La barre plafonne à 96 % : elle ne se « remplit » jamais tant que la
+        // réponse vérifiée n'est pas arrivée — pas de faux signal d'achèvement.
+        const pct = Math.min(96, (el / ESTIMATE_S) * 100);
+        fill.style.width = pct + "%";
+        bar.setAttribute("aria-valuenow", String(Math.round(pct)));
+        time.textContent =
+          el < ESTIMATE_S
+            ? `${fmtClock(el)} écoulé · estimation ≈ ${fmtClock(ESTIMATE_S)}`
+            : `${fmtClock(el)} écoulé · réponse imminente…`;
+      };
+      const id = window.setInterval(tick, 1000);
+      return {
+        setLabel: (txt: string) => {
+          label.textContent = txt;
+        },
+        stop: () => window.clearInterval(id),
+      };
+    };
+
     // `bilan-3` → `Bilan n°3` (libellé lisible du numéro).
     const issueLabel = (slug: string) => {
       const m = slug.match(/^bilan-0*(\d+)$/);
@@ -245,11 +308,14 @@ import BaseLayout from "../layouts/BaseLayout.astro";
       li.className = "space-y-4 py-8 first:pt-0 last:pb-0";
       li.innerHTML = `
         <p class="font-Scheherazade text-xl sm:text-2xl leading-snug text-black dark:text-white text-pretty">${escapeHtml(q)}</p>
-        <div class="answer">${noteHtml("Analyse de la question…")}</div>
+        <div class="answer"></div>
       `;
       list.appendChild(li);
       scrollDown();
       const slot = li.querySelector(".answer") as HTMLElement;
+
+      // Minuteur d'attente : démarre immédiatement, avant même la connexion SSE.
+      const waiter = startWaiter(slot);
 
       // Le pipeline RAG prend des dizaines de secondes (3 appels LLM). On
       // consomme le flux Server-Sent Events de `/qa/stream` : les évènements
@@ -261,6 +327,7 @@ import BaseLayout from "../layouts/BaseLayout.astro";
           body: JSON.stringify({ question: q }),
         });
         if (!res.ok || !res.body) {
+          waiter.stop();
           slot.innerHTML = noteHtml(
             "Le service est momentanément indisponible. Réessaie dans un instant.",
           );
@@ -287,14 +354,14 @@ import BaseLayout from "../layouts/BaseLayout.astro";
               else if (line.startsWith("data:")) data += line.slice(5).trim();
             }
             if (event === "stage") {
-              slot.innerHTML = noteHtml(
-                (JSON.parse(data) as { label: string }).label,
-              );
+              waiter.setLabel((JSON.parse(data) as { label: string }).label);
               scrollDown();
             } else if (event === "result") {
+              waiter.stop();
               renderResult(JSON.parse(data) as QaResponse, slot);
               finished = true;
             } else if (event === "error") {
+              waiter.stop();
               slot.innerHTML = noteHtml(
                 (JSON.parse(data) as { detail: string }).detail,
               );
@@ -302,7 +369,11 @@ import BaseLayout from "../layouts/BaseLayout.astro";
             }
           }
         }
+        // Filet de sécurité : flux clos sans évènement `result` (cf. `break`
+        // sur `done`) — on arrête le minuteur dans tous les cas.
+        waiter.stop();
       } catch {
+        waiter.stop();
         slot.innerHTML = noteHtml(
           "La requête a échoué. Vérifie ta connexion et réessaie.",
         );
