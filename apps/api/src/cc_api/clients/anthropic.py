@@ -35,6 +35,14 @@ log = get_logger(__name__)
 _PHRASE_SCHEMA: dict[str, Any] = {
     "type": "object",
     "properties": {
+        "paragraphe": {
+            "type": "integer",
+            "description": (
+                "Numéro du paragraphe (0, 1, 2, …). Les phrases d'un même "
+                "paragraphe partagent le même numéro ; on l'incrémente pour "
+                "marquer un saut de paragraphe."
+            ),
+        },
         "texte": {
             "type": "string",
             "description": (
@@ -60,34 +68,26 @@ _PHRASE_SCHEMA: dict[str, Any] = {
             ),
         },
     },
-    "required": ["texte", "citations", "citations_directes"],
+    "required": ["paragraphe", "texte", "citations", "citations_directes"],
 }
 
 _REDIGER_TOOL: dict[str, Any] = {
     "name": "rediger_reponse",
     "description": (
-        "Enregistre la dissertation d'explication de texte : une liste de "
-        "paragraphes, chaque paragraphe étant une liste de phrases ancrées."
+        "Enregistre la dissertation d'explication de texte : une liste PLATE "
+        "de phrases ancrées, dans l'ordre, chacune rattachée à un paragraphe "
+        "par son numéro."
     ),
     "input_schema": {
         "type": "object",
         "properties": {
-            "paragraphes": {
+            "phrases": {
                 "type": "array",
-                "description": "Les paragraphes de la dissertation, dans l'ordre.",
-                "items": {
-                    "type": "object",
-                    "properties": {
-                        "phrases": {
-                            "type": "array",
-                            "items": _PHRASE_SCHEMA,
-                        },
-                    },
-                    "required": ["phrases"],
-                },
+                "description": "Toutes les phrases de la dissertation, dans l'ordre.",
+                "items": _PHRASE_SCHEMA,
             },
         },
-        "required": ["paragraphes"],
+        "required": ["phrases"],
     },
 }
 
@@ -202,6 +202,11 @@ def _tool_input(response: Any, tool_name: str) -> dict[str, Any]:
     )
 
 
+def _strlist(value: Any) -> list[str]:
+    """Liste de chaînes défensive : tolère qu'un modèle dévie du schéma."""
+    return [str(x) for x in value] if isinstance(value, list) else []
+
+
 def _usage(response: Any) -> GenerationUsage:
     return GenerationUsage(
         input_tokens=response.usage.input_tokens,
@@ -289,19 +294,26 @@ class AnthropicClient:
         }
         response = await self._client.messages.create(**params)
         data = _tool_input(response, "rediger_reponse")
-        paragraphes: list[list[GeneratedPhrase]] = []
-        for para in data.get("paragraphes", []):
-            phrases = [
+        # Schéma plat : `phrases` est une liste de phrases, chacune tagguée par
+        # `paragraphe`. On regroupe par numéro de paragraphe. Parsing défensif :
+        # une phrase qui n'est pas un objet, ou sans texte, est ignorée.
+        by_para: dict[int, list[GeneratedPhrase]] = {}
+        for p in data.get("phrases", []):
+            if not isinstance(p, dict):
+                continue
+            texte = str(p.get("texte", "")).strip()
+            if not texte:
+                continue
+            raw_para = p.get("paragraphe", 0)
+            para_idx = raw_para if isinstance(raw_para, int) else 0
+            by_para.setdefault(para_idx, []).append(
                 GeneratedPhrase(
-                    texte=str(p.get("texte", "")).strip(),
-                    citations=[str(c) for c in p.get("citations", [])],
-                    citations_directes=[str(q) for q in p.get("citations_directes", [])],
+                    texte=texte,
+                    citations=_strlist(p.get("citations")),
+                    citations_directes=_strlist(p.get("citations_directes")),
                 )
-                for p in para.get("phrases", [])
-                if str(p.get("texte", "")).strip()
-            ]
-            if phrases:
-                paragraphes.append(phrases)
+            )
+        paragraphes: list[list[GeneratedPhrase]] = [by_para[k] for k in sorted(by_para)]
         usage = _usage(response)
         log.info(
             "anthropic.generate",
@@ -315,6 +327,15 @@ class AnthropicClient:
             stop_reason=response.stop_reason,
         )
         if not paragraphes:
+            log.warning(
+                "anthropic.generate_empty",
+                data_type=type(data).__name__,
+                keys=list(data.keys()) if isinstance(data, dict) else None,
+                phrases_type=type(data.get("phrases")).__name__
+                if isinstance(data, dict)
+                else None,
+                raw_sample=str(data)[:800],
+            )
             hint = (
                 " (génération tronquée : plafond max_tokens atteint)"
                 if response.stop_reason == "max_tokens"

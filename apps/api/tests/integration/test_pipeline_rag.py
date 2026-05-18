@@ -90,8 +90,13 @@ def _make_mock_anthropic(
                 },
             )
         if tool_name == "rediger_reponse":
+            # Schéma plat : liste de phrases, chacune tagguée par `paragraphe`.
             tool_input: dict[str, Any] = {
-                "paragraphes": [{"phrases": para} for para in paragraphes]
+                "phrases": [
+                    {**ph, "paragraphe": pi}
+                    for pi, para in enumerate(paragraphes)
+                    for ph in para
+                ]
             }
         elif tool_name == "decomposer_question":
             # Décomposition mockée : on renvoie la question telle quelle →
