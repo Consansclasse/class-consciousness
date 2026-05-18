@@ -5,8 +5,8 @@
 1. Embedding de toutes les requêtes via le backend configuré (Qwen3 local).
 2. Recherche hybride : vectorielle (Qdrant) + mots-clés (Postgres FTS),
    fusionnées par Reciprocal Rank Fusion.
-3. Reranking de tous les chunks + sélection diversifiée (MMR par article) →
-   top-k couvrant plusieurs articles/numéros (condition de la nuance).
+3. Reranking optionnel (`rag_rerank_enabled`) + sélection diversifiée (MMR
+   par article) → top-k couvrant plusieurs articles/numéros.
 4. Assemblage du contexte (chunks + metadata : ARK, source_id, char offsets).
 5. Génération Anthropic Claude Sonnet 4.6 — dissertation d'explication de texte,
    en sortie structurée (tool-use) : phrases déjà découpées, citations explicites.
@@ -406,8 +406,10 @@ async def answer_question(
             n_keyword_lists += 1
 
     rrf = _reciprocal_rank_fusion(ranked_lists)
-    # Pool de rerank borné : le reranking CPU est un goulot de latence en prod.
-    fused = sorted(rrf, key=lambda p: rrf[p], reverse=True)[:32]
+    # Pool de rerank borné : le reranking CPU est le goulot de latence en prod
+    # (~4 s/passage). 16 passages reranked suffisent largement à alimenter la
+    # sélection MMR finale ; au-delà la latence explose sans gain de qualité.
+    fused = sorted(rrf, key=lambda p: rrf[p], reverse=True)[: settings.rag_rerank_pool]
 
     # Chunks issus uniquement des mots-clés : leur payload n'est pas encore connu.
     missing = [pid for pid in fused if pid not in payloads]
@@ -444,46 +446,61 @@ async def answer_question(
             latencies=latencies,
         )
 
-    # 3. Rerank de TOUS les chunks retrouvés, puis sélection diversifiée (MMR).
-    # On reranke tout (coût négligeable : le reranker score déjà tous les docs)
-    # afin de disposer d'un large vivier pour la sélection par diversité.
+    # 3. Reranking (optionnel) puis sélection diversifiée (MMR).
+    # Le reranking cc-embed sur CPU est le poste de latence le plus lourd
+    # (~4 s/passage). `rag_rerank_enabled=False` le saute : le classement par
+    # fusion RRF (vecteur + mots-clés) sert alors directement de score — moins
+    # précis, mais bien plus rapide.
     t0 = time.monotonic()
-    documents = [r.payload.get("text", "") for r in retrieved]
-    rerank_hits = await reranker.rerank(
-        query=question, documents=documents, top_k=len(documents)
-    )
-    latencies["rerank_ms"] = int((time.monotonic() - t0) * 1000)
     reranked_all: list[RerankedChunk] = []
-    for hit in rerank_hits:
-        original = retrieved[hit.index]
-        reranked_all.append(
-            RerankedChunk(
-                source_id=_source_id(original.payload),
-                text=original.payload["text"],
-                retrieval_score=original.score,
-                rerank_score=hit.score,
-                payload=original.payload,
+    if settings.rag_rerank_enabled:
+        documents = [r.payload.get("text", "") for r in retrieved]
+        rerank_hits = await reranker.rerank(
+            query=question, documents=documents, top_k=len(documents)
+        )
+        for hit in rerank_hits:
+            original = retrieved[hit.index]
+            reranked_all.append(
+                RerankedChunk(
+                    source_id=_source_id(original.payload),
+                    text=original.payload["text"],
+                    retrieval_score=original.score,
+                    rerank_score=hit.score,
+                    payload=original.payload,
+                )
             )
-        )
-    # Seuil de pertinence : on écarte les passages dont le score de rerank est
-    # sous `rag_rerank_min_score`. Si AUCUN ne l'atteint, le corpus ne couvre
-    # pas la question → refus explicite (mieux que répondre depuis du bruit).
-    min_score = settings.rag_rerank_min_score
-    relevant = [c for c in reranked_all if c.rerank_score >= min_score]
-    if not relevant:
-        top = reranked_all[0].rerank_score if reranked_all else 0.0
-        log.warning("rag.no_relevant_chunks", top_rerank_score=top, min_score=min_score)
-        return RagResult(
-            question=question,
-            retrieved=retrieved,
-            reranked=[],
-            answer=None,
-            citation_report=None,
-            refused_reason="no_relevant_chunks",
-            model=anthropic.model,
-            latency_ms=int((time.monotonic() - started_at) * 1000),
-            latencies=latencies,
-        )
+        min_score = settings.rag_rerank_min_score
+        relevant = [c for c in reranked_all if c.rerank_score >= min_score]
+        if not relevant:
+            top = reranked_all[0].rerank_score if reranked_all else 0.0
+            log.warning("rag.no_relevant_chunks", top_rerank_score=top, min_score=min_score)
+            return RagResult(
+                question=question,
+                retrieved=retrieved,
+                reranked=[],
+                answer=None,
+                citation_report=None,
+                refused_reason="no_relevant_chunks",
+                model=anthropic.model,
+                latency_ms=int((time.monotonic() - started_at) * 1000),
+                latencies=latencies,
+            )
+    else:
+        # Sans reranker : on garde l'ordre RRF, score normalisé sur le meilleur
+        # (pour que la pénalité de diversité MMR reste à la bonne échelle).
+        top_score = retrieved[0].score if retrieved else 1.0
+        reranked_all = [
+            RerankedChunk(
+                source_id=_source_id(r.payload),
+                text=r.payload["text"],
+                retrieval_score=r.score,
+                rerank_score=(r.score / top_score) if top_score > 0 else 0.0,
+                payload=r.payload,
+            )
+            for r in retrieved
+        ]
+        relevant = reranked_all
+    latencies["rerank_ms"] = int((time.monotonic() - t0) * 1000)
     # `k` adaptatif : autant de passages que le corpus en offre de pertinents,
     # borné [min, max]. Question large bien couverte → beaucoup ; étroite → peu.
     if k_rerank is not None:

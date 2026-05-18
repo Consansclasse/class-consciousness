@@ -68,8 +68,15 @@ class Settings(BaseSettings):
     # une question étroite → peu. Si AUCUN passage n'atteint le seuil, la réponse
     # est refusée (`no_relevant_chunks`) : le corpus ne couvre pas la question.
     rag_rerank_min_score: float = Field(default=0.3, alias="CC_API_RAG_RERANK_MIN_SCORE")
-    rag_k_rerank_min: int = Field(default=6, alias="CC_API_RAG_K_RERANK_MIN")
-    rag_k_rerank_max: int = Field(default=20, alias="CC_API_RAG_K_RERANK_MAX")
+    rag_k_rerank_min: int = Field(default=4, alias="CC_API_RAG_K_RERANK_MIN")
+    rag_k_rerank_max: int = Field(default=6, alias="CC_API_RAG_K_RERANK_MAX")
+    # Nombre de passages soumis au reranker. Le reranking CPU coûte ~4 s/passage
+    # sur le VPS prod : ce plafond borne directement la latence du pipeline.
+    rag_rerank_pool: int = Field(default=16, alias="CC_API_RAG_RERANK_POOL")
+    # Reranking activé ? Désactivé par défaut : le reranker cc-embed sur CPU est
+    # le plus gros poste de latence (~4 s/passage). Sans lui, le classement par
+    # fusion RRF (vecteur + mots-clés) sert de score — moins fin, bien plus rapide.
+    rag_rerank_enabled: bool = Field(default=False, alias="CC_API_RAG_RERANK")
     rag_citation_fuzzy_threshold: int = Field(default=95, alias="CC_API_RAG_CITATION_FUZZY")
     # Poids de diversité du reranking (MMR par groupe) : pénalité appliquée au
     # score de rerank pour chaque chunk déjà retenu du même article. Force la
@@ -79,7 +86,10 @@ class Settings(BaseSettings):
     # Décomposition de question : le pipeline décompose la question en
     # sous-questions de recherche et récupère pour chacune, afin de couvrir
     # tous les angles. Échec gracieux → recherche sur la seule question.
-    rag_decomposition_enabled: bool = Field(default=True, alias="CC_API_RAG_DECOMPOSITION")
+    # Désactivée par défaut : la décomposition ajoute un appel LLM et multiplie
+    # les recherches. Réactivable (`CC_API_RAG_DECOMPOSITION=true`) pour gagner
+    # en couverture au prix de la latence.
+    rag_decomposition_enabled: bool = Field(default=False, alias="CC_API_RAG_DECOMPOSITION")
     # Recherche hybride : combine la recherche vectorielle (Qdrant) et une
     # recherche plein-texte par mots-clés (Postgres FTS français), fusionnées
     # par Reciprocal Rank Fusion. Rattrape les passages au vocabulaire exact

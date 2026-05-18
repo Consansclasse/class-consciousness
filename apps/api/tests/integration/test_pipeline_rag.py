@@ -215,9 +215,13 @@ async def test_decomposition_failure_degrades_gracefully(
     seeded_corpus: dict[str, Any],
     qdrant_client: Any,
     mock_embed_client: Any,
+    monkeypatch: Any,
 ) -> None:
     """Si la décomposition échoue, le pipeline retombe sur la seule question
     et répond normalement — la décomposition est un bonus, pas un point dur."""
+    from cc_api.core import settings as settings_module
+
+    monkeypatch.setattr(settings_module.settings, "rag_decomposition_enabled", True)
     source_id_0 = seeded_corpus["source_ids"][0]
     paragraphes = [
         [
@@ -482,10 +486,15 @@ async def test_refuses_when_no_relevant_chunks(
     seeded_corpus: dict[str, Any],
     qdrant_client: Any,
     mock_embed_client: Any,
+    monkeypatch: Any,
 ) -> None:
     """Si aucun chunk n'atteint le seuil de pertinence (rerank trop bas), le
     pipeline refuse avec `no_relevant_chunks` — le corpus ne couvre pas la
-    question — sans appeler la génération."""
+    question — sans appeler la génération. (Le seuil n'a de sens que reranking
+    activé.)"""
+    from cc_api.core import settings as settings_module
+
+    monkeypatch.setattr(settings_module.settings, "rag_rerank_enabled", True)
     source_id_0 = seeded_corpus["source_ids"][0]
     paragraphes = [[_phrase("ne devrait jamais être généré.", [source_id_0])]]
 

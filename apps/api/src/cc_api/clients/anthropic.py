@@ -224,7 +224,7 @@ class AnthropicClient:
         model: str,
         *,
         client: AsyncAnthropic | None = None,
-        max_retries: int = 5,
+        max_retries: int = 2,
     ) -> None:
         if not api_key:
             raise RuntimeError(
@@ -254,7 +254,7 @@ class AnthropicClient:
         system: str,
         context: str,
         question: str,
-        max_tokens: int = 8000,
+        max_tokens: int = 16000,
     ) -> GeneratedAnswer:
         """Génère la dissertation en sortie structurée (tool-use forcé).
 
@@ -311,9 +311,18 @@ class AnthropicClient:
             input_tokens=usage.input_tokens,
             output_tokens=usage.output_tokens,
             cache_read=usage.cache_read_input_tokens,
+            cache_creation=usage.cache_creation_input_tokens,
+            stop_reason=response.stop_reason,
         )
         if not paragraphes:
-            raise AnthropicError("`rediger_reponse` n'a produit aucune phrase exploitable")
+            hint = (
+                " (génération tronquée : plafond max_tokens atteint)"
+                if response.stop_reason == "max_tokens"
+                else ""
+            )
+            raise AnthropicError(
+                f"`rediger_reponse` n'a produit aucune phrase exploitable{hint}"
+            )
         return GeneratedAnswer(paragraphes=paragraphes, model=self.model, usage=usage)
 
     async def decompose(
