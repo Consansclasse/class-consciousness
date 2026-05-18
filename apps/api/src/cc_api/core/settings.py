@@ -39,7 +39,14 @@ class Settings(BaseSettings):
     )
 
     anthropic_api_key: str | None = Field(default=None, alias="ANTHROPIC_API_KEY")
-    anthropic_model: str = Field(default="claude-opus-4-7", alias="ANTHROPIC_MODEL")
+    # Sonnet 4.6 par défaut — Opus 4.7 est trop coûteux pour le volume RAG.
+    anthropic_model: str = Field(default="claude-sonnet-4-6", alias="ANTHROPIC_MODEL")
+    # Modèle du 2ᵉ passage « juge » qui vérifie l'ancrage sémantique (entailment)
+    # de chaque phrase analytique. Sonnet 4.6 également — bon compromis
+    # rigueur / coût pour ce contrôle.
+    anthropic_judge_model: str = Field(
+        default="claude-sonnet-4-6", alias="ANTHROPIC_JUDGE_MODEL"
+    )
 
     # Stripe — paiement de la cotisation associative.
     # En dev : clés sk_test_… (sandbox Stripe) ou pointage vers stripe-mock.
@@ -54,14 +61,40 @@ class Settings(BaseSettings):
     public_web_base: str = Field(default="http://localhost:3000", alias="PUBLIC_WEB_BASE")
 
     # Pipeline RAG : seuils de la règle d'or « aucune phrase sans citation vérifiée ».
-    rag_k_retrieve: int = Field(default=20, alias="CC_API_RAG_K_RETRIEVE")
-    rag_k_rerank: int = Field(default=5, alias="CC_API_RAG_K_RERANK")
+    rag_k_retrieve: int = Field(default=40, alias="CC_API_RAG_K_RETRIEVE")
+    # Sélection des passages transmis au LLM — `k` ADAPTATIF : on retient les
+    # passages dont le score de rerank dépasse `rag_rerank_min_score`, borné
+    # entre min et max. Une question large bien couverte → beaucoup de passages ;
+    # une question étroite → peu. Si AUCUN passage n'atteint le seuil, la réponse
+    # est refusée (`no_relevant_chunks`) : le corpus ne couvre pas la question.
+    rag_rerank_min_score: float = Field(default=0.3, alias="CC_API_RAG_RERANK_MIN_SCORE")
+    rag_k_rerank_min: int = Field(default=6, alias="CC_API_RAG_K_RERANK_MIN")
+    rag_k_rerank_max: int = Field(default=20, alias="CC_API_RAG_K_RERANK_MAX")
     rag_citation_fuzzy_threshold: int = Field(default=95, alias="CC_API_RAG_CITATION_FUZZY")
+    # Poids de diversité du reranking (MMR par groupe) : pénalité appliquée au
+    # score de rerank pour chaque chunk déjà retenu du même article. Force la
+    # sélection à couvrir plusieurs articles/numéros — condition de la nuance.
+    # 0 = sélection par score brut.
+    rag_mmr_diversity_weight: float = Field(default=0.1, alias="CC_API_RAG_MMR_WEIGHT")
+    # Décomposition de question : le pipeline décompose la question en
+    # sous-questions de recherche et récupère pour chacune, afin de couvrir
+    # tous les angles. Échec gracieux → recherche sur la seule question.
+    rag_decomposition_enabled: bool = Field(default=True, alias="CC_API_RAG_DECOMPOSITION")
+    # Recherche hybride : combine la recherche vectorielle (Qdrant) et une
+    # recherche plein-texte par mots-clés (Postgres FTS français), fusionnées
+    # par Reciprocal Rank Fusion. Rattrape les passages au vocabulaire exact
+    # que l'embedding manque. Sans effet si aucune session DB n'est fournie.
+    rag_hybrid_enabled: bool = Field(default=True, alias="CC_API_RAG_HYBRID")
     # Mode partiel : si au moins 1 phrase est vérifiée et certaines ne le sont
     # pas, on expose les phrases vérifiées (200 + incomplete=true) au lieu de
     # refuser toute la réponse (422). Aucune phrase non vérifiée n'est exposée
     # — la règle d'or « aucune phrase sans citation » reste sauve.
     rag_partial_mode_enabled: bool = Field(default=True, alias="CC_API_RAG_PARTIAL_MODE")
+    # Vérification d'ancrage sémantique : un 2ᵉ passage LLM « juge » statue, pour
+    # chaque phrase analytique, si elle est ENTAILED / NOT_ENTAILED / CONTRADICTED
+    # par les passages cités. C'est le garde-fou anti-hallucination du mode
+    # « explication de texte ». Désactivable uniquement pour les tests offline.
+    rag_verifier_enabled: bool = Field(default=True, alias="CC_API_RAG_VERIFIER")
 
     @property
     def postgres_dsn(self) -> str:

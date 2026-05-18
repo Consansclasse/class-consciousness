@@ -107,14 +107,26 @@ import BaseLayout from "../layouts/BaseLayout.astro";
     type Citation = {
       sourceId: string;
       issueSlug: string;
+      issueArk: string;
       articleSlug: string;
+      articleArk: string;
       articleTitle: string;
       authorName: string;
+      charStart: number;
+      charEnd: number;
+    };
+    type Sentence = {
+      text: string;
+      citations: string[];
+      verified: boolean;
+      paragraphe: number;
     };
     type QaResponse = {
       answer: string | null;
+      sentences: Sentence[];
       citedChunks: Citation[];
       incomplete: boolean;
+      refusedReason: string | null;
     };
 
     const autosize = () => {
@@ -139,10 +151,18 @@ import BaseLayout from "../layouts/BaseLayout.astro";
     const noteHtml = (text: string) =>
       `<p class="font-Scheherazade italic text-sm sm:text-base leading-relaxed text-black dark:text-white">${escapeHtml(text)}</p>`;
 
-    // Rend une réponse RAG : remplace les marqueurs [CITE:source_id] par des
-    // renvois numérotés et liste les sources dessous (liens vers /corpus).
-    const renderAnswer = (answer: string, cited: Citation[]) => {
+    // `bilan-3` → `Bilan n°3` (libellé lisible du numéro).
+    const issueLabel = (slug: string) => {
+      const m = slug.match(/^bilan-0*(\d+)$/);
+      return m ? `Bilan n°${m[1]}` : slug;
+    };
+
+    // Rend une réponse RAG structurée : chaque phrase vérifiée porte ses renvois
+    // numérotés ⁽ⁿ⁾, les paragraphes d'origine sont préservés, et l'appareil de
+    // sources complet (auteur, article, numéro, ARK, offsets) est listé dessous.
+    const renderAnswer = (sentences: Sentence[], cited: Citation[]) => {
       const byId = new Map(cited.map((c) => [c.sourceId, c]));
+      const verified = sentences.filter((s) => s.verified);
       const order: string[] = [];
       const numFor = (id: string) => {
         let i = order.indexOf(id);
@@ -152,28 +172,49 @@ import BaseLayout from "../layouts/BaseLayout.astro";
         }
         return i + 1;
       };
-      const withRefs = escapeHtml(answer).replace(
-        /\[CITE:([^\]]+)\]/g,
-        (_m, id: string) =>
-          id === "none"
-            ? ""
-            : `<sup class="text-darkpink">[${numFor(id)}]</sup>`,
-      );
-      let html = `<p class="font-Scheherazade text-base sm:text-lg leading-relaxed text-black dark:text-white text-pretty">${withRefs}</p>`;
+      // Regroupe les phrases par paragraphe d'origine.
+      const paras = new Map<number, Sentence[]>();
+      for (const s of verified) {
+        const arr = paras.get(s.paragraphe) ?? [];
+        arr.push(s);
+        paras.set(s.paragraphe, arr);
+      }
+      let html = "";
+      for (const [, group] of [...paras.entries()].sort((a, b) => a[0] - b[0])) {
+        const inner = group
+          .map((s) => {
+            const sup = s.citations
+              .filter((id) => id !== "none")
+              .map(
+                (id) => `<sup class="text-darkpink">(${numFor(id)})</sup>`,
+              )
+              .join("");
+            return `${escapeHtml(s.text)}${sup}`;
+          })
+          .join(" ");
+        html += `<p class="font-Scheherazade text-base sm:text-lg leading-relaxed text-black dark:text-white text-pretty mb-4">${inner}</p>`;
+      }
       if (order.length > 0) {
         const items = order
           .map((id, idx) => {
             const c = byId.get(id);
-            const label = c
-              ? `${escapeHtml(c.articleTitle)} — ${escapeHtml(c.authorName)}`
-              : escapeHtml(id);
-            const inner = c
-              ? `<a href="/corpus/${encodeURIComponent(c.issueSlug)}/${encodeURIComponent(c.articleSlug)}" class="hover:text-darkpink underline decoration-1 underline-offset-2">${label}</a>`
-              : label;
-            return `<li class="font-Scheherazade text-xs sm:text-sm text-black dark:text-white">[${idx + 1}] ${inner}</li>`;
+            let inner: string;
+            if (c) {
+              const ref = `${escapeHtml(c.authorName)}, « ${escapeHtml(c.articleTitle)} », ${escapeHtml(issueLabel(c.issueSlug))}`;
+              inner =
+                `<a href="/corpus/${encodeURIComponent(c.issueSlug)}/${encodeURIComponent(c.articleSlug)}" ` +
+                `class="hover:text-darkpink underline decoration-1 underline-offset-2">${ref}</a>` +
+                ` <span class="opacity-60">— ${escapeHtml(c.articleArk)}, car. ${c.charStart}–${c.charEnd}</span>`;
+            } else {
+              inner = escapeHtml(id);
+            }
+            return `<li class="font-Scheherazade text-xs sm:text-sm text-black dark:text-white">(${idx + 1}) ${inner}</li>`;
           })
           .join("");
-        html += `<ol class="mt-3 space-y-1 border-t border-black dark:border-white pt-3">${items}</ol>`;
+        html +=
+          `<div class="mt-5 border-t border-black dark:border-white pt-3">` +
+          `<p class="font-Scheherazade text-xs uppercase tracking-[0.2em] mb-2 opacity-70">Sources</p>` +
+          `<ol class="space-y-1.5">${items}</ol></div>`;
       }
       return html;
     };
@@ -201,12 +242,17 @@ import BaseLayout from "../layouts/BaseLayout.astro";
           );
         } else {
           const data = (await res.json()) as QaResponse;
-          if (!data.answer) {
+          const sentences = data.sentences ?? [];
+          const hasAnswer =
+            !!data.answer && sentences.some((s) => s.verified);
+          if (!hasAnswer) {
             slot.innerHTML = noteHtml(
-              "Je ne peux pas répondre à partir des sources disponibles.",
+              data.refusedReason === "no_relevant_chunks"
+                ? "Le corpus disponible ne couvre pas cette question."
+                : "Je ne peux pas répondre à partir des sources disponibles.",
             );
           } else {
-            let html = renderAnswer(data.answer, data.citedChunks ?? []);
+            let html = renderAnswer(sentences, data.citedChunks ?? []);
             if (data.incomplete) {
               html += noteHtml(
                 "Réponse partielle : les phrases non adossées à une citation vérifiée ont été retirées.",

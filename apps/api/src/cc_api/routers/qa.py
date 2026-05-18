@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Router /qa — pipeline RAG sourcé en exposition HTTP.
 
-POST /qa retourne 200 si toutes les phrases sont SOURCED_VERIFIED, sinon 422
+POST /qa retourne 200 si toutes les phrases sont SUPPORTED, sinon 422
 avec `refused_reason` et la liste des phrases problématiques. Aucune réponse
 non sourcée ne sort jamais — règle d'or non-négociable.
 
@@ -15,7 +15,8 @@ from typing import cast
 from anthropic import APIError
 from fastapi import APIRouter, HTTPException, Request
 
-from cc_api.clients.anthropic import get_anthropic_client
+from cc_api.clients.anthropic import AnthropicError, get_anthropic_client
+from cc_api.clients.db import get_session_maker
 from cc_api.clients.embed import EmbedServerError, get_embed_client, get_rerank_client
 from cc_api.clients.qdrant import get_qdrant
 from cc_api.core.logging import get_logger
@@ -48,10 +49,11 @@ def _build_response(result: RagResult) -> QaResponse:
     ]
     sentences = [
         Sentence(
-            text=v.sentence,
+            text=v.text,
             citations=v.citations,
             verdict=v.verdict.value,
-            verified=(v.verdict.value == "SOURCED_VERIFIED"),
+            verified=v.verified,
+            paragraphe=v.paragraphe,
             best_score=v.best_score,
             reason=v.reason,
         )
@@ -99,13 +101,15 @@ async def post_qa(request: Request, payload: QaRequest) -> QaResponse:
     anthropic = get_anthropic_client()
 
     try:
-        result = await answer_question(
-            payload.question,
-            qdrant=qdrant,
-            embed=embed,
-            reranker=reranker,
-            anthropic=anthropic,
-        )
+        async with get_session_maker()() as session:
+            result = await answer_question(
+                payload.question,
+                qdrant=qdrant,
+                embed=embed,
+                reranker=reranker,
+                anthropic=anthropic,
+                session=session,
+            )
     except EmbedServerError as exc:
         # cc-embed injoignable : dégradation gracieuse (503), pas une 500 nue.
         log.warning("qa.embed_unavailable", error=str(exc))
@@ -116,8 +120,10 @@ async def post_qa(request: Request, payload: QaRequest) -> QaResponse:
                 "Réessaie dans un instant."
             ),
         ) from exc
-    except APIError as exc:
-        # Erreur côté API Anthropic (panne, quota, crédits épuisés) : 503 propre.
+    except (APIError, AnthropicError) as exc:
+        # Erreur côté Anthropic — panne/quota/crédits, OU sortie structurée
+        # inexploitable (génération ou juge) : 503 propre, jamais de réponse
+        # non vérifiée exposée.
         log.warning("qa.llm_unavailable", error=str(exc))
         raise HTTPException(
             status_code=503,

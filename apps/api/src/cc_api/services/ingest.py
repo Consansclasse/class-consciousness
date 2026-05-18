@@ -272,7 +272,9 @@ async def ingest_issue(
                 )
                 all_points.append(
                     PointStruct(
-                        id=point_uuid,
+                        # qdrant-client 1.12 valide `id` en int | str strict :
+                        # un objet UUID doit être sérialisé en chaîne.
+                        id=str(point_uuid),
                         vector=emb,
                         payload={
                             "issue_id": issue.id,

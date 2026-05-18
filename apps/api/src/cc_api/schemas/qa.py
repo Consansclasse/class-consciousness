@@ -42,21 +42,21 @@ class Citation(_CamelModel):
 
 
 class Sentence(_CamelModel):
-    """Une phrase de la réponse RAG + son verdict de vérification.
+    """Une phrase de la réponse RAG + son verdict de vérification d'ancrage.
 
-    `verdict` est le verdict canonique parmi
-    {`SOURCED_VERIFIED`, `SOURCED_UNVERIFIED`, `UNSOURCED`, `REFUSED_BY_LLM`}.
-    `verified` est `True` seulement pour `SOURCED_VERIFIED` (citation littérale
-    vérifiée). Une phrase `REFUSED_BY_LLM` n'est PAS `verified` au sens strict,
-    mais elle est légitimement exposée car elle correspond au refus explicite
-    du LLM via `[CITE:none]`.
+    `verdict` est le verdict canonique parmi {`SUPPORTED`, `QUOTE_UNVERIFIED`,
+    `NOT_SUPPORTED`, `CONTRADICTED`, `UNSOURCED`, `REFUSED_BY_LLM`}.
+    `verified` est `True` pour `SUPPORTED` (ancrage vérifié : citations directes
+    littérales OK + juge sémantique ENTAILED) et pour `REFUSED_BY_LLM` (refus
+    explicite légitime via `[CITE:none]`).
     """
 
     text: str
     citations: list[str]  # source_ids cités
     verdict: str
     verified: bool
-    best_score: float  # 0..100, max partial_ratio sur les chunks cités
+    paragraphe: int  # index du paragraphe d'origine — regroupement à l'affichage
+    best_score: float  # 0..100, meilleur match littéral des citations directes
     reason: str  # explication humaine du verdict
 
 

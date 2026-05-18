@@ -1,16 +1,22 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Pipeline RAG sourcé — 7 étapes, règle d'or non-négociable.
+"""Pipeline RAG sourcé — règle d'or non-négociable.
 
-1. Embedding de la query via le backend configuré (Qwen3 local par défaut).
-2. Recherche Qdrant top-k retrieve (défaut 20) sur collection `bilan`.
-3. Reranking via le backend configuré → top-k rerank (défaut 5).
-4. Assemblage du contexte (5 chunks + metadata : ARK, source_id, char offsets).
-5. Génération Anthropic Claude Opus 4.7 avec prompt caching ephemeral.
-6. Découpe en phrases (services.citation.split_sentences, gère abréviations FR).
-7. Vérification citation par phrase (substring exact ou rapidfuzz adaptatif).
+0. Décomposition de la question en sous-questions de recherche (tool-use).
+1. Embedding de toutes les requêtes via le backend configuré (Qwen3 local).
+2. Recherche hybride : vectorielle (Qdrant) + mots-clés (Postgres FTS),
+   fusionnées par Reciprocal Rank Fusion.
+3. Reranking de tous les chunks + sélection diversifiée (MMR par article) →
+   top-k couvrant plusieurs articles/numéros (condition de la nuance).
+4. Assemblage du contexte (chunks + metadata : ARK, source_id, char offsets).
+5. Génération Anthropic Claude Sonnet 4.6 — dissertation d'explication de texte,
+   en sortie structurée (tool-use) : phrases déjà découpées, citations explicites.
+6. Vérification d'ancrage par phrase : contrôle littéral des citations directes
+   + juge sémantique d'entailment (services.citation.verify_response).
+7. Reconstitution du texte (services.citation.assemble_answer) — complet ou,
+   en mode partiel, restreint aux phrases vérifiées.
 
 Trois issues possibles :
-- **Réponse complète** : toutes les phrases sont SOURCED_VERIFIED ou
+- **Réponse complète** : toutes les phrases sont SUPPORTED ou
   REFUSED_BY_LLM (refus explicite). `incomplete=False`, `refused_reason=None`.
 - **Réponse partielle** (mode partiel, `settings.rag_partial_mode_enabled`) :
   au moins 1 phrase est légitime ET certaines ne le sont pas → on expose
@@ -28,67 +34,118 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from qdrant_client import AsyncQdrantClient
+from sqlalchemy import text as sql_text
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from cc_api.clients.anthropic import AnthropicClient
+from cc_api.clients.anthropic import AnthropicClient, AnthropicError
 from cc_api.clients.embed import EmbedClient, RerankClient
 from cc_api.core.logging import get_logger
 from cc_api.core.settings import settings
 from cc_api.services.citation import (
     CitationReport,
-    CitationVerdict,
     SentenceVerdict,
+    assemble_answer,
     verify_response,
 )
 
 COLLECTION = "bilan"
 
+# Constante de Reciprocal Rank Fusion : amortit le poids du rang dans la
+# fusion des listes (vectorielle + mots-clés). 60 = valeur usuelle de la
+# littérature (Cormack et al.).
+_RRF_C = 60
+
 log = get_logger(__name__)
 
-SYSTEM_PROMPT = """Tu es un assistant de recherche pour l'archive open-source \
-de la théorie marxiste « Conscience de classe ».
+SYSTEM_PROMPT = """Tu es un chercheur expert de l'archive open-source de la \
+théorie marxiste « Conscience de classe ». Tu rédiges, en français, une \
+**dissertation d'explication de texte** de niveau publication académique : un \
+exposé construit, argumenté et précis qui éclaire la question posée à partir — \
+et UNIQUEMENT à partir — des passages du corpus fournis dans le contexte.
 
-Tu réponds en français, avec rigueur académique. Tu suis impérativement la
-règle d'or de l'archive :
+## Ce qu'on attend de toi
 
-> **Aucune phrase de ta réponse ne doit exister sans être adossée à une citation \
-littéralement vérifiable dans le contexte fourni.**
+Tu n'es pas un colleur de fragments : tu **expliques, analyses et mets en \
+relation** le corpus dans tes propres mots. On attend une **dissertation \
+longue et développée**, pas un résumé. Structure obligatoire :
 
-## Format obligatoire de citation
+- **Introduction** : une ou deux phrases qui situent la question, son enjeu \
+théorique et la manière dont le corpus permet d'y répondre.
+- **Développement en plusieurs parties** : organise la réponse en 2 à 4 temps \
+argumentés (idéalement séparés par un saut de ligne). Chaque partie traite un \
+aspect de la question.
+- **Exploitation de CHAQUE passage pertinent** : ne te contente pas de citer un \
+passage et de passer au suivant. Pour chaque passage, consacre PLUSIEURS \
+phrases : présente-le, cite-le littéralement, puis explique ce qu'il établit, \
+ses présupposés, ses conséquences, et mets-le en relation avec les autres \
+passages. Confronte les articles et les auteurs quand ils divergent.
+- **Conclusion** : un paragraphe qui synthétise ce que le corpus établit et \
+pointe, le cas échéant, ce qu'il laisse ouvert.
 
-Chaque phrase doit se terminer par UN OU PLUSIEURS marqueurs `[CITE:source_id]`
-où `source_id` est l'identifiant EXACT d'un chunk du contexte. Exemple :
+La réponse doit être aussi **longue, complète et fouillée** que le permet le \
+nombre de passages fournis : exploite-les TOUS. Vise la densité d'un article \
+de revue savante. La longueur vient de l'analyse serrée de chaque passage, \
+jamais d'un remplissage ou d'un ajout extérieur. Une réponse courte qui laisse \
+des passages pertinents inexploités est une réponse ratée.
 
-> La position de Bilan est claire. [CITE:bilan-1/note-liminaire:0]
+## La règle d'or — ancrage de chaque phrase
 
-Plusieurs citations sur une phrase sont autorisées si la phrase synthétise
-plusieurs chunks :
+> **Aucune phrase ne doit affirmer quoi que ce soit qui ne soit soutenu par un \
+passage cité du corpus.** Tu n'utilises AUCUNE connaissance extérieure : ni \
+date, ni nom, ni événement, ni thèse qui ne figure dans les passages fournis.
 
-> Les deux articles convergent. [CITE:bilan-1/note-liminaire:0] [CITE:bilan-1/intro:1]
+## Format de sortie — outil `rediger_reponse`
 
-## Règles strictes
+Tu n'écris pas en texte libre : tu APPELLES l'outil `rediger_reponse`. La \
+réponse est une liste de `paragraphes`, chaque paragraphe une liste de \
+`phrases`. Pour CHAQUE phrase tu remplis trois champs :
 
-- Tu ne paraphrases JAMAIS : tu cites le texte du contexte (avec d'éventuelles \
-variations typographiques mineures tolérées, jusqu'à 5% de différence fuzzy).
-- Construis chaque phrase à partir d'un fragment LONG et CONTINU du chunk cité \
-plutôt que d'un résumé : une portion étendue reprise telle quelle passe la \
-vérification, une reformulation la rate. En cas de doute, cite plus largement.
-- Tu n'inventes JAMAIS de source_id : tu utilises uniquement ceux fournis dans \
-le contexte.
-- Si le contexte ne suffit pas à répondre, tu réponds exactement :
-  « Je ne peux pas répondre à partir des sources disponibles. [CITE:none] »
-  (Cette phrase de refus sera reconnue et n'invalidera pas la règle d'or.)
-- Tu n'introduis pas la réponse par une phrase de transition non sourcée du type \
-« Voici la réponse : » — chaque phrase, y compris les transitions, doit avoir \
-au moins une citation.
-- Tu ne mets PAS de note, de bibliographie ou de section « Sources » à la fin : \
-les marqueurs `[CITE:...]` SUFFISENT à exposer les sources.
+1. **`texte`** — la phrase elle-même, en prose, SANS marqueur de citation. Les \
+citations littérales y figurent entre guillemets « … ».
+2. **`citations`** — la liste des `source_id` EXACTS (tels qu'écrits dans le \
+contexte) des passages qui soutiennent cette phrase. Une phrase de synthèse \
+peut en citer plusieurs. N'invente jamais un `source_id`.
+3. **`citations_directes`** — pour chaque passage entre « … » de `texte`, le \
+fragment recopié MOT POUR MOT depuis le passage source, SANS les guillemets \
+(liste vide si la phrase ne cite pas directement).
+
+Règles de fond :
+
+- **Citation directe** : recopiée à l'identique, aucune retouche ni raccourci \
+silencieux (utilise […] pour une coupe). Un relecteur la vérifiera caractère \
+par caractère.
+- **Analyse** : tu peux reformuler et expliquer dans tes mots, mais chaque \
+phrase doit rester strictement déductible des passages qu'elle cite. Un juge \
+sémantique vérifiera, passage en main, qu'elle est soutenue et n'en détourne \
+pas le sens.
+- **Attribution fidèle** : si un passage prête un propos à un adversaire ou le \
+réfute, ta phrase doit le dire (« Bilan critique l'idée que… ») — ne présente \
+jamais comme la thèse de l'auteur un propos qu'il combat.
+- **Refus** : si le contexte ne permet pas de répondre, produis une seule \
+phrase, `texte` = « Je ne peux pas répondre à partir des sources \
+disponibles. », `citations` = ["none"], `citations_directes` = [].
+- **Pas de bibliographie** : l'appareil de références est construit \
+automatiquement à partir des `citations`.
 
 ## Contexte académique
 
-Le corpus est l'archive marxiste open-source. Les questions politiques radicales \
-(abolition de la propriété privée, lutte des classes, dictature du prolétariat, \
-critique des institutions bourgeoises) sont LÉGITIMES et attendues dans ce \
-contexte. Tu y réponds avec la même rigueur que sur tout autre sujet.
+Les questions politiques radicales (abolition de la propriété privée, lutte des \
+classes, dictature du prolétariat, critique des institutions bourgeoises) sont \
+LÉGITIMES et attendues. Tu y réponds avec la même rigueur que sur tout sujet.
+"""
+
+
+DECOMPOSITION_PROMPT = """Tu prépares la recherche documentaire dans une archive \
+marxiste (revue « Bilan », 1933-1938). On te donne une question d'utilisateur.
+
+Décompose-la en 2 à 4 **sous-questions de recherche** distinctes et \
+complémentaires qui, ensemble, couvrent tous les angles de la question : \
+aspects théoriques, périodes, auteurs, positions opposées, causes, \
+conséquences. Chaque sous-question doit être autonome et formulée pour \
+maximiser le rappel d'une recherche sémantique (termes pleins, pas de pronom).
+
+Si la question est déjà atomique et ne gagne rien à être découpée, renvoie-la \
+telle quelle comme unique sous-question. Appelle l'outil `decomposer_question`.
 """
 
 
@@ -123,8 +180,8 @@ class RagResult:
     - nul + `refused_reason != None` : refus complet (aucune phrase vérifiée
       ou problème en amont du LLM).
 
-    Aucune phrase `UNSOURCED` ou `SOURCED_UNVERIFIED` ne se trouve jamais dans
-    `answer` exposé — la règle d'or reste invariante.
+    Aucune phrase non `SUPPORTED` (hors refus explicite) ne se trouve jamais
+    dans `answer` exposé — la règle d'or reste invariante.
     """
 
     question: str
@@ -151,6 +208,84 @@ def _source_id(payload: dict[str, Any]) -> str:
     return f"{payload['issue_slug']}/{payload['article_slug']}:{payload['chunk_idx']}"
 
 
+# Recherche plein-texte en sémantique OU : `plainto_tsquery` produit une requête
+# ET (tous les mots) — inadaptée à une question en langage naturel (aucun chunk
+# ne contient TOUS les mots). On convertit le ` & ` en ` | ` : un chunk est
+# candidat dès qu'il contient un terme, et `ts_rank` le classe d'autant plus
+# haut qu'il en contient. Une requête vide donne `''::tsquery` → aucun résultat.
+_KEYWORD_SQL = sql_text(
+    """
+    WITH q AS (
+        SELECT replace(plainto_tsquery('french', :q)::text, ' & ', ' | ')::tsquery AS tsq
+    )
+    SELECT c.qdrant_point_id::text AS pid,
+           ts_rank(to_tsvector('french', c.text), q.tsq) AS rank
+    FROM chunks c, q
+    WHERE q.tsq <> ''::tsquery
+      AND to_tsvector('french', c.text) @@ q.tsq
+    ORDER BY rank DESC
+    LIMIT :lim
+    """
+)
+
+
+async def keyword_search(
+    session: AsyncSession, query: str, limit: int
+) -> list[tuple[str, float]]:
+    """Recherche plein-texte par mots-clés sur `chunks.text` (Postgres FTS FR).
+
+    Renvoie `(qdrant_point_id, ts_rank)` triés par pertinence décroissante.
+    Sémantique OU (cf. `_KEYWORD_SQL`) : adaptée aux questions en langage
+    naturel. Une requête sans terme exploitable ne ramène rien.
+    """
+    rows = (await session.execute(_KEYWORD_SQL, {"q": query, "lim": limit})).all()
+    return [(str(r.pid), float(r.rank)) for r in rows]
+
+
+def _reciprocal_rank_fusion(ranked_lists: list[list[str]]) -> dict[str, float]:
+    """Fusionne plusieurs listes ordonnées de `point_id` par Reciprocal Rank
+    Fusion : score = Σ 1/(_RRF_C + rang) sur toutes les listes où l'id figure.
+
+    RRF est robuste car il combine des classements sans dépendre de l'échelle
+    des scores (cosinus de Qdrant vs `ts_rank` de Postgres ne sont pas comparables).
+    """
+    scores: dict[str, float] = {}
+    for ranked in ranked_lists:
+        for rank, pid in enumerate(ranked):
+            scores[pid] = scores.get(pid, 0.0) + 1.0 / (_RRF_C + rank)
+    return scores
+
+
+def _select_diverse(
+    chunks: list[RerankedChunk], k: int, diversity_weight: float
+) -> list[RerankedChunk]:
+    """Sélection diversifiée (MMR par groupe) : `k` chunks équilibrant
+    pertinence et diversité des sources.
+
+    À chaque étape, choisit le chunk maximisant
+    `rerank_score - diversity_weight * (chunks déjà retenus du même article)`.
+    La sélection couvre ainsi plusieurs articles/numéros au lieu de se
+    concentrer sur le texte le mieux classé — condition de la nuance : le LLM
+    voit des voix et des positions à confronter. `diversity_weight = 0` redonne
+    la sélection par score brut.
+    """
+    selected: list[RerankedChunk] = []
+    pool = list(chunks)
+    per_article: dict[tuple[str, str], int] = {}
+
+    def _adjusted(c: RerankedChunk) -> float:
+        key = (c.payload["issue_slug"], c.payload["article_slug"])
+        return c.rerank_score - diversity_weight * per_article.get(key, 0)
+
+    while pool and len(selected) < k:
+        best = max(pool, key=_adjusted)
+        pool.remove(best)
+        selected.append(best)
+        key = (best.payload["issue_slug"], best.payload["article_slug"])
+        per_article[key] = per_article.get(key, 0) + 1
+    return selected
+
+
 def _build_context(reranked: list[RerankedChunk]) -> str:
     """Assemble le contexte LLM : un bloc lisible par chunk reranked."""
     blocks: list[str] = []
@@ -174,6 +309,7 @@ async def answer_question(
     embed: EmbedClient,
     reranker: RerankClient,
     anthropic: AnthropicClient,
+    session: AsyncSession | None = None,
     k_retrieve: int | None = None,
     k_rerank: int | None = None,
     fuzzy_threshold: int | None = None,
@@ -182,53 +318,102 @@ async def answer_question(
 
     Retourne un `RagResult` qui contient la trace complète des 7 étapes,
     qu'on accepte ou qu'on refuse la réponse. Le refus est explicite via
-    `refused_reason ∈ {None, "no_chunks_retrieved", "unverified_citations"}`.
+    `refused_reason ∈ {None, "no_chunks_retrieved", "no_relevant_chunks",
+    "unverified_citations"}`.
     """
     started_at = time.monotonic()
     latencies: dict[str, int] = {}
     k_retrieve_eff = k_retrieve if k_retrieve is not None else settings.rag_k_retrieve
-    k_rerank_eff = k_rerank if k_rerank is not None else settings.rag_k_rerank
     fuzzy_eff = (
         fuzzy_threshold if fuzzy_threshold is not None else settings.rag_citation_fuzzy_threshold
     )
 
     log.info("rag.start", question_len=len(question), k_retrieve=k_retrieve_eff)
 
-    # 1. Embedding query.
+    # 0. Décomposition : on cherche pour la question ET pour des sous-questions
+    # couvrant ses différents angles. Échec gracieux → la seule question.
     t0 = time.monotonic()
-    embeddings = await embed.embed_batch([question], input_type="query")
+    search_queries = [question]
+    if settings.rag_decomposition_enabled:
+        try:
+            subs = await anthropic.decompose(
+                system=DECOMPOSITION_PROMPT, question=question
+            )
+            search_queries.extend(s for s in subs if s != question)
+        except AnthropicError as exc:
+            log.warning("rag.decompose_failed", error=str(exc))
+    latencies["decompose_ms"] = int((time.monotonic() - t0) * 1000)
+    log.info("rag.decompose", n_queries=len(search_queries))
+
+    # 1. Embedding de toutes les requêtes de recherche (un seul appel batch).
+    t0 = time.monotonic()
+    embeddings = await embed.embed_batch(search_queries, input_type="query")
     if not embeddings:
         raise RuntimeError("le backend d'embedding a renvoyé un vecteur vide pour la query")
-    query_vector = embeddings[0]
     latencies["embed_ms"] = int((time.monotonic() - t0) * 1000)
     log.info(
         "rag.embed_query",
-        dims=len(query_vector),
+        n_queries=len(embeddings),
+        dims=len(embeddings[0]),
         latency_ms=latencies["embed_ms"],
         model=settings.embed_model,
     )
 
-    # 2. Qdrant top-k retrieve.
+    # 2. Recherche hybride : vectorielle (Qdrant) + mots-clés (Postgres FTS),
+    # une liste classée par (sous-)question et par moteur, fusionnées par
+    # Reciprocal Rank Fusion. Le vivier couvre tous les angles et les deux
+    # modes de rappel (sémantique + lexical).
     t0 = time.monotonic()
-    hits = await qdrant.query_points(
-        collection_name=COLLECTION,
-        query=query_vector,
-        limit=k_retrieve_eff,
-        with_payload=True,
-    )
-    latencies["qdrant_ms"] = int((time.monotonic() - t0) * 1000)
-    retrieved = [
-        RetrievedChunk(
-            qdrant_point_id=str(p.id),
-            score=p.score or 0.0,
-            payload=dict(p.payload or {}),
+    ranked_lists: list[list[str]] = []
+    payloads: dict[str, dict[str, Any]] = {}
+    for vector in embeddings:
+        hits = await qdrant.query_points(
+            collection_name=COLLECTION,
+            query=vector,
+            limit=k_retrieve_eff,
+            with_payload=True,
         )
-        for p in hits.points
+        vec_list: list[str] = []
+        for p in hits.points:
+            pid = str(p.id)
+            vec_list.append(pid)
+            payloads.setdefault(pid, dict(p.payload or {}))
+        ranked_lists.append(vec_list)
+
+    n_keyword_lists = 0
+    if session is not None and settings.rag_hybrid_enabled:
+        for sq in search_queries:
+            try:
+                kw = await keyword_search(session, sq, k_retrieve_eff)
+            except Exception as exc:
+                # L'hybride est un bonus : une panne FTS ne bloque jamais /qa.
+                log.warning("rag.keyword_search_failed", error=str(exc))
+                break
+            ranked_lists.append([pid for pid, _ in kw])
+            n_keyword_lists += 1
+
+    rrf = _reciprocal_rank_fusion(ranked_lists)
+    fused = sorted(rrf, key=lambda p: rrf[p], reverse=True)[: max(k_retrieve_eff, 64)]
+
+    # Chunks issus uniquement des mots-clés : leur payload n'est pas encore connu.
+    missing = [pid for pid in fused if pid not in payloads]
+    if missing:
+        for rec in await qdrant.retrieve(
+            collection_name=COLLECTION, ids=missing, with_payload=True
+        ):
+            payloads[str(rec.id)] = dict(rec.payload or {})
+
+    retrieved = [
+        RetrievedChunk(qdrant_point_id=pid, score=rrf[pid], payload=payloads[pid])
+        for pid in fused
+        if pid in payloads
     ]
+    latencies["qdrant_ms"] = int((time.monotonic() - t0) * 1000)
     log.info(
-        "rag.qdrant_retrieve",
+        "rag.retrieve",
         n_hits=len(retrieved),
-        top_score=retrieved[0].score if retrieved else None,
+        n_vector_lists=len(embeddings),
+        n_keyword_lists=n_keyword_lists,
         latency_ms=latencies["qdrant_ms"],
     )
 
@@ -245,17 +430,19 @@ async def answer_question(
             latencies=latencies,
         )
 
-    # 3. Rerank → top k_rerank.
+    # 3. Rerank de TOUS les chunks retrouvés, puis sélection diversifiée (MMR).
+    # On reranke tout (coût négligeable : le reranker score déjà tous les docs)
+    # afin de disposer d'un large vivier pour la sélection par diversité.
     t0 = time.monotonic()
     documents = [r.payload.get("text", "") for r in retrieved]
     rerank_hits = await reranker.rerank(
-        query=question, documents=documents, top_k=k_rerank_eff
+        query=question, documents=documents, top_k=len(documents)
     )
     latencies["rerank_ms"] = int((time.monotonic() - t0) * 1000)
-    reranked: list[RerankedChunk] = []
+    reranked_all: list[RerankedChunk] = []
     for hit in rerank_hits:
         original = retrieved[hit.index]
-        reranked.append(
+        reranked_all.append(
             RerankedChunk(
                 source_id=_source_id(original.payload),
                 text=original.payload["text"],
@@ -264,10 +451,42 @@ async def answer_question(
                 payload=original.payload,
             )
         )
+    # Seuil de pertinence : on écarte les passages dont le score de rerank est
+    # sous `rag_rerank_min_score`. Si AUCUN ne l'atteint, le corpus ne couvre
+    # pas la question → refus explicite (mieux que répondre depuis du bruit).
+    min_score = settings.rag_rerank_min_score
+    relevant = [c for c in reranked_all if c.rerank_score >= min_score]
+    if not relevant:
+        top = reranked_all[0].rerank_score if reranked_all else 0.0
+        log.warning("rag.no_relevant_chunks", top_rerank_score=top, min_score=min_score)
+        return RagResult(
+            question=question,
+            retrieved=retrieved,
+            reranked=[],
+            answer=None,
+            citation_report=None,
+            refused_reason="no_relevant_chunks",
+            model=anthropic.model,
+            latency_ms=int((time.monotonic() - started_at) * 1000),
+            latencies=latencies,
+        )
+    # `k` adaptatif : autant de passages que le corpus en offre de pertinents,
+    # borné [min, max]. Question large bien couverte → beaucoup ; étroite → peu.
+    if k_rerank is not None:
+        k_eff = k_rerank
+    else:
+        k_eff = max(settings.rag_k_rerank_min, min(settings.rag_k_rerank_max, len(relevant)))
+    # Sélection diversifiée : pas les k meilleurs scores bruts (souvent un seul
+    # article) mais une sélection couvrant plusieurs articles/numéros — nuance.
+    reranked = _select_diverse(relevant, k_eff, settings.rag_mmr_diversity_weight)
+    n_articles = len({(c.payload["issue_slug"], c.payload["article_slug"]) for c in reranked})
     log.info(
         "rag.rerank",
         n_in=len(retrieved),
+        n_relevant=len(relevant),
+        k_adaptive=k_eff,
         n_out=len(reranked),
+        n_articles=n_articles,
         top_rerank_score=reranked[0].rerank_score if reranked else None,
         latency_ms=latencies["rerank_ms"],
     )
@@ -284,7 +503,6 @@ async def answer_question(
         system=SYSTEM_PROMPT,
         context=context,
         question=question,
-        max_tokens=2048,
     )
     latencies["generate_ms"] = int((time.monotonic() - t0) * 1000)
     log.info(
@@ -296,19 +514,25 @@ async def answer_question(
         model=generation.model,
     )
 
-    # 6 + 7. Découpe phrases + vérification citation.
+    # 6 + 7. Vérification d'ancrage par phrase (littéral + juge sémantique).
+    # La réponse est déjà découpée en phrases par la génération structurée.
     t0 = time.monotonic()
-    citation_report = verify_response(
-        generation.text, chunks=chunks_by_source_id, fuzzy_threshold=fuzzy_eff
+    citation_report = await verify_response(
+        generation,
+        chunks=chunks_by_source_id,
+        anthropic=anthropic,
+        fuzzy_threshold=fuzzy_eff,
+        verifier_enabled=settings.rag_verifier_enabled,
+        judge_model=settings.anthropic_judge_model,
     )
     latencies["verify_ms"] = int((time.monotonic() - t0) * 1000)
     log.info(
         "rag.verify_citations",
         n_sentences=len(citation_report.sentences),
-        n_verified=citation_report.n_sourced_verified,
-        n_flagged=citation_report.n_sourced_verified_flagged,
-        n_unverified=citation_report.n_sourced_unverified,
-        n_unsourced=citation_report.n_unsourced,
+        n_supported=citation_report.n_supported,
+        n_rejected=citation_report.n_rejected,
+        n_contradicted=citation_report.n_contradicted,
+        n_refused_by_llm=citation_report.n_refused_by_llm,
         all_verified=citation_report.all_verified,
         latency_ms=latencies["verify_ms"],
     )
@@ -320,13 +544,9 @@ async def answer_question(
         # explicite) ET le setting est activé, on reconstruit `answer` avec
         # uniquement ces phrases-là et on signale `incomplete=True`. Sinon
         # refus complet 422.
-        legitimate_sentences = [
-            s.sentence
-            for s in citation_report.sentences
-            if s.verdict in (CitationVerdict.SOURCED_VERIFIED, CitationVerdict.REFUSED_BY_LLM)
-        ]
+        legitimate_sentences = [s for s in citation_report.sentences if s.verified]
         if settings.rag_partial_mode_enabled and legitimate_sentences:
-            partial_answer = " ".join(legitimate_sentences)
+            partial_answer = assemble_answer(citation_report.sentences, only_verified=True)
             log.warning(
                 "rag.partial",
                 n_kept=len(legitimate_sentences),
@@ -370,7 +590,7 @@ async def answer_question(
         question=question,
         retrieved=retrieved,
         reranked=reranked,
-        answer=generation.text,
+        answer=assemble_answer(citation_report.sentences, only_verified=False),
         citation_report=citation_report,
         refused_reason=None,
         model=generation.model,

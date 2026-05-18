@@ -5,12 +5,12 @@ S'applique à : tout pipeline RAG du projet (`apps/api/src/cc_api/services/rag.p
 
 ## Pourquoi cette règle
 
-La règle d'or actuelle (`no-unsourced-rag.md`) impose que chaque phrase RAG soit
-littéralement adossée à un chunk source (substring exact OU `rapidfuzz.partial_ratio`
-≥ seuil adaptatif). C'est solide contre l'hallucination pure.
+La règle `no-unsourced-rag.md` impose que chaque phrase RAG soit soutenue par un
+passage cité, et que toute citation directe soit littérale. C'est solide contre
+l'invention pure.
 
-**Mais une citation littérale peut être malhonnête.** Le passage extrait peut
-inverser ou détourner le sens global du paragraphe environnant.
+**Mais une citation littérale peut être malhonnête.** Le fragment extrait peut
+inverser ou détourner le sens du paragraphe environnant.
 
 ### Exemple canonique
 
@@ -19,81 +19,51 @@ Chunk source :
 > trompent gravement : la lutte se poursuit. »
 
 Le LLM extrait littéralement :
-> « La révolution est terminée. [CITE:bilan-1/article:5] »
+> « La révolution est terminée. » (citée comme `bilan-1/article:5`)
 
-Vérification fuzzy ≥ 95% : **passe** (substring exact). Mais la phrase **inverse
-le sens** de l'auteur, qui disait précisément le contraire.
+Le contrôle littéral **passe** (substring exact). Mais la phrase **inverse le
+sens** de l'auteur, qui disait précisément le contraire. C'est une
+**hallucination sourcée** : techniquement vérifiée, sémantiquement fausse. Pour
+une archive marxiste à standards académiques, le pipeline pourrait faire dire à
+Lénine l'inverse de Lénine en citant littéralement.
 
-C'est une **hallucination sourcée** : techniquement vérifiée, sémantiquement
-fausse. Pour une archive marxiste à standards académiques, c'est un risque
-éditorial sérieux : le pipeline pourrait faire dire à Lénine l'inverse de Lénine
-en citant littéralement.
+## Mécanisme implémenté — le juge sémantique
 
-## Statut actuel d'implémentation
+Depuis le passage au mode « dissertation d'explication de texte », la détection
+de distorsion n'est plus lexicale mais **sémantique**. Chaque phrase est soumise
+au 2ᵉ passage LLM `AnthropicClient.judge` (`services/citation.py`,
+`verify_response`), qui statue passage en main :
 
-| Garde-fou | Statut | Fichier |
-|---|---|---|
-| Phrase d'attribution obligatoire au sujet (« La fraction défend X » ≠ « X est défendu ») | ✅ Couverte par `SYSTEM_PROMPT` | `services/rag.py` |
-| Seuil fuzzy adaptatif sur phrases courtes (100 si ≤ 5 mots) | ✅ Implémenté | `services/citation.py:_adaptive_threshold` |
-| Refus explicite via `[CITE:none]` (verdict `REFUSED_BY_LLM`) | ✅ Implémenté | `services/citation.py:verify_sentence` |
-| Contexte étendu (anneau ±200 caractères autour du match) | ✅ Implémenté | `services/citation.py:_detect_uncarried_refutation` |
-| Détection lexicale réfutation/attribution adverse → verdict `SOURCED_VERIFIED_FLAGGED` | ✅ Implémenté | `services/citation.py:_REFUTATION_PATTERNS` |
-| Test « citation tronquée hostile » | ✅ Implémenté | `tests/integration/test_citation_verification.py` |
+- `ENTAILED` → phrase soutenue → verdict `SUPPORTED`.
+- `NOT_ENTAILED` → élément non soutenu → verdict `NOT_SUPPORTED`.
+- `CONTRADICTED` → la phrase dit le contraire du passage, OU présente comme
+  thèse de l'auteur un propos qu'il réfute / attribue à un adversaire / pose en
+  question rhétorique → verdict `CONTRADICTED`.
+
+Le verdict `CONTRADICTED` casse `all_verified` : la phrase est écartée (mode
+partiel → `incomplete=true`) ou la réponse refusée. C'est le successeur de
+l'ancien détecteur lexical `_REFUTATION_PATTERNS` (connecteurs `prétend*`,
+`certes`, `en réalité`…), retiré car le juge sémantique couvre le même risque
+sans faux positifs lexicaux.
+
+Le prompt du juge (`_JUDGE_SYSTEM`) impose explicitement : en cas de doute entre
+`ENTAILED` et `NOT_ENTAILED`, choisir `NOT_ENTAILED` — le silence est préférable
+à la distorsion.
 
 ## Anti-patterns à refuser quand on construit ou évalue le pipeline
 
-- Citer un fragment court (< 8 mots) extrait d'une phrase qui le réfute.
+- Citer un fragment court extrait d'une phrase qui le réfute.
 - Citer des mots prêtés par l'auteur à un adversaire idéologique (fréquent dans
   Bilan qui cite l'IC et Trotsky pour les critiquer).
 - Présenter une question rhétorique comme une affirmation.
-- Détacher une citation d'un connecteur de réfutation (« mais », « or »,
-  « contrairement à », « il est faux que », « prétendent que »).
-
-## Mécanisme implémenté — détection de réfutation
-
-Après qu'une phrase a passé la vérification littérale (substring ou fuzzy),
-`verify_sentence` scanne un anneau de ±200 caractères autour du fragment dans
-le chunk source (`_detect_uncarried_refutation`). Si un connecteur de
-réfutation ou d'attribution adverse y figure **sans** être reporté dans la
-phrase générée, le verdict devient `SOURCED_VERIFIED_FLAGGED` au lieu de
-`SOURCED_VERIFIED`. Ce verdict casse `all_verified` : le pipeline RAG écarte
-la phrase (mode partiel → `incomplete=true`), conformément au principe
-« le silence est préférable à la distorsion ».
-
-### Connecteurs retenus — haute précision uniquement
-
-- **Attribution adverse** : `prétend*`, `soi-disant`, `se réclam*`, `exult*`
-- **Réfutation explicite** : `certes`, `en réalité`, `contrairement à`,
-  `à l'opposé`, `il est faux`, `se tromp*`, `à tort`
-
-Les contrastes génériques (`mais`, `cependant`, `toutefois`, `pourtant`) ont
-été **délibérément écartés** : ubiquitaires en prose théorique, ils marquent
-le plus souvent une articulation interne du raisonnement et non une réfutation
-du fragment cité — leur inclusion produisait des faux positifs massifs
-(mesurés sur le corpus Bilan : ~40 % des phrases honnêtes faussement flaggées).
-Le biais assumé est la **précision** : mieux vaut manquer une distorsion subtile
-que rendre `incomplete` la majorité des réponses honnêtes.
-
-Le réglage (`_REFUTATION_PATTERNS`, `_REFUTATION_RING`) ne doit jamais être
-relâché sans nouvelle mesure de faux positifs sur le corpus.
-
-### 3. Test eval dédié
-
-Fixture TEI minimaliste avec une structure « X affirme A, mais A est faux ».
-Question piégeuse : « Que dit le texte sur A ? ». Vérifier que le pipeline :
-- soit refuse,
-- soit attribue correctement (« Le texte critique l'idée que A »),
-- soit (au pire) flag la réponse comme incomplete.
+- Affaiblir le prompt du juge ou désactiver `rag_verifier_enabled` en prod.
 
 ## Pour l'IA agentique : conduite obligatoire
 
-Quand tu travailles sur le pipeline RAG ou la vérification de citation :
-
-1. **Ne jamais relâcher** les seuils fuzzy ou adaptatifs sous prétexte d'augmenter
-   le taux de réponse.
+1. **Ne jamais désactiver** le juge sémantique en production (`rag_verifier_enabled`).
 2. **Toujours préserver** le verdict `REFUSED_BY_LLM` comme légitime.
-3. **Lors d'un audit**, lire le chunk source COMPLET (pas juste l'extraction) pour
-   vérifier la cohérence sémantique de la citation produite.
+3. **Lors d'un audit**, lire le chunk source COMPLET (pas juste l'extraction)
+   pour vérifier la cohérence sémantique de la phrase produite.
 4. **En cas de doute**, refuser la réponse. Le silence est préférable à la
    distorsion historique.
 
@@ -101,4 +71,4 @@ Voir aussi :
 - `.claude/rules/no-unsourced-rag.md`
 - `[[feedback_no_unsourced_answers]]` dans l'auto-memory utilisateur
 - `apps/api/src/cc_api/services/rag.py` (`SYSTEM_PROMPT`)
-- `apps/api/src/cc_api/services/citation.py` (`verify_sentence`, `_adaptive_threshold`)
+- `apps/api/src/cc_api/services/citation.py` (`verify_response`, `_JUDGE_SYSTEM`)

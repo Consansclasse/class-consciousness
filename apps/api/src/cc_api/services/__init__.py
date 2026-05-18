@@ -8,9 +8,8 @@ from cc_api.services.citation import (
     CitationReport,
     CitationVerdict,
     SentenceVerdict,
-    split_sentences,
+    assemble_answer,
     verify_response,
-    verify_sentence,
 )
 from cc_api.services.ingest import (
     COLLECTION,
@@ -38,11 +37,10 @@ __all__ = [
     "RetrievedChunk",
     "SentenceVerdict",
     "answer_question",
+    "assemble_answer",
     "chunk_point_id",
     "create_checkout",
     "handle_stripe_event",
     "ingest_issue",
-    "split_sentences",
     "verify_response",
-    "verify_sentence",
 ]
