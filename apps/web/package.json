@@ -20,7 +20,7 @@
     "@astrojs/check": "^0.9.0",
     "@astrojs/tailwind": "^6.0.2",
     "@fontsource/playfair-display": "^5.2.8",
-    "@fontsource/scheherazade-new": "^5.2.8",
+    "@fontsource/scheherazade-new": "^5.2.9",
     "@playwright/test": "^1.56.0",
     "autoprefixer": "^10.5.0",
     "postcss": "^8.5.14",
