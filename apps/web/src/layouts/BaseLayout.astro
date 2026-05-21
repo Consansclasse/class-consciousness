@@ -10,13 +10,15 @@ interface Props {
 }
 
 const {
-  title = "Conscience de classe — archive Bilan à réponses sourcées",
-  description = "Interrogez les archives de Bilan (1933-1938), revue de la Gauche communiste italienne. Chaque réponse est citée et vérifiée dans le corpus, sans hallucination.",
+  title = "Conscience de classe — bibliothèque et outil du marxisme",
+  description = "Bibliothèque et outil de travail pour l'étude du marxisme.",
   noindex = false,
 } = Astro.props;
 
 // URL canonique : protège des doublons (paramètres, slash final, http/https).
 const canonical = new URL(Astro.url.pathname, Astro.site).href;
+// Vignette de partage (1200×630, titre en UnifrakturMaguntia) — voir public/og.png.
+const ogImage = new URL("/og.png", Astro.site).href;
 
 const matomoUrl = import.meta.env.PUBLIC_MATOMO_URL;
 const matomoSiteId = import.meta.env.PUBLIC_MATOMO_SITE_ID;
@@ -40,11 +42,16 @@ const matomoSiteId = import.meta.env.PUBLIC_MATOMO_SITE_ID;
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />
     <meta property="og:url" content={canonical} />
+    <meta property="og:image" content={ogImage} />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Conscience de classe — archive Bilan" />
 
     <!-- Twitter Card -->
-    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content={title} />
     <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={ogImage} />
 
     <script is:inline>
       // Init thème : respecte localStorage, sinon préférence système.

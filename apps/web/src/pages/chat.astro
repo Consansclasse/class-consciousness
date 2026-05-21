@@ -690,11 +690,9 @@ import BaseLayout from "../layouts/BaseLayout.astro";
         }
         if (res.status === 402) {
           waiter.stop();
-          slot.innerHTML =
-            noteHtml(
-              "Vous avez atteint le quota de l'assistant. La lecture du corpus et des textes reste libre, sans limite.",
-            ) +
-            `<p class="mt-2 font-Scheherazade text-sm"><a href="/abonnement" class="text-darkpink underline decoration-1 underline-offset-2">S'abonner pour davantage de requêtes</a></p>`;
+          slot.innerHTML = noteHtml(
+            "Vous avez atteint le quota offert du jour. La lecture du corpus et des textes reste libre, sans limite ; revenez demain pour de nouvelles questions offertes.",
+          );
           scrollDown();
           return;
         }

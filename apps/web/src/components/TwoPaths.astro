@@ -1,0 +1,151 @@
+---
+// SPDX-License-Identifier: AGPL-3.0-or-later
+//
+// Deux voies d'accès à l'outil, présentées côte à côte en tableau clair :
+//   1. Auto-hébergement (open source, AGPL) — gratuit, à vie, contrôle total.
+//   2. Application hébergée — rien à installer, compte requis, solde prépayé
+//      décompté au coût réel (pay-as-you-go, pas d'abonnement).
+// L'archive et la lecture des textes restent libres dans les deux cas :
+// ce choix ne porte que sur l'usage de l'assistant de recherche sourcé.
+//
+// Modèle de prix retenu (recherche marché 2026 + modèle API OpenAI/Anthropic) :
+// solde PRÉPAYÉ décompté à la CONSOMMATION RÉELLE de tokens (cost-plus).
+//   - Recharge libre dès TOPUP_MIN_EUR (parité OpenAI), solde sans expiration.
+//   - Chaque réponse retire son coût de calcul réel + marge, affiché à la
+//     question près (on mesure déjà les tokens : RagInteraction.usage).
+const TOPUP_MIN_EUR = "5 €";
+
+type Path = {
+  kicker: string;
+  title: string;
+  price: string;
+  priceDetail: string;
+  pitch: string;
+  features: string[];
+  caveat: string;
+  cta: string;
+  href: string;
+  external?: boolean;
+};
+
+const paths: Path[] = [
+  {
+    kicker: "Auto-hébergé",
+    title: "Installez-le, c'est à vous.",
+    price: "Gratuit",
+    priceDetail: "à vie · licence AGPL-3.0",
+    pitch:
+      "Clonez le dépôt et faites tourner l'outil chez vous. Le code, le pipeline RAG, les modèles d'embedding auto-hébergés : tout est ouvert, modifiable, reproductible. Aucun quota imposé par nous.",
+    features: [
+      "Contrôle total du code et du corpus.",
+      "Aucune limite de requêtes — vous décidez.",
+      "Données chez vous, aucun tiers.",
+      "Forkez, corrigez, contestez un résultat.",
+    ],
+    caveat:
+      "À votre charge : l'hébergement, le calcul et votre propre clé LLM.",
+    cta: "Cloner sur GitHub",
+    href: "https://github.com/Consansclasse/class-consciousness",
+    external: true,
+  },
+  {
+    kicker: "Application hébergée",
+    title: "Rien à installer. Créez un compte.",
+    price: "Solde prépayé",
+    priceDetail: `recharge dès ${TOPUP_MIN_EUR} · décompté au coût réel`,
+    pitch:
+      "Créez un compte et interrogez l'assistant ici, sans rien configurer. Nous prenons en charge l'infrastructure, le calcul et le modèle. Vous créditez un solde et chaque réponse en retire son coût de calcul réel — vous ne payez que ce que vous consommez.",
+    features: [
+      "Aucune installation, aucune maintenance.",
+      "Pipeline et modèles toujours à jour.",
+      "Solde prépayé, recharge libre dès " + TOPUP_MIN_EUR + " — sans abonnement.",
+      "Décompté au coût réel de chaque réponse, affiché à la question près.",
+    ],
+    caveat:
+      "La lecture du corpus reste libre et sans compte ; seul l'assistant demande un compte.",
+    cta: "Créer un compte",
+    href: "/connexion",
+  },
+];
+---
+
+<section
+  id="acces"
+  class="relative bg-white dark:bg-black px-6 md:px-12 lg:px-16 py-24 md:py-32"
+>
+  <div class="mx-auto w-full max-w-5xl">
+    <!-- En-tête section -->
+    <header class="mb-12 md:mb-16 text-center">
+      <h2
+        class="font-Scheherazade text-3xl sm:text-4xl md:text-5xl xl:text-6xl leading-[1.1] tracking-tight text-black dark:text-white"
+      >
+        Deux façons de l'utiliser.
+      </h2>
+      <p
+        class="mt-4 font-Scheherazade italic text-base sm:text-lg md:text-xl text-black dark:text-white max-w-2xl mx-auto text-pretty"
+      >
+        Installez-le librement chez vous, ou utilisez l'application hébergée
+        sans rien configurer. La lecture du corpus reste gratuite dans les deux
+        cas.
+      </p>
+    </header>
+
+    <!-- Tableau : deux colonnes côte à côte -->
+    <div
+      class="grid grid-cols-1 md:grid-cols-2 border-t border-l border-black dark:border-white"
+    >
+      {
+        paths.map((path) => (
+          <article class="flex flex-col border-b border-r border-black dark:border-white p-6 sm:p-8 md:p-10">
+            <p class="font-Scheherazade text-xs uppercase tracking-[0.25em] text-darkpink">
+              {path.kicker}
+            </p>
+            <h3 class="mt-3 font-Scheherazade text-2xl sm:text-3xl leading-snug text-black dark:text-white text-pretty">
+              {path.title}
+            </h3>
+
+            <div class="mt-5 pb-5 border-b border-black/15 dark:border-white/15">
+              <p class="font-Scheherazade text-xl sm:text-2xl text-black dark:text-white">
+                {path.price}
+              </p>
+              <p class="mt-1 font-Scheherazade text-xs sm:text-sm text-black dark:text-white">
+                {path.priceDetail}
+              </p>
+            </div>
+
+            <p class="mt-5 font-Scheherazade text-sm sm:text-base leading-relaxed text-black dark:text-white text-pretty">
+              {path.pitch}
+            </p>
+
+            <ul class="mt-5 space-y-2 font-Scheherazade text-sm sm:text-base leading-relaxed text-black dark:text-white">
+              {path.features.map((f) => (
+                <li class="flex gap-2.5">
+                  <span aria-hidden="true" class="text-darkpink shrink-0">
+                    ·
+                  </span>
+                  <span>{f}</span>
+                </li>
+              ))}
+            </ul>
+
+            <p class="mt-5 font-Scheherazade italic text-xs sm:text-sm leading-relaxed text-black dark:text-white text-pretty">
+              {path.caveat}
+            </p>
+
+            <div class="mt-auto pt-8">
+              <a
+                href={path.href}
+                {...(path.external
+                  ? { target: "_blank", rel: "noopener noreferrer" }
+                  : {})}
+                class="inline-block w-full text-center font-Scheherazade text-sm uppercase tracking-[0.2em] border border-black dark:border-white py-3 px-6 text-black dark:text-white transition-colors hover:bg-darkpink hover:border-darkpink hover:text-white focus-visible:bg-darkpink focus-visible:border-darkpink focus-visible:text-white focus-visible:outline-none"
+              >
+                {path.cta} →
+              </a>
+            </div>
+          </article>
+        ))
+      }
+    </div>
+  </div>
+</section>

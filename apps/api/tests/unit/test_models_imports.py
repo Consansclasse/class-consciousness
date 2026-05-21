@@ -45,6 +45,7 @@ def test_base_metadata_lists_all_tables() -> None:
         "abonnements",
         "rag_interactions",
         "rag_feedback",
+        "conversations",
     }
 
 

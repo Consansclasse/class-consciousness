@@ -3,6 +3,7 @@ import AIButton from "../components/AIButton.astro";
 import ManifestoQuote from "../components/ManifestoQuote.astro";
 import ProjectExplain from "../components/ProjectExplain.astro";
 import SiteFooter from "../components/SiteFooter.astro";
+import TwoPaths from "../components/TwoPaths.astro";
 import ThemeToggle from "../components/ThemeToggle.astro";
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import BaseLayout from "../layouts/BaseLayout.astro";
@@ -27,7 +28,10 @@ const t = {
 };
 ---
 
-<BaseLayout title="Conscience de classe — Archive sourcée">
+<BaseLayout
+  title="Conscience de classe — bibliothèque et outil du marxisme"
+  description="Bibliothèque et outil de travail pour l'étude du marxisme."
+>
   <main class="relative bg-white dark:bg-black">
     <!-- Top bar : logotype + theme toggle (sticky pour rester visible au scroll) -->
     <header
@@ -51,6 +55,12 @@ const t = {
           class="hidden sm:inline font-Scheherazade text-xs uppercase tracking-[0.25em] text-black dark:text-white hover:text-darkpink transition-colors"
         >
           Le corpus
+        </a>
+        <a
+          href="/connexion"
+          class="font-Scheherazade text-xs uppercase tracking-[0.25em] text-black dark:text-white hover:text-darkpink transition-colors"
+        >
+          Connexion
         </a>
         <ThemeToggle />
       </div>
@@ -160,6 +170,15 @@ const t = {
     </section>
 
     <!-- Bande séparatrice : barre rose minimaliste -->
+    <div
+      aria-hidden="true"
+      class="mx-auto h-px w-24 bg-darkpink"
+    ></div>
+
+    <!-- DEUX VOIES D'ACCÈS : auto-hébergement gratuit vs application hébergée -->
+    <TwoPaths />
+
+    <!-- Bande séparatrice -->
     <div
       aria-hidden="true"
       class="mx-auto h-px w-24 bg-darkpink"
