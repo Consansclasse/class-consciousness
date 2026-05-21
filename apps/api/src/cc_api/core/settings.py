@@ -76,13 +76,14 @@ class Settings(BaseSettings):
     # transmises à Stripe Checkout.
     public_web_base: str = Field(default="http://localhost:3000", alias="PUBLIC_WEB_BASE")
 
-    # Authentification — sessions navigateur (cookie signé) + magic-link.
+    # Authentification — sessions navigateur (cookie signé) + email/mot de passe.
     # `session_secret` signe le cookie : DOIT être surchargé en production.
     session_secret: str = Field(
         default=_DEFAULT_SESSION_SECRET, alias="CC_API_SESSION_SECRET"
     )
-    # SMTP pour l'envoi du magic-link. Sans `smtp_host`, le lien est seulement
-    # journalisé (mode dev) au lieu d'être expédié — aucun envoi réel.
+    # SMTP pour les emails transactionnels (vérification d'adresse, réinitialisation
+    # de mot de passe). Sans `smtp_host`, le lien est seulement journalisé (mode
+    # dev) au lieu d'être expédié — aucun envoi réel.
     smtp_host: str | None = Field(default=None, alias="CC_API_SMTP_HOST")
     smtp_port: int = Field(default=587, alias="CC_API_SMTP_PORT")
     smtp_user: str | None = Field(default=None, alias="CC_API_SMTP_USER")

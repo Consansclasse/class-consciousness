@@ -6,7 +6,7 @@ Trois endpoints :
 - POST /adhesions/checkout : crée l'intent + Stripe Session → renvoie URL.
 - POST /adhesions/webhook/stripe : reçoit les events Stripe (signature vérifiée).
 - GET /adhesions/intent/{intent_id} : état d'une intention (consommé par
-  /adherer/merci pour afficher confirmation).
+  /join/thanks pour afficher confirmation).
 
 Pas d'auth sur /checkout : un visiteur anonyme peut adhérer. L'authentification
 nominative se fait plus tard via magic-link (table `auth_tokens`).
@@ -125,7 +125,7 @@ async def post_stripe_webhook(
 
 @router.get("/intent/{token}", response_model=AdhesionIntentStatusOut)
 async def get_intent(token: str) -> AdhesionIntentStatusOut:
-    """État d'une intention — utilisé par /adherer/merci pour confirmation.
+    """État d'une intention — utilisé par /join/thanks pour confirmation.
 
     Pas d'auth, mais indexé par un jeton opaque non devinable (192 bits) et non
     par l'id séquentiel : sans cela l'endpoint serait énumérable et exposerait

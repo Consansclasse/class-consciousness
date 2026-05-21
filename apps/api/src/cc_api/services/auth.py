@@ -1,13 +1,17 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Service d'authentification — magic-link sans mot de passe.
+"""Service d'authentification — email + mot de passe.
 
-Flux : l'utilisateur saisit son email → un `AuthToken` à usage unique (TTL
-15 min) est créé, seul son hash SHA-256 est stocké → le lien part par email.
-Cliquer le lien consomme le token et ouvre une session.
+Flux : inscription (email + mot de passe + consentement) → email de confirmation
+→ la connexion par mot de passe n'est ouverte qu'une fois l'email vérifié.
+Réinitialisation du mot de passe par email. Aucun magic-link.
 
-En dev (pas de SMTP configuré), l'email n'est pas expédié : le lien est
-journalisé et renvoyé à l'appelant pour faciliter les tests locaux. En prod,
-il part par SMTP via fastapi-mail.
+Les tokens d'email (vérification, réinitialisation) sont à usage unique : seul
+leur hash SHA-256 est stocké, et leur `purpose` borne ce qu'ils peuvent
+consommer. Les mots de passe sont hachés en Argon2id (`core/security`).
+
+En dev (pas de SMTP), l'email n'est pas expédié : le lien est journalisé et
+renvoyé à l'appelant pour faciliter les tests. En prod sans SMTP, lever
+`AuthError` — un lien ne doit jamais transiter par la réponse HTTP en prod.
 """
 
 from __future__ import annotations
@@ -21,18 +25,25 @@ from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from cc_api.core.logging import get_logger
+from cc_api.core.security import hash_password, verify_password
 from cc_api.core.settings import settings
-from cc_api.models.auth_token import AuthToken
+from cc_api.models.auth_token import AuthToken, TokenPurpose
 from cc_api.models.user import User
 
 log = get_logger(__name__)
 
-# Durée de validité d'un magic-link (cf. docstring de models/auth_token.py).
-_TOKEN_TTL = timedelta(minutes=15)
+# Durées de validité des tokens email. Vérification d'adresse : confortable
+# (24 h). Réinitialisation de mot de passe : court (1 h), surface réduite.
+_VERIFY_TTL = timedelta(hours=24)
+_RESET_TTL = timedelta(hours=1)
+
+# Hash factice : on le « vérifie » quand l'email est inconnu pour égaliser le
+# temps de réponse — empêche d'inférer l'existence d'un compte par timing.
+_DUMMY_HASH = hash_password("timing-equalizer-not-a-real-password")
 
 
 class AuthError(Exception):
-    """Magic-link invalide : inexistant, expiré ou déjà consommé."""
+    """Échec d'authentification — identifiants invalides, token expiré, etc."""
 
 
 def _hash_token(token: str) -> str:
@@ -40,37 +51,65 @@ def _hash_token(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
-async def _get_or_create_user(session: AsyncSession, email: str) -> User:
-    """Récupère le User par email, ou le crée SANS consentement.
+async def _issue_token(
+    session: AsyncSession, user_id: int, purpose: TokenPurpose, ttl: timedelta
+) -> str:
+    """Crée un token email à usage unique et renvoie sa valeur brute.
 
-    `consent_data_at` reste NULL ici : demander un lien ne prouve rien
-    (n'importe qui peut saisir l'adresse d'autrui). Le consentement n'est
-    horodaté qu'à la vérification du lien — quand le contrôle de l'adresse est
-    prouvé. Un compte créé mais jamais vérifié reste donc inerte.
+    Purge opportuniste des tokens expirés (pas de cron) avant émission.
     """
-    result = await session.execute(select(User).where(User.email == email))
-    user = result.scalar_one_or_none()
-    if user is not None:
-        return user
-    user = User(email=email)
-    session.add(user)
-    await session.flush()
-    log.info("auth.user_created", user_id=user.id)
-    return user
+    await session.execute(
+        delete(AuthToken).where(AuthToken.expires_at < datetime.now(UTC))
+    )
+    raw = secrets.token_urlsafe(32)
+    session.add(
+        AuthToken(
+            user_id=user_id,
+            token_hash=_hash_token(raw),
+            purpose=purpose,
+            expires_at=datetime.now(UTC) + ttl,
+        )
+    )
+    return raw
 
 
-async def _send_magic_link_email(email: str, link: str) -> None:
-    """Expédie le magic-link par SMTP.
+async def _consume_token(
+    session: AsyncSession, token: str, purpose: TokenPurpose
+) -> int | None:
+    """Consomme atomiquement un token du `purpose` attendu → renvoie le user_id.
 
-    En dev, aucun envoi : le lien est journalisé pour les essais locaux. Hors
-    dev sans SMTP configuré, lève AuthError — le token n'est alors JAMAIS ni
-    journalisé ni renvoyé au client.
+    `UPDATE … WHERE used_at IS NULL AND expires_at > now() AND purpose = :p` ne
+    marque la ligne qu'une fois : un double-clic, même concurrent, ne consomme
+    pas deux fois. Renvoie None si le token est inconnu, expiré, déjà utilisé ou
+    d'un autre purpose.
+    """
+    result = await session.execute(
+        update(AuthToken)
+        .where(
+            AuthToken.token_hash == _hash_token(token),
+            AuthToken.purpose == purpose,
+            AuthToken.used_at.is_(None),
+            AuthToken.expires_at > datetime.now(UTC),
+        )
+        .values(used_at=datetime.now(UTC))
+        .returning(AuthToken.user_id)
+    )
+    row = result.first()
+    return int(row.user_id) if row is not None else None
+
+
+async def _send_email(email: str, subject: str, body: str, link: str) -> None:
+    """Expédie un email transactionnel contenant `link`.
+
+    En dev sans SMTP : journalise et renvoie (le lien est rendu à l'appelant
+    pour les tests). En prod sans SMTP : `AuthError` — le lien ne doit jamais
+    transiter par la réponse HTTP. L'email reste hors des logs (hygiène RGPD).
     """
     if not settings.smtp_configured:
         if settings.is_dev:
-            log.info("auth.magic_link.dev", email=email, link=link)
+            log.info("auth.email.dev", email=email, link=link)
             return
-        log.error("auth.magic_link.smtp_unconfigured")
+        log.error("auth.email.smtp_unconfigured")
         raise AuthError("service d'envoi d'email indisponible")
     config = ConnectionConfig(
         MAIL_USERNAME=settings.smtp_user or "",
@@ -83,80 +122,162 @@ async def _send_magic_link_email(email: str, link: str) -> None:
         USE_CREDENTIALS=bool(settings.smtp_user),
     )
     message = MessageSchema(
-        subject="Votre lien de connexion — Conscience de classe",
-        recipients=[email],
-        body=(
-            "Bonjour,\n\n"
-            "Pour vous connecter, ouvrez ce lien (valable 15 minutes) :\n\n"
-            f"{link}\n\n"
-            "Si vous n'êtes pas à l'origine de cette demande, ignorez ce message.\n"
-        ),
-        subtype=MessageType.plain,
+        subject=subject, recipients=[email], body=body, subtype=MessageType.plain
     )
     await FastMail(config).send_message(message)
-    # L'email est volontairement hors du log — hygiène RGPD : on évite
-    # d'enrichir la surface des journaux d'identifiants personnels.
-    log.info("auth.magic_link.sent")
+    log.info("auth.email.sent")
 
 
-async def request_magic_link(session: AsyncSession, email: str) -> str | None:
-    """Crée un magic-link pour `email` et l'envoie.
+def _verify_link(token: str) -> str:
+    return f"{settings.public_web_base}/verify-email?token={token}"
 
-    Renvoie le lien uniquement en environnement dev (facilite les tests
-    locaux) ; sinon None — hors dev, le lien ne transite QUE par email, jamais
-    par la réponse HTTP.
+
+def _reset_link(token: str) -> str:
+    return f"{settings.public_web_base}/reset-password?token={token}"
+
+
+async def register(
+    session: AsyncSession,
+    *,
+    email: str,
+    password: str,
+    display_name: str | None,
+    consent_newsletter: bool,
+) -> str | None:
+    """Inscrit un compte et envoie l'email de vérification.
+
+    Idempotent et sans oracle d'énumération (le router répond toujours de façon
+    générique) :
+    - email neuf → compte non vérifié créé, email de vérification envoyé ;
+    - email connu mais non vérifié (inscription inachevée, ou compte créé par un
+      don) → mot de passe (re)posé, nouvel email de vérification ;
+    - email déjà vérifié → aucun envoi (on ne révèle pas le compte).
+
+    Renvoie le lien de vérification en dev uniquement, sinon None.
     """
-    user = await _get_or_create_user(session, email)
-    # Purge opportuniste des tokens expirés — évite leur accumulation (pas de cron).
-    await session.execute(
-        delete(AuthToken).where(AuthToken.expires_at < datetime.now(UTC))
-    )
-    raw_token = secrets.token_urlsafe(32)
-    session.add(
-        AuthToken(
-            user_id=user.id,
-            token_hash=_hash_token(raw_token),
-            expires_at=datetime.now(UTC) + _TOKEN_TTL,
-        )
-    )
-    await session.commit()
+    now = datetime.now(UTC)
+    user = (
+        await session.execute(select(User).where(User.email == email))
+    ).scalar_one_or_none()
 
-    link = f"{settings.public_web_base}/connexion/verifier?token={raw_token}"
-    await _send_magic_link_email(email, link)
+    if user is not None and user.email_verified_at is not None:
+        await session.commit()
+        log.info("auth.register.already_active", user_id=user.id)
+        return None
+
+    if user is None:
+        user = User(email=email)
+        session.add(user)
+        await session.flush()
+        log.info("auth.user_created", user_id=user.id)
+
+    user.password_hash = hash_password(password)
+    if display_name:
+        user.display_name = display_name
+    # Consentement RGPD horodaté à l'inscription (la case a été cochée).
+    if user.consent_data_at is None:
+        user.consent_data_at = now
+    if consent_newsletter and user.consent_newsletter_at is None:
+        user.consent_newsletter_at = now
+
+    raw = await _issue_token(session, user.id, TokenPurpose.VERIFY_EMAIL, _VERIFY_TTL)
+    link = _verify_link(raw)
+    await session.commit()
+    await _send_email(
+        email,
+        "Confirmez votre adresse — Conscience de classe",
+        "Bonjour,\n\nConfirmez votre adresse pour activer votre compte "
+        f"(lien valable 24 heures) :\n\n{link}\n\n"
+        "Si vous n'êtes pas à l'origine de cette inscription, ignorez ce message.\n",
+        link,
+    )
     return link if settings.is_dev else None
 
 
-async def verify_magic_link(session: AsyncSession, token: str) -> User:
-    """Consomme un magic-link et renvoie le User.
+async def verify_email(session: AsyncSession, token: str) -> User:
+    """Consomme un token de vérification et marque l'email comme vérifié.
 
-    La consommation est atomique : un `UPDATE … WHERE used_at IS NULL AND
-    expires_at > now()` ne marque la ligne qu'une fois — un double-clic, même
-    concurrent, ne peut pas ouvrir deux sessions. En cas d'échec le message est
-    volontairement générique (pas d'oracle inconnu / expiré / déjà utilisé).
-
-    Au premier succès, `consent_data_at` est horodaté ici : cliquer le lien
-    reçu par email prouve le contrôle de l'adresse — c'est le vrai consentement.
+    Au succès, ouvre l'accès : `email_verified_at` est horodaté (cliquer le lien
+    prouve le contrôle de l'adresse).
     """
-    now = datetime.now(UTC)
-    result = await session.execute(
-        update(AuthToken)
-        .where(
-            AuthToken.token_hash == _hash_token(token),
-            AuthToken.used_at.is_(None),
-            AuthToken.expires_at > now,
-        )
-        .values(used_at=now)
-        .returning(AuthToken.user_id)
-    )
-    row = result.first()
-    if row is None:
-        raise AuthError("lien de connexion invalide ou expiré")
-
-    user = await session.get(User, row.user_id)
+    user_id = await _consume_token(session, token, TokenPurpose.VERIFY_EMAIL)
+    if user_id is None:
+        raise AuthError("lien de vérification invalide ou expiré")
+    user = await session.get(User, user_id)
     if user is None or user.deleted_at is not None:
-        raise AuthError("lien de connexion invalide ou expiré")
-    if user.consent_data_at is None:
-        user.consent_data_at = now
+        raise AuthError("lien de vérification invalide ou expiré")
+    if user.email_verified_at is None:
+        user.email_verified_at = datetime.now(UTC)
     await session.commit()
-    log.info("auth.verified", user_id=user.id)
+    log.info("auth.email_verified", user_id=user.id)
+    return user
+
+
+async def authenticate(session: AsyncSession, email: str, password: str) -> User:
+    """Valide email + mot de passe → renvoie le User, ou lève AuthError.
+
+    Message générique sur identifiants invalides (pas d'oracle email/mot de
+    passe). Un compte sans mot de passe (créé par don) ou non vérifié est
+    refusé. Le temps de réponse est égalisé même si l'email est inconnu.
+    """
+    user = (
+        await session.execute(select(User).where(User.email == email))
+    ).scalar_one_or_none()
+    if user is None or user.password_hash is None or user.deleted_at is not None:
+        verify_password(_DUMMY_HASH, password)  # égalise le timing
+        raise AuthError("identifiants invalides")
+    if not verify_password(user.password_hash, password):
+        raise AuthError("identifiants invalides")
+    if user.email_verified_at is None:
+        raise AuthError("email non vérifié")
+    return user
+
+
+async def request_password_reset(session: AsyncSession, email: str) -> str | None:
+    """Envoie un email de réinitialisation si le compte existe et est vérifié.
+
+    Réponse toujours générique côté router (pas d'oracle). Renvoie le lien en
+    dev uniquement, sinon None.
+    """
+    user = (
+        await session.execute(select(User).where(User.email == email))
+    ).scalar_one_or_none()
+    if (
+        user is None
+        or user.password_hash is None
+        or user.email_verified_at is None
+        or user.deleted_at is not None
+    ):
+        return None
+    raw = await _issue_token(session, user.id, TokenPurpose.RESET_PASSWORD, _RESET_TTL)
+    link = _reset_link(raw)
+    await session.commit()
+    await _send_email(
+        email,
+        "Réinitialisation de votre mot de passe — Conscience de classe",
+        "Bonjour,\n\npour choisir un nouveau mot de passe, ouvrez ce lien "
+        f"(valable 1 heure) :\n\n{link}\n\n"
+        "Si vous n'êtes pas à l'origine de cette demande, ignorez ce message.\n",
+        link,
+    )
+    return link if settings.is_dev else None
+
+
+async def reset_password(session: AsyncSession, token: str, new_password: str) -> User:
+    """Consomme un token de reset et remplace le mot de passe.
+
+    Réinitialiser prouve aussi le contrôle de l'adresse : un email non encore
+    vérifié l'est alors implicitement.
+    """
+    user_id = await _consume_token(session, token, TokenPurpose.RESET_PASSWORD)
+    if user_id is None:
+        raise AuthError("lien de réinitialisation invalide ou expiré")
+    user = await session.get(User, user_id)
+    if user is None or user.deleted_at is not None:
+        raise AuthError("lien de réinitialisation invalide ou expiré")
+    user.password_hash = hash_password(new_password)
+    if user.email_verified_at is None:
+        user.email_verified_at = datetime.now(UTC)
+    await session.commit()
+    log.info("auth.password_reset", user_id=user.id)
     return user

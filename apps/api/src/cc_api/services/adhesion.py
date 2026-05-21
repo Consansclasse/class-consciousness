@@ -141,7 +141,7 @@ async def create_checkout(
             solidaire=True,
             public_token=public_token,
             stripe_session_id=f"solidaire_{user.id}_{int(datetime.now(UTC).timestamp())}",
-            stripe_redirect_url=f"{settings.public_web_base}/adherer/merci?solidaire=1",
+            stripe_redirect_url=f"{settings.public_web_base}/join/thanks?solidaire=1",
             status=AdhesionIntentStatus.COMPLETED,
             expires_at=datetime.now(UTC) + timedelta(hours=1),
             paid_at=datetime.now(UTC),
@@ -171,11 +171,11 @@ async def create_checkout(
     await session.flush()
 
     success_url = (
-        f"{settings.public_web_base}/adherer/merci"
+        f"{settings.public_web_base}/join/thanks"
         f"?intent={public_token}&session_id={{CHECKOUT_SESSION_ID}}"
     )
     cancel_url = (
-        f"{settings.public_web_base}/adherer/erreur"
+        f"{settings.public_web_base}/join/error"
         f"?intent={public_token}&session_id={{CHECKOUT_SESSION_ID}}"
     )
 

@@ -87,10 +87,13 @@ def _success_result(question: str) -> RagResult:
 
 
 def _login(client: Any, email: str) -> None:
-    """Ouvre une session pour `email` via le flux magic-link."""
-    req = client.post("/auth/request-link", json={"email": email})
-    token = parse_qs(urlparse(req.json()["devMagicLink"]).query)["token"][0]
-    assert client.post("/auth/verify", json={"token": token}).status_code == 200
+    """Ouvre une session pour `email` via le flux mot de passe (register → verify)."""
+    reg = client.post(
+        "/auth/register",
+        json={"email": email, "password": "motdepasse-de-test", "consent_data": True},
+    )
+    token = parse_qs(urlparse(reg.json()["devLink"]).query)["token"][0]
+    assert client.post("/auth/verify-email", json={"token": token}).status_code == 200
 
 
 def _active_abonnement(user_id: int) -> Abonnement:

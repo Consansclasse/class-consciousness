@@ -28,12 +28,17 @@ configure_logging()
 app = FastAPI(title="class-consciousness API", version="0.0.1")
 app.state.limiter = limiter
 app.add_middleware(SlowAPIMiddleware)
-# Sessions navigateur — cookie signé (itsdangerous). `https_only` actif hors dev.
+# Sessions navigateur — cookie signé (itsdangerous).
+# En prod, le web (consciencedeclasse.com) et l'API (api.cdc.…) sont sur des
+# domaines distincts → requêtes *cross-site*. Un cookie `SameSite=Lax` ne serait
+# alors PAS envoyé sur les `fetch` du SPA : la session paraîtrait toujours fermée.
+# Donc `SameSite=None` hors dev (impose `Secure`, garanti par `https_only`). En
+# dev (localhost, http, même origine) on garde `Lax`, plus strict et compatible.
 app.add_middleware(
     SessionMiddleware,
     secret_key=settings.session_secret,
     https_only=not settings.is_dev,
-    same_site="lax",
+    same_site="lax" if settings.is_dev else "none",
     max_age=7 * 24 * 3600,  # expiration absolue du cookie de session : 7 jours
 )
 
@@ -86,6 +91,11 @@ if settings.cors_origin_list:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origin_list,
+        # `allow_credentials` est indispensable : le SPA appelle l'API en
+        # `fetch(..., credentials: "include")` pour transporter le cookie de
+        # session cross-site. Sans cela le navigateur bloque la réponse et
+        # n'envoie pas le cookie — l'auth ne peut pas fonctionner.
+        allow_credentials=True,
         allow_methods=["GET", "POST"],
         allow_headers=["Content-Type"],
     )

@@ -26,6 +26,15 @@ class User(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     email: Mapped[str] = mapped_column(String(320), nullable=False, unique=True, index=True)
     display_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # Hash Argon2id du mot de passe. Nullable : un compte créé par le tunnel
+    # d'adhésion (don) n'a pas de mot de passe tant que la personne ne s'inscrit
+    # pas explicitement. La connexion par mot de passe l'exige non-null.
+    password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # Horodatage de la vérification d'email (clic sur le lien de confirmation).
+    # Tant qu'il est NULL, la connexion par mot de passe est refusée.
+    email_verified_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

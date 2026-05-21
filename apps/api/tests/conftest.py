@@ -333,15 +333,18 @@ def client(app: Any) -> Iterator[Any]:
 def login() -> Any:
     """Renvoie un helper `login(client, email)` qui ouvre une session.
 
-    Exécute le flux magic-link complet (request-link → verify) ; le TestClient
-    conserve le cookie de session. Suppose une DB pointée vers le testcontainer
-    (fixtures `qa_env` / `quota_env` / `auth_env`).
+    Exécute le flux mot de passe complet (register → verify-email, qui ouvre la
+    session) ; le TestClient conserve le cookie. Suppose une DB pointée vers le
+    testcontainer (fixtures `qa_env` / `quota_env` / `auth_env`).
     """
     from urllib.parse import parse_qs, urlparse
 
-    def _login(client: Any, email: str) -> None:
-        req = client.post("/auth/request-link", json={"email": email})
-        token = parse_qs(urlparse(req.json()["devMagicLink"]).query)["token"][0]
-        assert client.post("/auth/verify", json={"token": token}).status_code == 200
+    def _login(client: Any, email: str, password: str = "motdepasse-de-test") -> None:
+        reg = client.post(
+            "/auth/register",
+            json={"email": email, "password": password, "consent_data": True},
+        )
+        token = parse_qs(urlparse(reg.json()["devLink"]).query)["token"][0]
+        assert client.post("/auth/verify-email", json={"token": token}).status_code == 200
 
     return _login

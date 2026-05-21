@@ -11,7 +11,7 @@ from __future__ import annotations
 from cc_api.models.abonnement import Abonnement, AbonnementStatus
 from cc_api.models.adhesion_intent import AdhesionIntent, AdhesionIntentStatus
 from cc_api.models.article import Article
-from cc_api.models.auth_token import AuthToken
+from cc_api.models.auth_token import AuthToken, TokenPurpose
 from cc_api.models.author import Author
 from cc_api.models.base import Base
 from cc_api.models.chunk import Chunk
@@ -40,5 +40,6 @@ __all__ = [
     "RagFeedback",
     "RagFeedbackKind",
     "RagInteraction",
+    "TokenPurpose",
     "User",
 ]

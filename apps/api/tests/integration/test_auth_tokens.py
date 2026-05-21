@@ -13,7 +13,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import pytest
-from cc_api.models import AuthToken, User
+from cc_api.models import AuthToken, TokenPurpose, User
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
@@ -35,10 +35,24 @@ async def test_token_hash_unique(
 
     token_hash = _new_token_hash()
     expires = datetime.now(tz=UTC) + timedelta(minutes=15)
-    db_session.add(AuthToken(user_id=user.id, token_hash=token_hash, expires_at=expires))
+    db_session.add(
+        AuthToken(
+            user_id=user.id,
+            token_hash=token_hash,
+            expires_at=expires,
+            purpose=TokenPurpose.VERIFY_EMAIL,
+        )
+    )
     await db_session.commit()
 
-    db_session.add(AuthToken(user_id=user.id, token_hash=token_hash, expires_at=expires))
+    db_session.add(
+        AuthToken(
+            user_id=user.id,
+            token_hash=token_hash,
+            expires_at=expires,
+            purpose=TokenPurpose.VERIFY_EMAIL,
+        )
+    )
     with pytest.raises(IntegrityError):
         await db_session.commit()
     await db_session.rollback()
@@ -54,7 +68,12 @@ async def test_consume_marks_used_at(
     await db_session.flush()
 
     expires = datetime.now(tz=UTC) + timedelta(minutes=15)
-    token = AuthToken(user_id=user.id, token_hash=_new_token_hash(), expires_at=expires)
+    token = AuthToken(
+        user_id=user.id,
+        token_hash=_new_token_hash(),
+        expires_at=expires,
+        purpose=TokenPurpose.VERIFY_EMAIL,
+    )
     db_session.add(token)
     await db_session.commit()
     await db_session.refresh(token)
@@ -85,11 +104,13 @@ async def test_expired_token_detectable(
         user_id=user.id,
         token_hash=_new_token_hash(),
         expires_at=now + timedelta(minutes=15),
+        purpose=TokenPurpose.VERIFY_EMAIL,
     )
     expired = AuthToken(
         user_id=user.id,
         token_hash=_new_token_hash(),
         expires_at=now - timedelta(minutes=1),
+        purpose=TokenPurpose.VERIFY_EMAIL,
     )
     db_session.add_all([fresh, expired])
     await db_session.commit()
@@ -113,7 +134,14 @@ async def test_token_cascade_delete_with_user(
     await db_session.flush()
 
     expires = datetime.now(tz=UTC) + timedelta(minutes=15)
-    db_session.add(AuthToken(user_id=user.id, token_hash=_new_token_hash(), expires_at=expires))
+    db_session.add(
+        AuthToken(
+            user_id=user.id,
+            token_hash=_new_token_hash(),
+            expires_at=expires,
+            purpose=TokenPurpose.VERIFY_EMAIL,
+        )
+    )
     await db_session.commit()
 
     await db_session.delete(user)

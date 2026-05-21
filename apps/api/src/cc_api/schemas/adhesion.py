@@ -5,7 +5,7 @@ Trois écrans côté frontend, trois schemas :
 
 1. AdhesionCheckoutIn — POST /adhesions/checkout (form submission)
 2. AdhesionCheckoutOut — réponse, donne l'URL Stripe à rediriger
-3. AdhesionIntentStatusOut — GET /adhesions/intent/{id} (page /adherer/merci)
+3. AdhesionIntentStatusOut — GET /adhesions/intent/{id} (page /join/thanks)
 
 Pas de schema pour le webhook : c'est du raw bytes vérifié par signature.
 """
@@ -55,14 +55,14 @@ class AdhesionCheckoutIn(BaseModel):
 class AdhesionCheckoutOut(BaseModel):
     """URL Stripe vers laquelle rediriger immédiatement le navigateur."""
 
-    # Jeton opaque, jamais l'id séquentiel — sert d'identifiant à /adherer/merci.
+    # Jeton opaque, jamais l'id séquentiel — sert d'identifiant à /join/thanks.
     public_token: str
     redirect_url: str
     expires_at: datetime
 
 
 class AdhesionIntentStatusOut(BaseModel):
-    """État courant d'une intention — la page /adherer/merci la lit."""
+    """État courant d'une intention — la page /join/thanks la lit."""
 
     public_token: str
     status: AdhesionIntentStatus
