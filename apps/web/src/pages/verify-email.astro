@@ -1,10 +1,10 @@
 ---
-import ThemeToggle from "../../components/ThemeToggle.astro";
+import ThemeToggle from "../components/ThemeToggle.astro";
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import BaseLayout from "../../layouts/BaseLayout.astro";
+import BaseLayout from "../layouts/BaseLayout.astro";
 ---
 
-<BaseLayout title="Conscience de classe — Vérification">
+<BaseLayout title="Conscience de classe — Vérification" noindex>
   <div class="flex min-h-dvh flex-col bg-white dark:bg-black">
     <header
       class="flex shrink-0 items-center justify-between px-6 lg:px-10 py-5 border-b border-black dark:border-white"
@@ -13,17 +13,15 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
         href="/"
         class="font-Scheherazade text-xs sm:text-sm uppercase tracking-[0.25em] text-black dark:text-white hover:text-darkpink transition-colors"
       >
-        ← Retour
+        ← RETOUR
       </a>
       <ThemeToggle />
     </header>
 
     <main class="flex flex-1 items-center justify-center px-6 py-16">
       <div id="status" class="w-full max-w-md text-center" aria-live="polite">
-        <p
-          class="font-Scheherazade text-base leading-relaxed text-black dark:text-white"
-        >
-          Vérification du lien de connexion…
+        <p class="font-Scheherazade text-base leading-relaxed text-black dark:text-white">
+          Vérification de votre adresse…
         </p>
       </div>
     </main>
@@ -44,33 +42,30 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
     const token = new URLSearchParams(window.location.search).get("token");
 
     if (!token) {
-      render("Ce lien de connexion est incomplet.", {
-        href: "/connexion",
-        label: "Demander un nouveau lien",
+      render("Ce lien de vérification est incomplet.", {
+        href: "/register",
+        label: "Créer un compte",
       });
     } else {
       (async () => {
         try {
-          const res = await fetch(`${API_BASE}/auth/verify`, {
+          const res = await fetch(`${API_BASE}/auth/verify-email`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             credentials: "include",
             body: JSON.stringify({ token }),
           });
           if (res.ok) {
-            render("Connexion réussie.", {
-              href: "/chat",
-              label: "Accéder à l'assistant",
-            });
+            window.location.href = "/chat";
           } else {
-            render("Ce lien de connexion est invalide ou expiré.", {
-              href: "/connexion",
-              label: "Demander un nouveau lien",
+            render("Ce lien de vérification est invalide ou expiré.", {
+              href: "/register",
+              label: "Recommencer l'inscription",
             });
           }
         } catch {
           render("La vérification a échoué. Vérifiez votre connexion.", {
-            href: "/connexion",
+            href: "/verify-email",
             label: "Réessayer",
           });
         }

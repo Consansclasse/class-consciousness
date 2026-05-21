@@ -1,0 +1,141 @@
+---
+import ThemeToggle from "../components/ThemeToggle.astro";
+// SPDX-License-Identifier: AGPL-3.0-or-later
+import BaseLayout from "../layouts/BaseLayout.astro";
+---
+
+<BaseLayout title="Conscience de classe — Inscription" noindex>
+  <div class="flex min-h-dvh flex-col bg-white dark:bg-black">
+    <header
+      class="flex shrink-0 items-center justify-between px-6 lg:px-10 py-5 border-b border-black dark:border-white"
+    >
+      <a
+        href="/"
+        class="font-Scheherazade text-xs sm:text-sm uppercase tracking-[0.25em] text-black dark:text-white hover:text-darkpink transition-colors"
+      >
+        ← RETOUR
+      </a>
+      <ThemeToggle />
+    </header>
+
+    <main class="flex flex-1 items-center justify-center px-6 py-16">
+      <div class="w-full max-w-md">
+        <h1
+          class="font-Scheherazade text-2xl sm:text-3xl leading-snug text-black dark:text-white mb-2 uppercase"
+        >
+          CRÉER UN COMPTE
+        </h1>
+        <p class="font-Scheherazade text-sm leading-relaxed text-black dark:text-white mb-8">
+          Choisissez un mot de passe (10 caractères minimum). Vous recevrez un email pour
+          confirmer votre adresse avant de pouvoir vous connecter.
+        </p>
+
+        <form id="register-form" autocomplete="on" class="space-y-4">
+          <input
+            type="email"
+            id="email"
+            name="email"
+            required
+            autocomplete="email"
+            aria-label="Adresse électronique"
+            placeholder="vous@exemple.org"
+            class="w-full border border-black dark:border-white bg-transparent px-4 py-3 font-Scheherazade text-base text-black dark:text-white outline-none focus-visible:border-darkpink"
+          />
+          <input
+            type="password"
+            id="password"
+            name="password"
+            required
+            minlength="10"
+            autocomplete="new-password"
+            aria-label="Mot de passe"
+            placeholder="Mot de passe (10 caractères minimum)"
+            class="w-full border border-black dark:border-white bg-transparent px-4 py-3 font-Scheherazade text-base text-black dark:text-white outline-none focus-visible:border-darkpink"
+          />
+          <label class="flex items-start gap-3 font-Scheherazade text-sm text-black dark:text-white">
+            <input type="checkbox" id="consent" required class="mt-1 accent-darkpink" />
+            <span
+              >J'accepte que mon adresse soit traitée pour gérer mon compte
+              (<a href="/legal/privacy" class="text-darkpink underline">confidentialité</a>).</span
+            >
+          </label>
+          <button
+            type="submit"
+            id="submit"
+            class="w-full bg-darkpink text-white font-Scheherazade text-sm uppercase tracking-[0.2em] py-3 transition-opacity hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            CRÉER LE COMPTE
+          </button>
+        </form>
+
+        <div id="result" class="mt-6" aria-live="polite"></div>
+
+        <nav class="mt-8 font-Scheherazade text-sm">
+          <a href="/login" class="text-darkpink underline decoration-1 underline-offset-2"
+            >J'ai déjà un compte</a
+          >
+        </nav>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    const form = document.getElementById("register-form") as HTMLFormElement;
+    const email = document.getElementById("email") as HTMLInputElement;
+    const password = document.getElementById("password") as HTMLInputElement;
+    const consent = document.getElementById("consent") as HTMLInputElement;
+    const submit = document.getElementById("submit") as HTMLButtonElement;
+    const result = document.getElementById("result") as HTMLElement;
+    const API_BASE = (
+      import.meta.env.PUBLIC_API_BASE_URL ?? "http://localhost:8000"
+    ).replace(/\/$/, "");
+
+    const escapeHtml = (s: string) =>
+      s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      if (!consent.checked) return;
+      submit.disabled = true;
+      try {
+        const res = await fetch(`${API_BASE}/auth/register`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({
+            email: email.value.trim(),
+            password: password.value,
+            consent_data: true,
+          }),
+        });
+        if (!res.ok) {
+          result.className =
+            "mt-6 font-Scheherazade text-sm leading-relaxed text-black dark:text-white";
+          result.textContent =
+            res.status === 422
+              ? "Vérifiez votre adresse et un mot de passe d'au moins 10 caractères."
+              : "Une erreur est survenue. Réessayez dans un instant.";
+          submit.disabled = false;
+          return;
+        }
+        const data = (await res.json()) as { devLink?: string };
+        let html =
+          "Compte créé. Vérifiez votre boîte de réception : un lien de confirmation vient d'être envoyé.";
+        if (data.devLink) {
+          html +=
+            `<br /><br /><span class="uppercase tracking-wide text-xs">dev</span> ` +
+            `<a href="${escapeHtml(data.devLink)}" class="text-darkpink underline decoration-1 underline-offset-2">confirmer maintenant</a>`;
+        }
+        result.className =
+          "mt-6 font-Scheherazade text-sm leading-relaxed text-black dark:text-white";
+        result.innerHTML = html;
+        form.style.display = "none";
+      } catch {
+        result.className =
+          "mt-6 font-Scheherazade text-sm leading-relaxed text-black dark:text-white";
+        result.textContent = "La requête a échoué. Vérifiez votre connexion et réessayez.";
+        submit.disabled = false;
+      }
+    });
+  </script>
+</BaseLayout>

@@ -72,6 +72,31 @@ textarea {
   resize: none;
 }
 
+/* Placeholder : rose de la palette (jamais de gris système). */
+::placeholder {
+  color: #e27ecc;
+  opacity: 1;
+}
+
+/* Autofill navigateur : par défaut Chrome force un fond jaune/blanc + texte
+   sombre, illisible en thème sombre (le bug « couleur dans les inputs »). On
+   neutralise le fond via un box-shadow interne et on fixe la couleur du texte
+   selon le thème. */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus {
+  -webkit-text-fill-color: #000000;
+  -webkit-box-shadow: 0 0 0 1000px #ffffff inset;
+  caret-color: #000000;
+}
+html.dark input:-webkit-autofill,
+html.dark input:-webkit-autofill:hover,
+html.dark input:-webkit-autofill:focus {
+  -webkit-text-fill-color: #ffffff;
+  -webkit-box-shadow: 0 0 0 1000px #000000 inset;
+  caret-color: #ffffff;
+}
+
 /* ============================================================
    AI Button — breathing glow + shimmer + star twinkle
    Copié de artedusa-frontend/src/app/globals.css
