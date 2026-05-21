@@ -21,12 +21,12 @@ import BaseLayout from "../layouts/BaseLayout.astro";
     <main class="flex flex-1 items-center justify-center px-6 py-16">
       <div class="w-full max-w-md">
         <h1
-          class="font-Scheherazade text-2xl sm:text-3xl leading-snug text-black dark:text-white mb-2"
+          class="font-Scheherazade text-2xl sm:text-3xl leading-snug text-black dark:text-white mb-2 uppercase"
         >
           Se connecter
         </h1>
         <p
-          class="font-Scheherazade text-sm leading-relaxed text-black dark:text-white opacity-70 mb-8"
+          class="font-Scheherazade text-sm leading-relaxed text-black dark:text-white mb-8"
         >
           Saisissez votre adresse électronique : nous vous enverrons un lien de
           connexion, valable 15 minutes. Aucun mot de passe.
@@ -95,7 +95,7 @@ import BaseLayout from "../layouts/BaseLayout.astro";
           "Si un compte correspond à cette adresse, un lien de connexion vient d'être envoyé. Vérifiez votre boîte de réception.";
         if (data.devMagicLink) {
           html +=
-            `<br /><br /><span class="opacity-50 uppercase tracking-wide text-xs">dev</span> ` +
+            `<br /><br /><span class="uppercase tracking-wide text-xs">dev</span> ` +
             `<a href="${escapeHtml(data.devMagicLink)}" class="text-darkpink underline decoration-1 underline-offset-2">ouvrir le lien de connexion</a>`;
         }
         note(html);

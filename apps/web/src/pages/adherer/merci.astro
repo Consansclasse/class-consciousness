@@ -74,7 +74,7 @@ const isFailed =
               <p class="font-Scheherazade text-xs uppercase tracking-[0.25em] text-darkpink">
                 {solidaire ? "Adhésion solidaire enregistrée" : "Paiement reçu"}
               </p>
-              <h1 class="mt-3 font-Scheherazade text-4xl sm:text-5xl leading-none text-black dark:text-white">
+              <h1 class="mt-3 font-Scheherazade text-4xl sm:text-5xl leading-none text-black dark:text-white uppercase">
                 Merci.
               </h1>
               <p class="mt-6 font-Scheherazade text-base sm:text-lg text-black dark:text-white leading-relaxed max-w-xl">
@@ -98,7 +98,7 @@ const isFailed =
               <p class="font-Scheherazade text-xs uppercase tracking-[0.25em] text-darkpink">
                 Paiement en attente de confirmation
               </p>
-              <h1 class="mt-3 font-Scheherazade text-4xl sm:text-5xl leading-none text-black dark:text-white">
+              <h1 class="mt-3 font-Scheherazade text-4xl sm:text-5xl leading-none text-black dark:text-white uppercase">
                 Patientez.
               </h1>
               <p class="mt-6 font-Scheherazade text-base sm:text-lg text-black dark:text-white leading-relaxed max-w-xl">
@@ -120,7 +120,7 @@ const isFailed =
               <p class="font-Scheherazade text-xs uppercase tracking-[0.25em] text-darkpink">
                 Paiement non finalisé
               </p>
-              <h1 class="mt-3 font-Scheherazade text-4xl sm:text-5xl leading-none text-black dark:text-white">
+              <h1 class="mt-3 font-Scheherazade text-4xl sm:text-5xl leading-none text-black dark:text-white uppercase">
                 Aucun débit n'a eu lieu.
               </h1>
               <p class="mt-6 font-Scheherazade text-base sm:text-lg text-black dark:text-white leading-relaxed max-w-xl">
@@ -140,7 +140,7 @@ const isFailed =
         {
           !intent && fetchError && (
             <>
-              <h1 class="font-Scheherazade text-4xl sm:text-5xl leading-none text-black dark:text-white">
+              <h1 class="font-Scheherazade text-4xl sm:text-5xl leading-none text-black dark:text-white uppercase">
                 Confirmation différée.
               </h1>
               <p class="mt-6 font-Scheherazade text-base text-black dark:text-white leading-relaxed max-w-xl">
@@ -153,7 +153,7 @@ const isFailed =
         {
           !intent && !fetchError && (
             <>
-              <h1 class="font-Scheherazade text-4xl sm:text-5xl leading-none text-black dark:text-white">
+              <h1 class="font-Scheherazade text-4xl sm:text-5xl leading-none text-black dark:text-white uppercase">
                 Cette page attend un identifiant d'adhésion.
               </h1>
               <p class="mt-6 font-Scheherazade text-base text-black dark:text-white max-w-xl">

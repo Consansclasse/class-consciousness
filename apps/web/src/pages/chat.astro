@@ -265,7 +265,7 @@ import BaseLayout from "../layouts/BaseLayout.astro";
           </div>
           <p
             data-time
-            class="font-Scheherazade text-xs uppercase tracking-[0.15em] text-black dark:text-white opacity-70"
+            class="font-Scheherazade text-xs uppercase tracking-[0.15em] text-black dark:text-white"
           >0:00 écoulé · estimation ≈ ${fmtClock(ESTIMATE_S)}</p>
         </div>`;
       const label = slot.querySelector("[data-label]") as HTMLElement;
@@ -347,7 +347,7 @@ import BaseLayout from "../layouts/BaseLayout.astro";
               inner =
                 `<a href="/corpus/${encodeURIComponent(c.issueSlug)}/${encodeURIComponent(c.articleSlug)}" ` +
                 `class="hover:text-darkpink underline decoration-1 underline-offset-2">${ref}</a>` +
-                ` <span class="opacity-60">— ${escapeHtml(c.articleArk)}, car. ${c.charStart}–${c.charEnd}</span>`;
+                ` <span>— ${escapeHtml(c.articleArk)}, car. ${c.charStart}–${c.charEnd}</span>`;
             } else {
               inner = escapeHtml(id);
             }
@@ -356,7 +356,7 @@ import BaseLayout from "../layouts/BaseLayout.astro";
           .join("");
         html +=
           `<div class="mt-5 border-t border-black dark:border-white pt-3">` +
-          `<p class="font-Scheherazade text-xs uppercase tracking-[0.2em] mb-2 opacity-70">Sources</p>` +
+          `<p class="font-Scheherazade text-xs uppercase tracking-[0.2em] mb-2">Sources</p>` +
           `<ol class="space-y-1.5">${items}</ol></div>`;
       }
       return html;
@@ -396,7 +396,7 @@ import BaseLayout from "../layouts/BaseLayout.astro";
       const box = document.createElement("div");
       box.className = "mt-5 border-t border-black dark:border-white pt-3";
       box.innerHTML = `
-        <p class="font-Scheherazade text-xs uppercase tracking-[0.2em] mb-2 opacity-70">Votre retour</p>
+        <p class="font-Scheherazade text-xs uppercase tracking-[0.2em] mb-2">Votre retour</p>
         <div data-fb-actions class="flex flex-wrap gap-2">
           <button type="button" data-fb="UP" class="${FB_BTN}" aria-label="Signaler que la réponse est utile">Réponse utile</button>
           <button type="button" data-fb="DOWN" class="${FB_BTN}" aria-label="Signaler que la réponse est insuffisante">Réponse insuffisante</button>
@@ -405,7 +405,7 @@ import BaseLayout from "../layouts/BaseLayout.astro";
       slot.appendChild(box);
 
       const done = (msg: string) => {
-        box.innerHTML = `<p class="font-Scheherazade italic text-sm leading-relaxed text-black dark:text-white opacity-70">${escapeHtml(msg)}</p>`;
+        box.innerHTML = `<p class="font-Scheherazade italic text-sm leading-relaxed text-black dark:text-white">${escapeHtml(msg)}</p>`;
       };
       const actions = box.querySelector("[data-fb-actions]") as HTMLElement;
 
@@ -528,8 +528,8 @@ import BaseLayout from "../layouts/BaseLayout.astro";
         (active ? "bg-darkpink/10" : "hover:bg-black/5 dark:hover:bg-white/10");
       li.innerHTML = `
         <button type="button" data-select class="${CONV_BTN_BASE}" title="${escapeHtml(c.title)}">${escapeHtml(c.title)}</button>
-        <button type="button" data-rename aria-label="Renommer la conversation" class="shrink-0 px-1 font-Scheherazade text-xs text-black/50 hover:text-darkpink dark:text-white/50">✎</button>
-        <button type="button" data-delete aria-label="Supprimer la conversation" class="shrink-0 px-1 font-Scheherazade text-xs text-black/50 hover:text-darkpink dark:text-white/50">×</button>
+        <button type="button" data-rename aria-label="Renommer la conversation" class="shrink-0 px-1 font-Scheherazade text-xs text-black hover:text-darkpink dark:text-white">✎</button>
+        <button type="button" data-delete aria-label="Supprimer la conversation" class="shrink-0 px-1 font-Scheherazade text-xs text-black hover:text-darkpink dark:text-white">×</button>
       `;
       (li.querySelector("[data-select]") as HTMLElement).addEventListener(
         "click",
@@ -553,7 +553,7 @@ import BaseLayout from "../layouts/BaseLayout.astro";
       if (conversations.length === 0) {
         const li = document.createElement("li");
         li.className =
-          "px-3 py-4 font-Scheherazade text-xs italic text-black/60 dark:text-white/60";
+          "px-3 py-4 font-Scheherazade text-xs italic text-black dark:text-white";
         li.textContent = "Aucune conversation pour l'instant.";
         convList.appendChild(li);
         return;
