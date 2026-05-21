@@ -153,12 +153,28 @@ _VERDICT_TOOL: dict[str, Any] = {
 
 @dataclass(frozen=True)
 class GenerationUsage:
-    """Compteurs de tokens retournés par l'API."""
+    """Compteurs de tokens d'un appel LLM — s'additionnent d'un appel à l'autre."""
 
     input_tokens: int
     output_tokens: int
     cache_creation_input_tokens: int
     cache_read_input_tokens: int
+
+    @classmethod
+    def zero(cls) -> GenerationUsage:
+        """Relevé vide — élément neutre, défaut avant tout appel LLM."""
+        return cls(0, 0, 0, 0)
+
+    def __add__(self, other: GenerationUsage) -> GenerationUsage:
+        """Agrège deux relevés — p. ex. génération + juge d'une même requête."""
+        return GenerationUsage(
+            input_tokens=self.input_tokens + other.input_tokens,
+            output_tokens=self.output_tokens + other.output_tokens,
+            cache_creation_input_tokens=self.cache_creation_input_tokens
+            + other.cache_creation_input_tokens,
+            cache_read_input_tokens=self.cache_read_input_tokens
+            + other.cache_read_input_tokens,
+        )
 
 
 @dataclass(frozen=True)
@@ -186,6 +202,14 @@ class JudgeVerdict:
     index: int
     verdict: str  # ENTAILED | NOT_ENTAILED | CONTRADICTED
     justification: str
+
+
+@dataclass(frozen=True)
+class JudgeResult:
+    """Verdicts du juge sémantique + tokens consommés par le(s) appel(s)."""
+
+    verdicts: list[JudgeVerdict]
+    usage: GenerationUsage
 
 
 class AnthropicError(RuntimeError):
@@ -380,7 +404,7 @@ class AnthropicClient:
         payload: str,
         model: str | None = None,
         max_tokens: int = 4096,
-    ) -> list[JudgeVerdict]:
+    ) -> JudgeResult:
         """2ᵉ passage « juge » — verdicts d'ancrage en tool-use forcé.
 
         Un ré-essai en cas de sortie inexploitable (très improbable avec un
@@ -399,8 +423,10 @@ class AnthropicClient:
             "messages": [{"role": "user", "content": [{"type": "text", "text": payload}]}],
         }
         last_exc: Exception | None = None
+        usage = GenerationUsage.zero()
         for attempt in (1, 2):
             response = await self._client.messages.create(**params)
+            usage = usage + _usage(response)
             try:
                 data = _tool_input(response, "rendre_verdicts")
                 verdicts = [
@@ -416,7 +442,7 @@ class AnthropicClient:
                 log.warning("anthropic.judge_retry", attempt=attempt, error=str(exc))
                 continue
             log.info("anthropic.judge", model=judge_model, n_verdicts=len(verdicts))
-            return verdicts
+            return JudgeResult(verdicts=verdicts, usage=usage)
         raise AnthropicError(f"juge sémantique : sortie inexploitable après 2 essais ({last_exc})")
 
 

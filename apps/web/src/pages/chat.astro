@@ -5,90 +5,154 @@ import BaseLayout from "../layouts/BaseLayout.astro";
 ---
 
 <BaseLayout title="Conscience de classe — Conversation">
-  <div class="flex h-dvh flex-col bg-white dark:bg-black">
-    <!-- Header minimal, séparé du contenu par une fine ligne noire -->
-    <header
-      class="flex shrink-0 items-center justify-between px-6 lg:px-10 py-5 border-b border-black dark:border-white"
-    >
-      <a
-        href="/"
-        class="font-Scheherazade text-xs sm:text-sm uppercase tracking-[0.25em] text-black dark:text-white hover:text-darkpink transition-colors"
-      >
-        ← Retour
-      </a>
-      <a
-        href="/"
-        class="font-Scheherazade text-sm uppercase tracking-[0.2em] text-black dark:text-white hover:text-darkpink transition-colors"
-      >
-        Conscience de classe
-      </a>
-      <div class="flex items-center gap-6">
-        <a
-          href="/corpus"
-          class="hidden sm:inline font-Scheherazade text-xs uppercase tracking-[0.25em] text-black dark:text-white hover:text-darkpink transition-colors"
-        >
-          Le corpus
-        </a>
-        <ThemeToggle />
-      </div>
-    </header>
-
-    <!-- Zone scrollable : flex column qui occupe toute la hauteur disponible -->
-    <main
-      id="conv"
-      class="flex-1 overflow-y-auto flex flex-col"
-      aria-live="polite"
-    >
-      <div class="mx-auto flex w-full max-w-3xl flex-1 flex-col px-6 md:px-10">
-        <!-- Messages : séparés par fines lignes noires -->
-        <ol
-          id="messages"
-          class="flex-1 divide-y divide-black dark:divide-white py-8"
-        ></ol>
-      </div>
-    </main>
-
-    <!-- Input : encadré d'une fine ligne noire, collé en bas avec un peu d'air -->
-    <form
-      id="chat-form"
-      autocomplete="off"
-      class="shrink-0 bg-white dark:bg-black px-6 md:px-10 pb-5 pt-2"
+  <div class="flex h-dvh bg-white dark:bg-black">
+    <!-- Barre latérale : historique des conversations (façon fil persistant). -->
+    <aside
+      id="sidebar"
+      aria-label="Vos conversations"
+      class="fixed inset-y-0 left-0 z-30 flex w-72 -translate-x-full flex-col border-r border-black bg-white transition-transform dark:border-white dark:bg-black lg:static lg:translate-x-0"
     >
       <div
-        class="mx-auto flex w-full max-w-3xl items-end gap-3 border border-black dark:border-white px-4 py-3"
+        class="flex shrink-0 items-center justify-between border-b border-black px-4 py-5 dark:border-white"
       >
-        <textarea
-          id="chat-input"
-          name="q"
-          rows="1"
-          maxlength="500"
-          aria-label="Votre question"
-          class="min-h-[28px] max-h-48 flex-1 resize-none border-none bg-transparent py-1 font-Scheherazade text-lg leading-relaxed text-black dark:text-white outline-none"
-        ></textarea>
-
-        <button
-          type="submit"
-          id="chat-submit"
-          aria-label="Envoyer"
-          disabled
-          class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-darkpink text-white transition-opacity hover:opacity-90 focus-visible:opacity-90 disabled:opacity-25 disabled:cursor-not-allowed"
+        <span
+          class="font-Scheherazade text-xs uppercase tracking-[0.25em] text-black dark:text-white"
+          >Conversations</span
         >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            class="h-4 w-4"
-          >
-            <path d="M12 19V5"></path>
-            <path d="m5 12 7-7 7 7"></path>
-          </svg>
+        <button
+          type="button"
+          id="sidebar-close"
+          aria-label="Fermer le panneau"
+          class="font-Scheherazade text-lg leading-none text-black dark:text-white lg:hidden"
+        >
+          ×
         </button>
       </div>
-    </form>
+      <div class="shrink-0 px-4 py-3">
+        <button
+          type="button"
+          id="new-conv"
+          class="w-full border border-black px-3 py-2 font-Scheherazade text-xs uppercase tracking-[0.2em] text-black transition-colors hover:bg-darkpink hover:border-darkpink hover:text-white dark:border-white dark:text-white"
+        >
+          + Nouvelle conversation
+        </button>
+      </div>
+      <ul
+        id="conv-list"
+        class="flex-1 divide-y divide-black/20 overflow-y-auto dark:divide-white/20"
+      ></ul>
+    </aside>
+
+    <!-- Voile sombre derrière le tiroir mobile. -->
+    <div
+      id="sidebar-backdrop"
+      class="fixed inset-0 z-20 hidden bg-black/40 lg:hidden"
+    >
+    </div>
+
+    <div class="flex min-w-0 flex-1 flex-col">
+      <!-- Header minimal, séparé du contenu par une fine ligne noire -->
+      <header
+        class="flex shrink-0 items-center justify-between border-b border-black px-6 py-5 dark:border-white lg:px-10"
+      >
+        <div class="flex items-center gap-4">
+          <button
+            type="button"
+            id="sidebar-open"
+            aria-label="Ouvrir le panneau des conversations"
+            class="font-Scheherazade text-xl leading-none text-black dark:text-white lg:hidden"
+          >
+            ☰
+          </button>
+          <a
+            href="/"
+            class="font-Scheherazade text-xs uppercase tracking-[0.25em] text-black transition-colors hover:text-darkpink dark:text-white sm:text-sm"
+          >
+            ← Retour
+          </a>
+        </div>
+        <a
+          href="/"
+          class="hidden font-Scheherazade text-sm uppercase tracking-[0.2em] text-black transition-colors hover:text-darkpink dark:text-white sm:inline"
+        >
+          Conscience de classe
+        </a>
+        <div class="flex items-center gap-6">
+          <a
+            href="/corpus"
+            class="hidden font-Scheherazade text-xs uppercase tracking-[0.25em] text-black transition-colors hover:text-darkpink dark:text-white sm:inline"
+          >
+            Le corpus
+          </a>
+          <button
+            type="button"
+            id="logout"
+            aria-label="Se déconnecter"
+            class="font-Scheherazade text-xs uppercase tracking-[0.25em] text-black transition-colors hover:text-darkpink dark:text-white"
+          >
+            Déconnexion
+          </button>
+          <ThemeToggle />
+        </div>
+      </header>
+
+      <!-- Zone scrollable : flex column qui occupe toute la hauteur disponible -->
+      <main
+        id="conv"
+        class="flex flex-1 flex-col overflow-y-auto"
+        aria-live="polite"
+      >
+        <div class="mx-auto flex w-full max-w-3xl flex-1 flex-col px-6 md:px-10">
+          <!-- Messages : séparés par fines lignes noires -->
+          <ol
+            id="messages"
+            class="flex-1 divide-y divide-black py-8 dark:divide-white"
+          ></ol>
+        </div>
+      </main>
+
+      <!-- Input : encadré d'une fine ligne noire, collé en bas avec un peu d'air -->
+      <form
+        id="chat-form"
+        autocomplete="off"
+        class="shrink-0 bg-white px-6 pb-5 pt-2 dark:bg-black md:px-10"
+      >
+        <div
+          class="mx-auto flex w-full max-w-3xl items-end gap-3 border border-black px-4 py-3 dark:border-white"
+        >
+          <textarea
+            id="chat-input"
+            name="q"
+            rows="1"
+            maxlength="500"
+            aria-label="Votre question"
+            class="min-h-[28px] max-h-48 flex-1 resize-none border-none bg-transparent py-1 font-Scheherazade text-lg leading-relaxed text-black outline-none dark:text-white"
+          ></textarea>
+
+          <button
+            type="submit"
+            id="chat-submit"
+            aria-label="Envoyer"
+            disabled
+            class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-darkpink text-white transition-opacity hover:opacity-90 focus-visible:opacity-90 disabled:cursor-not-allowed disabled:opacity-25"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              class="h-4 w-4"
+            >
+              <path d="M12 19V5"></path>
+              <path d="m5 12 7-7 7 7"></path>
+            </svg>
+          </button>
+        </div>
+      </form>
+    </div>
   </div>
 
   <script>
@@ -97,12 +161,20 @@ import BaseLayout from "../layouts/BaseLayout.astro";
     const btn = document.getElementById("chat-submit") as HTMLButtonElement;
     const list = document.getElementById("messages") as HTMLOListElement;
     const conv = document.getElementById("conv") as HTMLElement;
+    const convList = document.getElementById("conv-list") as HTMLUListElement;
+    const sidebar = document.getElementById("sidebar") as HTMLElement;
+    const backdrop = document.getElementById("sidebar-backdrop") as HTMLElement;
 
     // L'API min_length de la question est 3 caractères (cf. schemas/qa.py).
     const MIN_LEN = 3;
     const API_BASE = (
       import.meta.env.PUBLIC_API_BASE_URL ?? "http://localhost:8000"
     ).replace(/\/$/, "");
+
+    // Le cookie de session est porté par l'API (SessionMiddleware) : tout appel
+    // authentifié doit l'envoyer. `same-origin` ne suffit pas (l'API est sur un
+    // autre sous-domaine) — `include` est obligatoire.
+    const withCreds: RequestInit = { credentials: "include" };
 
     type Citation = {
       sourceId: string;
@@ -127,7 +199,15 @@ import BaseLayout from "../layouts/BaseLayout.astro";
       citedChunks: Citation[];
       incomplete: boolean;
       refusedReason: string | null;
+      interactionId: number | null;
+      conversationId: number | null;
     };
+    type ConvSummary = { id: number; title: string; updatedAt: string };
+    type ConvMessage = QaResponse & { question: string };
+    type ConvDetail = { id: number; title: string; messages: ConvMessage[] };
+
+    // Fil courant — null tant qu'aucune question n'a ouvert (ou rouvert) un fil.
+    let currentConversationId: number | null = null;
 
     const autosize = () => {
       ta.style.height = "auto";
@@ -282,6 +362,103 @@ import BaseLayout from "../layouts/BaseLayout.astro";
       return html;
     };
 
+    // Classes communes des boutons de feedback — sobres, cohérentes avec le site.
+    const FB_BTN =
+      "border border-black dark:border-white px-3 py-1 font-Scheherazade " +
+      "text-xs uppercase tracking-[0.15em] text-black dark:text-white " +
+      "hover:bg-darkpink hover:text-white hover:border-darkpink transition-colors";
+
+    // Transmet un retour de lecteur à l'API. `kind` ∈ UP | DOWN | FLAG.
+    const sendFeedback = async (
+      interactionId: number,
+      kind: string,
+      comment: string | null = null,
+    ): Promise<boolean> => {
+      try {
+        const res = await fetch(
+          `${API_BASE}/qa/interactions/${interactionId}/feedback`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ kind, comment }),
+            ...withCreds,
+          },
+        );
+        return res.ok;
+      } catch {
+        return false;
+      }
+    };
+
+    // Ajoute sous une réponse vérifiée la zone de feedback (pouce / signalement).
+    // Ferme la boucle humaine : chaque retour est rattaché à l'interaction RAG.
+    const attachFeedback = (slot: HTMLElement, interactionId: number) => {
+      const box = document.createElement("div");
+      box.className = "mt-5 border-t border-black dark:border-white pt-3";
+      box.innerHTML = `
+        <p class="font-Scheherazade text-xs uppercase tracking-[0.2em] mb-2 opacity-70">Votre retour</p>
+        <div data-fb-actions class="flex flex-wrap gap-2">
+          <button type="button" data-fb="UP" class="${FB_BTN}" aria-label="Signaler que la réponse est utile">Réponse utile</button>
+          <button type="button" data-fb="DOWN" class="${FB_BTN}" aria-label="Signaler que la réponse est insuffisante">Réponse insuffisante</button>
+          <button type="button" data-fb="FLAG" class="${FB_BTN}" aria-label="Signaler une erreur dans la réponse">Signaler une erreur</button>
+        </div>`;
+      slot.appendChild(box);
+
+      const done = (msg: string) => {
+        box.innerHTML = `<p class="font-Scheherazade italic text-sm leading-relaxed text-black dark:text-white opacity-70">${escapeHtml(msg)}</p>`;
+      };
+      const actions = box.querySelector("[data-fb-actions]") as HTMLElement;
+
+      const openFlagForm = () => {
+        actions.innerHTML = `
+          <div class="w-full space-y-2">
+            <textarea
+              data-fb-comment
+              rows="2"
+              maxlength="2000"
+              aria-label="Précisez l'erreur signalée"
+              placeholder="Quelle citation ou affirmation pose problème ?"
+              class="w-full resize-none border border-black dark:border-white bg-transparent p-2 font-Scheherazade text-sm leading-relaxed text-black dark:text-white outline-none"
+            ></textarea>
+            <button type="button" data-fb-send class="${FB_BTN}">Envoyer le signalement</button>
+          </div>`;
+        const comment = actions.querySelector(
+          "[data-fb-comment]",
+        ) as HTMLTextAreaElement;
+        comment.focus();
+        const send = actions.querySelector("[data-fb-send]") as HTMLButtonElement;
+        send.addEventListener("click", async () => {
+          send.disabled = true;
+          const ok = await sendFeedback(
+            interactionId,
+            "FLAG",
+            comment.value.trim() || null,
+          );
+          done(
+            ok
+              ? "Merci, le signalement a été transmis."
+              : "Le signalement n'a pas pu être envoyé.",
+          );
+        });
+      };
+
+      box.querySelectorAll("[data-fb]").forEach((b) => {
+        b.addEventListener("click", async () => {
+          const kind = (b as HTMLElement).dataset.fb ?? "";
+          if (kind === "FLAG") {
+            openFlagForm();
+            return;
+          }
+          const ok = await sendFeedback(interactionId, kind);
+          done(
+            ok
+              ? "Merci de votre retour."
+              : "Le retour n'a pas pu être envoyé.",
+          );
+        });
+      });
+    };
+
     // Affiche la réponse finale (vérifiée) ou le message de refus adéquat.
     const renderResult = (data: QaResponse, slot: HTMLElement) => {
       const sentences = data.sentences ?? [];
@@ -301,18 +478,195 @@ import BaseLayout from "../layouts/BaseLayout.astro";
         );
       }
       slot.innerHTML = html;
+      if (data.interactionId != null) attachFeedback(slot, data.interactionId);
     };
 
-    const ask = async (q: string) => {
+    // Crée la ligne d'un échange (question + emplacement de réponse) et renvoie
+    // le slot de réponse. Partagé entre une question en direct et le rejeu de
+    // l'historique.
+    const addExchange = (question: string): HTMLElement => {
       const li = document.createElement("li");
       li.className = "space-y-4 py-8 first:pt-0 last:pb-0";
       li.innerHTML = `
-        <p class="font-Scheherazade text-xl sm:text-2xl leading-snug text-black dark:text-white text-pretty">${escapeHtml(q)}</p>
+        <p class="font-Scheherazade text-xl sm:text-2xl leading-snug text-black dark:text-white text-pretty">${escapeHtml(question)}</p>
         <div class="answer"></div>
       `;
       list.appendChild(li);
+      return li.querySelector(".answer") as HTMLElement;
+    };
+
+    // ───────────────────────── Barre latérale (historique) ──────────────────
+
+    const closeSidebar = () => {
+      sidebar.classList.add("-translate-x-full");
+      backdrop.classList.add("hidden");
+    };
+    const openSidebar = () => {
+      sidebar.classList.remove("-translate-x-full");
+      backdrop.classList.remove("hidden");
+    };
+
+    // Met à jour l'URL (?c=…) sans recharger — deep-link d'un fil.
+    const setUrl = (id: number | null) => {
+      const url = new URL(window.location.href);
+      if (id == null) url.searchParams.delete("c");
+      else url.searchParams.set("c", String(id));
+      url.searchParams.delete("q");
+      window.history.replaceState({}, "", url);
+    };
+
+    const CONV_BTN_BASE =
+      "flex-1 truncate text-left font-Scheherazade text-sm text-black dark:text-white";
+
+    // Rend une ligne de conversation dans la liste latérale.
+    const renderConvItem = (c: ConvSummary): HTMLLIElement => {
+      const li = document.createElement("li");
+      li.dataset.id = String(c.id);
+      const active = c.id === currentConversationId;
+      li.className =
+        "group flex items-center gap-1 px-3 py-2.5 " +
+        (active ? "bg-darkpink/10" : "hover:bg-black/5 dark:hover:bg-white/10");
+      li.innerHTML = `
+        <button type="button" data-select class="${CONV_BTN_BASE}" title="${escapeHtml(c.title)}">${escapeHtml(c.title)}</button>
+        <button type="button" data-rename aria-label="Renommer la conversation" class="shrink-0 px-1 font-Scheherazade text-xs text-black/50 hover:text-darkpink dark:text-white/50">✎</button>
+        <button type="button" data-delete aria-label="Supprimer la conversation" class="shrink-0 px-1 font-Scheherazade text-xs text-black/50 hover:text-darkpink dark:text-white/50">×</button>
+      `;
+      (li.querySelector("[data-select]") as HTMLElement).addEventListener(
+        "click",
+        () => void selectConversation(c.id),
+      );
+      (li.querySelector("[data-rename]") as HTMLElement).addEventListener(
+        "click",
+        () => startRename(li, c),
+      );
+      (li.querySelector("[data-delete]") as HTMLElement).addEventListener(
+        "click",
+        () => void deleteConversation(c.id),
+      );
+      return li;
+    };
+
+    let conversations: ConvSummary[] = [];
+
+    const renderConvList = () => {
+      convList.innerHTML = "";
+      if (conversations.length === 0) {
+        const li = document.createElement("li");
+        li.className =
+          "px-3 py-4 font-Scheherazade text-xs italic text-black/60 dark:text-white/60";
+        li.textContent = "Aucune conversation pour l'instant.";
+        convList.appendChild(li);
+        return;
+      }
+      for (const c of conversations) convList.appendChild(renderConvItem(c));
+    };
+
+    const loadConversations = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/conversations`, withCreds);
+        if (res.status === 401) return void redirectToLogin();
+        if (!res.ok) return;
+        conversations = (await res.json()) as ConvSummary[];
+        renderConvList();
+      } catch {
+        /* réseau indisponible — la liste reste vide, non bloquant */
+      }
+    };
+
+    // Édition inline du titre : remplace le bouton par un champ. Entrée valide
+    // (PATCH), Échap annule.
+    const startRename = (li: HTMLLIElement, c: ConvSummary) => {
+      const input = document.createElement("input");
+      input.type = "text";
+      input.value = c.title;
+      input.maxLength = 200;
+      input.setAttribute("aria-label", "Nouveau titre de la conversation");
+      input.className =
+        "flex-1 border border-black dark:border-white bg-transparent px-1 py-0.5 font-Scheherazade text-sm text-black dark:text-white outline-none";
+      const selectBtn = li.querySelector("[data-select]") as HTMLElement;
+      li.replaceChild(input, selectBtn);
+      input.focus();
+      input.select();
+      const commit = async () => {
+        const title = input.value.trim();
+        if (title && title !== c.title) {
+          try {
+            await fetch(`${API_BASE}/conversations/${c.id}`, {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ title }),
+              ...withCreds,
+            });
+            c.title = title;
+          } catch {
+            /* échec réseau — on réaffiche l'ancien titre */
+          }
+        }
+        renderConvList();
+      };
+      input.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          void commit();
+        } else if (e.key === "Escape") {
+          renderConvList();
+        }
+      });
+      input.addEventListener("blur", () => void commit());
+    };
+
+    const deleteConversation = async (id: number) => {
+      if (!window.confirm("Supprimer définitivement cette conversation ?")) return;
+      try {
+        await fetch(`${API_BASE}/conversations/${id}`, {
+          method: "DELETE",
+          ...withCreds,
+        });
+      } catch {
+        return;
+      }
+      conversations = conversations.filter((c) => c.id !== id);
+      if (currentConversationId === id) startNewConversation();
+      renderConvList();
+    };
+
+    // Charge et réaffiche un fil complet.
+    const selectConversation = async (id: number) => {
+      try {
+        const res = await fetch(`${API_BASE}/conversations/${id}`, withCreds);
+        if (res.status === 401) return void redirectToLogin();
+        if (!res.ok) return;
+        const detail = (await res.json()) as ConvDetail;
+        currentConversationId = id;
+        setUrl(id);
+        list.innerHTML = "";
+        for (const m of detail.messages) {
+          const slot = addExchange(m.question);
+          renderResult(m, slot);
+        }
+        renderConvList();
+        closeSidebar();
+        scrollDown();
+        ta.focus();
+      } catch {
+        /* non bloquant */
+      }
+    };
+
+    const startNewConversation = () => {
+      currentConversationId = null;
+      setUrl(null);
+      list.innerHTML = "";
+      renderConvList();
+      closeSidebar();
+      ta.focus();
+    };
+
+    // ───────────────────────────── Question en direct ───────────────────────
+
+    const ask = async (q: string) => {
+      const slot = addExchange(q);
       scrollDown();
-      const slot = li.querySelector(".answer") as HTMLElement;
 
       // Minuteur d'attente : démarre immédiatement, avant même la connexion SSE.
       const waiter = startWaiter(slot);
@@ -324,8 +678,26 @@ import BaseLayout from "../layouts/BaseLayout.astro";
         const res = await fetch(`${API_BASE}/qa/stream`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ question: q }),
+          body: JSON.stringify({
+            question: q,
+            conversationId: currentConversationId,
+          }),
+          ...withCreds,
         });
+        if (res.status === 401) {
+          waiter.stop();
+          return void redirectToLogin();
+        }
+        if (res.status === 402) {
+          waiter.stop();
+          slot.innerHTML =
+            noteHtml(
+              "Vous avez atteint le quota de l'assistant. La lecture du corpus et des textes reste libre, sans limite.",
+            ) +
+            `<p class="mt-2 font-Scheherazade text-sm"><a href="/abonnement" class="text-darkpink underline decoration-1 underline-offset-2">S'abonner pour davantage de requêtes</a></p>`;
+          scrollDown();
+          return;
+        }
         if (!res.ok || !res.body) {
           waiter.stop();
           slot.innerHTML = noteHtml(
@@ -358,7 +730,9 @@ import BaseLayout from "../layouts/BaseLayout.astro";
               scrollDown();
             } else if (event === "result") {
               waiter.stop();
-              renderResult(JSON.parse(data) as QaResponse, slot);
+              const payload = JSON.parse(data) as QaResponse;
+              renderResult(payload, slot);
+              onAnswered(q, payload);
               finished = true;
             } else if (event === "error") {
               waiter.stop();
@@ -380,6 +754,67 @@ import BaseLayout from "../layouts/BaseLayout.astro";
       }
       scrollDown();
     };
+
+    // Met à jour l'état du fil après une réponse : un fil neuf est inséré en
+    // tête de la liste latérale ; un fil existant remonte. L'URL suit.
+    const onAnswered = (question: string, data: QaResponse) => {
+      const id = data.conversationId;
+      if (id == null) return;
+      const wasNew = currentConversationId == null;
+      currentConversationId = id;
+      setUrl(id);
+      const existing = conversations.find((c) => c.id === id);
+      if (existing) {
+        // Remonte le fil en tête (dernier actif).
+        conversations = [existing, ...conversations.filter((c) => c.id !== id)];
+      } else {
+        const title =
+          question.length > 80 ? question.slice(0, 79) + "…" : question;
+        conversations = [
+          { id, title, updatedAt: new Date().toISOString() },
+          ...conversations,
+        ];
+      }
+      if (wasNew) renderConvList();
+    };
+
+    // ───────────────────────────── Garde d'authentification ─────────────────
+
+    const redirectToLogin = () => {
+      window.location.href = "/connexion";
+    };
+
+    const requireAuth = async (): Promise<boolean> => {
+      try {
+        const res = await fetch(`${API_BASE}/auth/me`, withCreds);
+        if (res.ok) return true;
+      } catch {
+        /* réseau : on traite comme non authentifié */
+      }
+      redirectToLogin();
+      return false;
+    };
+
+    // ───────────────────────────── Câblage UI ───────────────────────────────
+
+    document
+      .getElementById("new-conv")
+      ?.addEventListener("click", startNewConversation);
+    document
+      .getElementById("sidebar-open")
+      ?.addEventListener("click", openSidebar);
+    document
+      .getElementById("sidebar-close")
+      ?.addEventListener("click", closeSidebar);
+    backdrop.addEventListener("click", closeSidebar);
+    document.getElementById("logout")?.addEventListener("click", async () => {
+      try {
+        await fetch(`${API_BASE}/auth/logout`, { method: "POST", ...withCreds });
+      } catch {
+        /* on redirige quand même */
+      }
+      redirectToLogin();
+    });
 
     ta.addEventListener("input", () => {
       autosize();
@@ -404,16 +839,27 @@ import BaseLayout from "../layouts/BaseLayout.astro";
       void ask(q);
     });
 
-    // Préremplissage depuis ?q=…
-    const params = new URLSearchParams(window.location.search);
-    const initialQ = params.get("q")?.trim();
-    if (initialQ && initialQ.length >= MIN_LEN) {
-      ta.value = initialQ;
-      autosize();
-      btn.disabled = false;
-      form.requestSubmit();
-    } else {
-      ta.focus();
-    }
+    // ───────────────────────────── Amorçage ─────────────────────────────────
+
+    void (async () => {
+      if (!(await requireAuth())) return;
+      await loadConversations();
+
+      const params = new URLSearchParams(window.location.search);
+      const deepLink = Number(params.get("c"));
+      if (deepLink && conversations.some((c) => c.id === deepLink)) {
+        await selectConversation(deepLink);
+      }
+
+      const initialQ = params.get("q")?.trim();
+      if (initialQ && initialQ.length >= MIN_LEN) {
+        ta.value = initialQ;
+        autosize();
+        btn.disabled = false;
+        form.requestSubmit();
+      } else {
+        ta.focus();
+      }
+    })();
   </script>
 </BaseLayout>

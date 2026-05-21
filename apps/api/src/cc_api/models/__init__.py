@@ -15,8 +15,11 @@ from cc_api.models.auth_token import AuthToken
 from cc_api.models.author import Author
 from cc_api.models.base import Base
 from cc_api.models.chunk import Chunk
+from cc_api.models.conversation import Conversation
 from cc_api.models.issue import Issue
 from cc_api.models.membership import Membership, MembershipSource, MembershipTier
+from cc_api.models.rag_feedback import RagFeedback, RagFeedbackKind
+from cc_api.models.rag_interaction import RagInteraction
 from cc_api.models.user import User
 
 __all__ = [
@@ -29,9 +32,13 @@ __all__ = [
     "Author",
     "Base",
     "Chunk",
+    "Conversation",
     "Issue",
     "Membership",
     "MembershipSource",
     "MembershipTier",
+    "RagFeedback",
+    "RagFeedbackKind",
+    "RagInteraction",
     "User",
 ]

@@ -1,0 +1,80 @@
+---
+import ThemeToggle from "../../components/ThemeToggle.astro";
+// SPDX-License-Identifier: AGPL-3.0-or-later
+import BaseLayout from "../../layouts/BaseLayout.astro";
+---
+
+<BaseLayout title="Conscience de classe — Vérification">
+  <div class="flex min-h-dvh flex-col bg-white dark:bg-black">
+    <header
+      class="flex shrink-0 items-center justify-between px-6 lg:px-10 py-5 border-b border-black dark:border-white"
+    >
+      <a
+        href="/"
+        class="font-Scheherazade text-xs sm:text-sm uppercase tracking-[0.25em] text-black dark:text-white hover:text-darkpink transition-colors"
+      >
+        ← Retour
+      </a>
+      <ThemeToggle />
+    </header>
+
+    <main class="flex flex-1 items-center justify-center px-6 py-16">
+      <div id="status" class="w-full max-w-md text-center" aria-live="polite">
+        <p
+          class="font-Scheherazade text-base leading-relaxed text-black dark:text-white"
+        >
+          Vérification du lien de connexion…
+        </p>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    const status = document.getElementById("status") as HTMLElement;
+    const API_BASE = (
+      import.meta.env.PUBLIC_API_BASE_URL ?? "http://localhost:8000"
+    ).replace(/\/$/, "");
+
+    const render = (message: string, link: { href: string; label: string }) => {
+      status.innerHTML =
+        `<p class="font-Scheherazade text-base leading-relaxed text-black dark:text-white mb-4">${message}</p>` +
+        `<a href="${link.href}" class="font-Scheherazade text-sm uppercase tracking-[0.2em] text-darkpink underline decoration-1 underline-offset-4">${link.label}</a>`;
+    };
+
+    const token = new URLSearchParams(window.location.search).get("token");
+
+    if (!token) {
+      render("Ce lien de connexion est incomplet.", {
+        href: "/connexion",
+        label: "Demander un nouveau lien",
+      });
+    } else {
+      (async () => {
+        try {
+          const res = await fetch(`${API_BASE}/auth/verify`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify({ token }),
+          });
+          if (res.ok) {
+            render("Connexion réussie.", {
+              href: "/chat",
+              label: "Accéder à l'assistant",
+            });
+          } else {
+            render("Ce lien de connexion est invalide ou expiré.", {
+              href: "/connexion",
+              label: "Demander un nouveau lien",
+            });
+          }
+        } catch {
+          render("La vérification a échoué. Vérifiez votre connexion.", {
+            href: "/connexion",
+            label: "Réessayer",
+          });
+        }
+      })();
+    }
+  </script>
+</BaseLayout>

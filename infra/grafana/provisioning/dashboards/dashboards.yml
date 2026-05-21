@@ -1,0 +1,13 @@
+# Provisionnement des dashboards : Grafana charge tout JSON déposé dans
+# /var/lib/grafana/dashboards (monté depuis infra/grafana/dashboards).
+apiVersion: 1
+
+providers:
+  - name: cc-dashboards
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards
+      foldersFromFilesStructure: false

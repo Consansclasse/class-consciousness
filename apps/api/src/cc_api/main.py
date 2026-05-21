@@ -4,19 +4,38 @@ from collections.abc import Awaitable, Callable
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
+from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
+from starlette.middleware.sessions import SessionMiddleware
 
 from cc_api.core.logging import configure_logging
 from cc_api.core.ratelimit import limiter
 from cc_api.core.settings import settings
-from cc_api.routers import abonnements, adhesions, corpus, debug, qa
+from cc_api.routers import (
+    abonnements,
+    adhesions,
+    auth,
+    conversations,
+    corpus,
+    debug,
+    qa,
+    stats,
+)
 
 configure_logging()
 
 app = FastAPI(title="class-consciousness API", version="0.0.1")
 app.state.limiter = limiter
 app.add_middleware(SlowAPIMiddleware)
+# Sessions navigateur — cookie signé (itsdangerous). `https_only` actif hors dev.
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=settings.session_secret,
+    https_only=not settings.is_dev,
+    same_site="lax",
+    max_age=7 * 24 * 3600,  # expiration absolue du cookie de session : 7 jours
+)
 
 
 @app.middleware("http")
@@ -77,11 +96,30 @@ async def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
+@app.get("/metrics", include_in_schema=False)
+async def metrics(request: Request) -> Response:
+    """Métriques Prometheus du pipeline RAG (format texte d'exposition).
+
+    Gated par `Authorization: Bearer <token>` si `CC_API_METRICS_TOKEN` est
+    défini — Prometheus envoie le même jeton dans sa scrape_config. Sans jeton
+    configuré (dev), l'endpoint reste ouvert.
+    """
+    expected = settings.metrics_token
+    if expected and request.headers.get("authorization", "") != f"Bearer {expected}":
+        return JSONResponse(
+            status_code=401, content={"detail": "metrics : jeton requis"}
+        )
+    return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
+
+
 app.include_router(corpus.router)
 app.include_router(qa.router)
+app.include_router(conversations.router)
 app.include_router(adhesions.router)
 app.include_router(abonnements.router)
+app.include_router(auth.router)
 
 if settings.is_dev:
     app.include_router(debug.router)
     app.include_router(corpus.admin_router)
+    app.include_router(stats.admin_router)

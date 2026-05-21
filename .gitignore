@@ -26,6 +26,11 @@ dist/
 .turbo/
 *.log
 
+# Playwright
+test-results/
+playwright-report/
+.playwright/
+
 # Editors
 .vscode/
 .idea/

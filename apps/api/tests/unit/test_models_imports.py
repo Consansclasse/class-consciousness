@@ -43,6 +43,8 @@ def test_base_metadata_lists_all_tables() -> None:
         "auth_tokens",
         "adhesion_intents",
         "abonnements",
+        "rag_interactions",
+        "rag_feedback",
     }
 
 

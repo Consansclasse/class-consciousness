@@ -84,6 +84,30 @@ def qdrant_url() -> Iterator[str]:
 
 
 @pytest.fixture(scope="session")
+def redis_url() -> Iterator[str]:
+    """URL Redis testcontainer (skip si testcontainers indisponible).
+
+    Conteneur générique `DockerContainer` : évite l'extra `testcontainers[redis]`,
+    non installé. Le quota d'usage RAG s'appuie sur ce Redis.
+    """
+    try:
+        from testcontainers.core.container import DockerContainer
+        from testcontainers.core.waiting_utils import wait_for_logs
+    except ImportError:
+        pytest.skip("testcontainers not installed")
+
+    container = DockerContainer("redis:7-alpine").with_exposed_ports(6379)
+    container.start()
+    try:
+        wait_for_logs(container, "Ready to accept connections", timeout=30)
+        host = container.get_container_host_ip()
+        port = container.get_exposed_port(6379)
+        yield f"redis://{host}:{port}/0"
+    finally:
+        container.stop()
+
+
+@pytest.fixture(scope="session")
 def migrated_db(postgres_url: str) -> str:
     """Applique `alembic upgrade head` une fois par session sur le testcontainer."""
     parsed = urlparse(postgres_url)
@@ -116,7 +140,8 @@ async def clean_db(migrated_db: str) -> AsyncIterator[None]:
         async with engine.begin() as conn:
             await conn.exec_driver_sql(
                 "TRUNCATE chunks, articles, issues, authors, auth_tokens, "
-                "abonnements, memberships, users RESTART IDENTITY CASCADE"
+                "abonnements, rag_feedback, rag_interactions, conversations, "
+                "memberships, users RESTART IDENTITY CASCADE"
             )
     finally:
         await engine.dispose()
@@ -256,3 +281,21 @@ def client(app: Any) -> Iterator[Any]:
 
     with TestClient(app) as c:
         yield c
+
+
+@pytest.fixture
+def login() -> Any:
+    """Renvoie un helper `login(client, email)` qui ouvre une session.
+
+    Exécute le flux magic-link complet (request-link → verify) ; le TestClient
+    conserve le cookie de session. Suppose une DB pointée vers le testcontainer
+    (fixtures `qa_env` / `quota_env` / `auth_env`).
+    """
+    from urllib.parse import parse_qs, urlparse
+
+    def _login(client: Any, email: str) -> None:
+        req = client.post("/auth/request-link", json={"email": email})
+        token = parse_qs(urlparse(req.json()["devMagicLink"]).query)["token"][0]
+        assert client.post("/auth/verify", json={"token": token}).status_code == 200
+
+    return _login

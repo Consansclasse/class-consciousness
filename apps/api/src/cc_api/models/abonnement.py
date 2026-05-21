@@ -69,5 +69,10 @@ class Abonnement(Base):
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
     canceled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # `created` du dernier event Stripe appliqué — sert à ignorer les webhooks
+    # arrivés dans le désordre (Stripe ne garantit pas l'ordre de livraison).
+    last_event_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     user: Mapped[User] = relationship()

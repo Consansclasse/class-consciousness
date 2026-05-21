@@ -49,13 +49,20 @@ api() {
   fi
 }
 
+# required_status_checks : objet (CI requise) pour le repo de code ; passer
+# REQUIRED_STATUS_CHECKS=null pour un repo sans CI (ex. class-consciousness-corpus,
+# qui ne contient que des fichiers TEI). La protection anti-force-push et
+# anti-suppression reste appliquée dans les deux cas.
+if [[ -n "${REQUIRED_STATUS_CHECKS:-}" ]]; then
+  status_checks="$REQUIRED_STATUS_CHECKS"
+else
+  status_checks='{"strict": true, "contexts": ["python", "node", "security", "docker-build", "dco"]}'
+fi
+
 echo "→ Branch protection sur $OWNER/$REPO@$BRANCH"
 api PUT "/repos/$OWNER/$REPO/branches/$BRANCH/protection" "$(cat <<JSON
 {
-  "required_status_checks": {
-    "strict": true,
-    "contexts": ["python", "node", "security", "docker-build", "dco"]
-  },
+  "required_status_checks": $status_checks,
   "enforce_admins": false,
   "required_pull_request_reviews": null,
   "restrictions": null,

@@ -38,7 +38,7 @@ from qdrant_client import AsyncQdrantClient
 from sqlalchemy import text as sql_text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from cc_api.clients.anthropic import AnthropicClient, AnthropicError
+from cc_api.clients.anthropic import AnthropicClient, AnthropicError, GenerationUsage
 from cc_api.clients.embed import EmbedClient, RerankClient
 from cc_api.core.logging import get_logger
 from cc_api.core.settings import settings
@@ -194,12 +194,24 @@ class RagResult:
     latencies: dict[str, int] = field(default_factory=dict)  # par étape
     incomplete: bool = False
     dropped_sentences: list[str] = field(default_factory=list)
+    # Tokens de la génération seule ; le juge est dans `citation_report.judge_usage`.
+    generation_usage: GenerationUsage = field(default_factory=GenerationUsage.zero)
 
     @property
     def sentences(self) -> list[SentenceVerdict]:
         if self.citation_report is None:
             return []
         return self.citation_report.sentences
+
+    @property
+    def total_usage(self) -> GenerationUsage:
+        """Tokens cumulés de la requête : génération + juge sémantique."""
+        judge = (
+            self.citation_report.judge_usage
+            if self.citation_report is not None
+            else GenerationUsage.zero()
+        )
+        return self.generation_usage + judge
 
 
 def _source_id(payload: dict[str, Any]) -> str:
@@ -301,6 +313,243 @@ def _build_context(reranked: list[RerankedChunk]) -> str:
     return "\n".join(blocks)
 
 
+# --- Étapes composables du pipeline -----------------------------------------
+# `answer_question` ci-dessous les enchaîne. Isolées, elles sont rappelables :
+# socle de la future boucle agentique (re-chercher = ré-invoquer `_retrieve`).
+# Chacune renvoie son résultat + sa latence, l'orchestrateur agrège.
+
+
+# Marqueurs lexicaux d'une question à plusieurs angles (comparaison,
+# opposition, évolution, mise en relation). Leur présence fait pencher le
+# routage vers « complexe ». On exclut « et »/« ou », trop fréquents pour
+# discriminer quoi que ce soit.
+_COMPLEXITY_MARKERS: tuple[str, ...] = (
+    " vs ", " versus ", "différence", "diffère", "diverge", "oppose",
+    "opposition", "compare", "comparer", "comparaison", "confronte",
+    "évolution", "évolue", "par rapport", "tandis que", "alors que",
+    "rapport entre", "lien entre", "distinction", "contraste",
+)
+
+
+def _classify_complexity(question: str) -> str:
+    """Heuristique de routage : « complexe » si la question appelle plusieurs
+    angles (comparaison, évolution, énoncé long ou multiple), « simple » sinon.
+    Décide si la décomposition (un appel LLM) vaut le coup.
+
+    Au moindre indice de pluralité → « complexe » : on préfère couvrir tous les
+    angles (rappel) plutôt qu'économiser un appel au prix d'une réponse étroite.
+    """
+    q = question.lower()
+    if len(q.split()) >= 16:
+        return "complexe"
+    if q.count("?") >= 2:
+        return "complexe"
+    if any(marker in q for marker in _COMPLEXITY_MARKERS):
+        return "complexe"
+    return "simple"
+
+
+async def _decompose(
+    question: str, *, anthropic: AnthropicClient
+) -> tuple[list[str], int]:
+    """Étape 0 — décompose la question en sous-questions de recherche.
+
+    Renvoie `[question] + sous-questions` et la latence (ms). Échec gracieux
+    (décomposition désactivée ou LLM indisponible) → la seule question.
+    """
+    t0 = time.monotonic()
+    search_queries = [question]
+    # Routage de complexité : si activé, on ne décompose QUE les questions
+    # jugées complexes (économie d'un appel LLM sur les questions simples).
+    # Sinon, le flag global `rag_decomposition_enabled` décide (comportement
+    # historique). `route` est journalisé pour observer la décision.
+    if settings.rag_routing_enabled:
+        route = _classify_complexity(question)
+        should_decompose = route == "complexe"
+    else:
+        route = "off"
+        should_decompose = settings.rag_decomposition_enabled
+    if should_decompose:
+        try:
+            subs = await anthropic.decompose(
+                system=DECOMPOSITION_PROMPT, question=question
+            )
+            search_queries.extend(s for s in subs if s != question)
+        except AnthropicError as exc:
+            log.warning("rag.decompose_failed", error=str(exc))
+    decompose_ms = int((time.monotonic() - t0) * 1000)
+    log.info("rag.decompose", n_queries=len(search_queries), route=route)
+    return search_queries, decompose_ms
+
+
+async def _retrieve(
+    search_queries: list[str],
+    *,
+    qdrant: AsyncQdrantClient,
+    embed: EmbedClient,
+    session: AsyncSession | None,
+    k_retrieve: int,
+) -> tuple[list[RetrievedChunk], dict[str, int]]:
+    """Étapes 1-2 — embedding des requêtes + recherche hybride (vectorielle
+    Qdrant + mots-clés Postgres FTS), fusionnées par Reciprocal Rank Fusion.
+
+    Renvoie les chunks (bornés au pool de rerank) et les latences
+    `{embed_ms, qdrant_ms}`.
+    """
+    latencies: dict[str, int] = {}
+    # 1. Embedding de toutes les requêtes de recherche (un seul appel batch).
+    t0 = time.monotonic()
+    embeddings = await embed.embed_batch(search_queries, input_type="query")
+    if not embeddings:
+        raise RuntimeError("le backend d'embedding a renvoyé un vecteur vide pour la query")
+    latencies["embed_ms"] = int((time.monotonic() - t0) * 1000)
+    log.info(
+        "rag.embed_query",
+        n_queries=len(embeddings),
+        dims=len(embeddings[0]),
+        latency_ms=latencies["embed_ms"],
+        model=settings.embed_model,
+    )
+
+    # 2. Recherche hybride : vectorielle (Qdrant) + mots-clés (Postgres FTS),
+    # une liste classée par (sous-)question et par moteur, fusionnées par
+    # Reciprocal Rank Fusion. Le vivier couvre tous les angles et les deux
+    # modes de rappel (sémantique + lexical).
+    t0 = time.monotonic()
+    ranked_lists: list[list[str]] = []
+    payloads: dict[str, dict[str, Any]] = {}
+    for vector in embeddings:
+        hits = await qdrant.query_points(
+            collection_name=COLLECTION,
+            query=vector,
+            limit=k_retrieve,
+            with_payload=True,
+        )
+        vec_list: list[str] = []
+        for p in hits.points:
+            pid = str(p.id)
+            vec_list.append(pid)
+            payloads.setdefault(pid, dict(p.payload or {}))
+        ranked_lists.append(vec_list)
+
+    n_keyword_lists = 0
+    if session is not None and settings.rag_hybrid_enabled:
+        for sq in search_queries:
+            try:
+                kw = await keyword_search(session, sq, k_retrieve)
+            except Exception as exc:
+                # L'hybride est un bonus : une panne FTS ne bloque jamais /qa.
+                log.warning("rag.keyword_search_failed", error=str(exc))
+                break
+            ranked_lists.append([pid for pid, _ in kw])
+            n_keyword_lists += 1
+
+    rrf = _reciprocal_rank_fusion(ranked_lists)
+    # Pool de rerank borné : le reranking CPU est le goulot de latence en prod
+    # (~4 s/passage). 16 passages reranked suffisent largement à alimenter la
+    # sélection MMR finale ; au-delà la latence explose sans gain de qualité.
+    fused = sorted(rrf, key=lambda p: rrf[p], reverse=True)[: settings.rag_rerank_pool]
+
+    # Chunks issus uniquement des mots-clés : leur payload n'est pas encore connu.
+    missing = [pid for pid in fused if pid not in payloads]
+    if missing:
+        for rec in await qdrant.retrieve(
+            collection_name=COLLECTION, ids=missing, with_payload=True
+        ):
+            payloads[str(rec.id)] = dict(rec.payload or {})
+
+    retrieved = [
+        RetrievedChunk(qdrant_point_id=pid, score=rrf[pid], payload=payloads[pid])
+        for pid in fused
+        if pid in payloads
+    ]
+    latencies["qdrant_ms"] = int((time.monotonic() - t0) * 1000)
+    log.info(
+        "rag.retrieve",
+        n_hits=len(retrieved),
+        n_vector_lists=len(embeddings),
+        n_keyword_lists=n_keyword_lists,
+        latency_ms=latencies["qdrant_ms"],
+    )
+    return retrieved, latencies
+
+
+async def _rerank_and_select(
+    retrieved: list[RetrievedChunk],
+    question: str,
+    *,
+    reranker: RerankClient,
+    k_rerank: int | None,
+) -> tuple[list[RerankedChunk], str | None, int]:
+    """Étape 3 — reranking optionnel + sélection diversifiée (MMR par article).
+
+    Renvoie `(chunks sélectionnés, refused_reason, rerank_ms)`. `refused_reason`
+    vaut `"no_relevant_chunks"` si le reranking est actif et qu'aucun passage ne
+    dépasse le seuil de pertinence, sinon None.
+    """
+    t0 = time.monotonic()
+    reranked_all: list[RerankedChunk] = []
+    if settings.rag_rerank_enabled:
+        documents = [r.payload.get("text", "") for r in retrieved]
+        rerank_hits = await reranker.rerank(
+            query=question, documents=documents, top_k=len(documents)
+        )
+        for hit in rerank_hits:
+            original = retrieved[hit.index]
+            reranked_all.append(
+                RerankedChunk(
+                    source_id=_source_id(original.payload),
+                    text=original.payload["text"],
+                    retrieval_score=original.score,
+                    rerank_score=hit.score,
+                    payload=original.payload,
+                )
+            )
+        min_score = settings.rag_rerank_min_score
+        relevant = [c for c in reranked_all if c.rerank_score >= min_score]
+        if not relevant:
+            top = reranked_all[0].rerank_score if reranked_all else 0.0
+            log.warning("rag.no_relevant_chunks", top_rerank_score=top, min_score=min_score)
+            return [], "no_relevant_chunks", int((time.monotonic() - t0) * 1000)
+    else:
+        # Sans reranker : on garde l'ordre RRF, score normalisé sur le meilleur
+        # (pour que la pénalité de diversité MMR reste à la bonne échelle).
+        top_score = retrieved[0].score if retrieved else 1.0
+        reranked_all = [
+            RerankedChunk(
+                source_id=_source_id(r.payload),
+                text=r.payload["text"],
+                retrieval_score=r.score,
+                rerank_score=(r.score / top_score) if top_score > 0 else 0.0,
+                payload=r.payload,
+            )
+            for r in retrieved
+        ]
+        relevant = reranked_all
+    # `k` adaptatif : autant de passages que le corpus en offre de pertinents,
+    # borné [min, max]. Question large bien couverte → beaucoup ; étroite → peu.
+    if k_rerank is not None:
+        k_eff = k_rerank
+    else:
+        k_eff = max(settings.rag_k_rerank_min, min(settings.rag_k_rerank_max, len(relevant)))
+    # Sélection diversifiée : pas les k meilleurs scores bruts (souvent un seul
+    # article) mais une sélection couvrant plusieurs articles/numéros — nuance.
+    reranked = _select_diverse(relevant, k_eff, settings.rag_mmr_diversity_weight)
+    rerank_ms = int((time.monotonic() - t0) * 1000)
+    n_articles = len({(c.payload["issue_slug"], c.payload["article_slug"]) for c in reranked})
+    log.info(
+        "rag.rerank",
+        n_in=len(retrieved),
+        n_relevant=len(relevant),
+        k_adaptive=k_eff,
+        n_out=len(reranked),
+        n_articles=n_articles,
+        top_rerank_score=reranked[0].rerank_score if reranked else None,
+        latency_ms=rerank_ms,
+    )
+    return reranked, None, rerank_ms
+
+
 async def answer_question(
     question: str,
     *,
@@ -340,96 +589,21 @@ async def answer_question(
     log.info("rag.start", question_len=len(question), k_retrieve=k_retrieve_eff)
     await _stage("Analyse de la question…")
 
-    # 0. Décomposition : on cherche pour la question ET pour des sous-questions
-    # couvrant ses différents angles. Échec gracieux → la seule question.
-    t0 = time.monotonic()
-    search_queries = [question]
-    if settings.rag_decomposition_enabled:
-        try:
-            subs = await anthropic.decompose(
-                system=DECOMPOSITION_PROMPT, question=question
-            )
-            search_queries.extend(s for s in subs if s != question)
-        except AnthropicError as exc:
-            log.warning("rag.decompose_failed", error=str(exc))
-    latencies["decompose_ms"] = int((time.monotonic() - t0) * 1000)
-    log.info("rag.decompose", n_queries=len(search_queries))
+    # 0. Décomposition de la question en sous-questions de recherche.
+    search_queries, latencies["decompose_ms"] = await _decompose(
+        question, anthropic=anthropic
+    )
 
     await _stage("Recherche dans le corpus sourcé…")
-    # 1. Embedding de toutes les requêtes de recherche (un seul appel batch).
-    t0 = time.monotonic()
-    embeddings = await embed.embed_batch(search_queries, input_type="query")
-    if not embeddings:
-        raise RuntimeError("le backend d'embedding a renvoyé un vecteur vide pour la query")
-    latencies["embed_ms"] = int((time.monotonic() - t0) * 1000)
-    log.info(
-        "rag.embed_query",
-        n_queries=len(embeddings),
-        dims=len(embeddings[0]),
-        latency_ms=latencies["embed_ms"],
-        model=settings.embed_model,
+    # 1-2. Embedding + recherche hybride (vectorielle + mots-clés), fusion RRF.
+    retrieved, retrieval_latencies = await _retrieve(
+        search_queries,
+        qdrant=qdrant,
+        embed=embed,
+        session=session,
+        k_retrieve=k_retrieve_eff,
     )
-
-    # 2. Recherche hybride : vectorielle (Qdrant) + mots-clés (Postgres FTS),
-    # une liste classée par (sous-)question et par moteur, fusionnées par
-    # Reciprocal Rank Fusion. Le vivier couvre tous les angles et les deux
-    # modes de rappel (sémantique + lexical).
-    t0 = time.monotonic()
-    ranked_lists: list[list[str]] = []
-    payloads: dict[str, dict[str, Any]] = {}
-    for vector in embeddings:
-        hits = await qdrant.query_points(
-            collection_name=COLLECTION,
-            query=vector,
-            limit=k_retrieve_eff,
-            with_payload=True,
-        )
-        vec_list: list[str] = []
-        for p in hits.points:
-            pid = str(p.id)
-            vec_list.append(pid)
-            payloads.setdefault(pid, dict(p.payload or {}))
-        ranked_lists.append(vec_list)
-
-    n_keyword_lists = 0
-    if session is not None and settings.rag_hybrid_enabled:
-        for sq in search_queries:
-            try:
-                kw = await keyword_search(session, sq, k_retrieve_eff)
-            except Exception as exc:
-                # L'hybride est un bonus : une panne FTS ne bloque jamais /qa.
-                log.warning("rag.keyword_search_failed", error=str(exc))
-                break
-            ranked_lists.append([pid for pid, _ in kw])
-            n_keyword_lists += 1
-
-    rrf = _reciprocal_rank_fusion(ranked_lists)
-    # Pool de rerank borné : le reranking CPU est le goulot de latence en prod
-    # (~4 s/passage). 16 passages reranked suffisent largement à alimenter la
-    # sélection MMR finale ; au-delà la latence explose sans gain de qualité.
-    fused = sorted(rrf, key=lambda p: rrf[p], reverse=True)[: settings.rag_rerank_pool]
-
-    # Chunks issus uniquement des mots-clés : leur payload n'est pas encore connu.
-    missing = [pid for pid in fused if pid not in payloads]
-    if missing:
-        for rec in await qdrant.retrieve(
-            collection_name=COLLECTION, ids=missing, with_payload=True
-        ):
-            payloads[str(rec.id)] = dict(rec.payload or {})
-
-    retrieved = [
-        RetrievedChunk(qdrant_point_id=pid, score=rrf[pid], payload=payloads[pid])
-        for pid in fused
-        if pid in payloads
-    ]
-    latencies["qdrant_ms"] = int((time.monotonic() - t0) * 1000)
-    log.info(
-        "rag.retrieve",
-        n_hits=len(retrieved),
-        n_vector_lists=len(embeddings),
-        n_keyword_lists=n_keyword_lists,
-        latency_ms=latencies["qdrant_ms"],
-    )
+    latencies.update(retrieval_latencies)
 
     if not retrieved:
         return RagResult(
@@ -444,81 +618,22 @@ async def answer_question(
             latencies=latencies,
         )
 
-    # 3. Reranking (optionnel) puis sélection diversifiée (MMR).
-    # Le reranking cc-embed sur CPU est le poste de latence le plus lourd
-    # (~4 s/passage). `rag_rerank_enabled=False` le saute : le classement par
-    # fusion RRF (vecteur + mots-clés) sert alors directement de score — moins
-    # précis, mais bien plus rapide.
-    t0 = time.monotonic()
-    reranked_all: list[RerankedChunk] = []
-    if settings.rag_rerank_enabled:
-        documents = [r.payload.get("text", "") for r in retrieved]
-        rerank_hits = await reranker.rerank(
-            query=question, documents=documents, top_k=len(documents)
-        )
-        for hit in rerank_hits:
-            original = retrieved[hit.index]
-            reranked_all.append(
-                RerankedChunk(
-                    source_id=_source_id(original.payload),
-                    text=original.payload["text"],
-                    retrieval_score=original.score,
-                    rerank_score=hit.score,
-                    payload=original.payload,
-                )
-            )
-        min_score = settings.rag_rerank_min_score
-        relevant = [c for c in reranked_all if c.rerank_score >= min_score]
-        if not relevant:
-            top = reranked_all[0].rerank_score if reranked_all else 0.0
-            log.warning("rag.no_relevant_chunks", top_rerank_score=top, min_score=min_score)
-            return RagResult(
-                question=question,
-                retrieved=retrieved,
-                reranked=[],
-                answer=None,
-                citation_report=None,
-                refused_reason="no_relevant_chunks",
-                model=anthropic.model,
-                latency_ms=int((time.monotonic() - started_at) * 1000),
-                latencies=latencies,
-            )
-    else:
-        # Sans reranker : on garde l'ordre RRF, score normalisé sur le meilleur
-        # (pour que la pénalité de diversité MMR reste à la bonne échelle).
-        top_score = retrieved[0].score if retrieved else 1.0
-        reranked_all = [
-            RerankedChunk(
-                source_id=_source_id(r.payload),
-                text=r.payload["text"],
-                retrieval_score=r.score,
-                rerank_score=(r.score / top_score) if top_score > 0 else 0.0,
-                payload=r.payload,
-            )
-            for r in retrieved
-        ]
-        relevant = reranked_all
-    latencies["rerank_ms"] = int((time.monotonic() - t0) * 1000)
-    # `k` adaptatif : autant de passages que le corpus en offre de pertinents,
-    # borné [min, max]. Question large bien couverte → beaucoup ; étroite → peu.
-    if k_rerank is not None:
-        k_eff = k_rerank
-    else:
-        k_eff = max(settings.rag_k_rerank_min, min(settings.rag_k_rerank_max, len(relevant)))
-    # Sélection diversifiée : pas les k meilleurs scores bruts (souvent un seul
-    # article) mais une sélection couvrant plusieurs articles/numéros — nuance.
-    reranked = _select_diverse(relevant, k_eff, settings.rag_mmr_diversity_weight)
-    n_articles = len({(c.payload["issue_slug"], c.payload["article_slug"]) for c in reranked})
-    log.info(
-        "rag.rerank",
-        n_in=len(retrieved),
-        n_relevant=len(relevant),
-        k_adaptive=k_eff,
-        n_out=len(reranked),
-        n_articles=n_articles,
-        top_rerank_score=reranked[0].rerank_score if reranked else None,
-        latency_ms=latencies["rerank_ms"],
+    # 3. Reranking (optionnel) + sélection diversifiée (MMR par article).
+    reranked, rerank_refusal, latencies["rerank_ms"] = await _rerank_and_select(
+        retrieved, question, reranker=reranker, k_rerank=k_rerank
     )
+    if rerank_refusal is not None:
+        return RagResult(
+            question=question,
+            retrieved=retrieved,
+            reranked=[],
+            answer=None,
+            citation_report=None,
+            refused_reason=rerank_refusal,
+            model=anthropic.model,
+            latency_ms=int((time.monotonic() - started_at) * 1000),
+            latencies=latencies,
+        )
 
     # 4. Assemblage contexte.
     t0 = time.monotonic()
@@ -597,6 +712,7 @@ async def answer_question(
                 latencies=latencies,
                 incomplete=True,
                 dropped_sentences=list(citation_report.refused_sentences),
+                generation_usage=generation.usage,
             )
         log.warning(
             "rag.refused",
@@ -614,6 +730,7 @@ async def answer_question(
             model=generation.model,
             latency_ms=total_ms,
             latencies=latencies,
+            generation_usage=generation.usage,
         )
 
     log.info("rag.answered", latency_ms=total_ms, n_sentences=len(citation_report.sentences))
@@ -627,4 +744,5 @@ async def answer_question(
         model=generation.model,
         latency_ms=total_ms,
         latencies=latencies,
+        generation_usage=generation.usage,
     )

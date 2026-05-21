@@ -99,17 +99,69 @@ class StripeClient:
             metadata=metadata,
             locale="fr",
         )
+        # L'email est volontairement hors du log — hygiène RGPD.
         log.info(
             "stripe.checkout.created",
             session_id=session.id,
             amount_eur_cents=amount_eur_cents,
-            email=email,
         )
         return CheckoutSessionCreated(
             id=session.id,
             url=session.url,
             expires_at=session.expires_at,
         )
+
+    async def create_subscription_checkout_session(
+        self,
+        *,
+        email: str,
+        price_id: str,
+        success_url: str,
+        cancel_url: str,
+        metadata: dict[str, str],
+    ) -> CheckoutSessionCreated:
+        """Crée une Checkout Session en mode `subscription` (abonnement récurrent).
+
+        Le `price_id` référence un Price récurrent du compte Stripe.
+        `subscription_data.metadata` propage les metadata (dont `user_id`)
+        jusqu'à la Subscription — c'est là que le webhook les relit, et non sur
+        la Session de checkout.
+        """
+        session: Any = await stripe.checkout.Session.create_async(
+            mode="subscription",
+            customer_email=email,
+            line_items=[{"price": price_id, "quantity": 1}],
+            success_url=success_url,
+            cancel_url=cancel_url,
+            metadata=metadata,
+            subscription_data={"metadata": metadata},
+            locale="fr",
+        )
+        # L'email est volontairement hors du log — hygiène RGPD.
+        log.info(
+            "stripe.subscription_checkout.created",
+            session_id=session.id,
+        )
+        return CheckoutSessionCreated(
+            id=session.id,
+            url=session.url,
+            expires_at=session.expires_at,
+        )
+
+    async def create_billing_portal_session(
+        self, *, customer_id: str, return_url: str
+    ) -> str:
+        """Crée une session du Customer Portal Stripe et renvoie son URL.
+
+        Le portail gère côté Stripe la résiliation et le moyen de paiement —
+        inutile de coder un tunnel de gestion d'abonnement.
+        """
+        session: Any = await stripe.billing_portal.Session.create_async(
+            customer=customer_id,
+            return_url=return_url,
+        )
+        log.info("stripe.billing_portal.created", customer_id=customer_id)
+        return str(session.url)
 
     def construct_event(self, payload: bytes, sig_header: str) -> stripe.Event:
         """Vérifie la signature du webhook et reconstruit l'événement typé.

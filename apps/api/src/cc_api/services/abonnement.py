@@ -24,13 +24,22 @@ from datetime import UTC, datetime
 from typing import Any
 
 import stripe
-from sqlalchemy import select
+from sqlalchemy import or_, select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from cc_api.clients.stripe import StripeClient
 from cc_api.core.logging import get_logger
+from cc_api.core.settings import settings
 from cc_api.models.abonnement import Abonnement, AbonnementStatus
+from cc_api.models.user import User
 
 log = get_logger(__name__)
+
+
+class AbonnementError(Exception):
+    """Erreur métier d'abonnement — p. ex. abonnement non configuré côté Stripe."""
+
 
 _HANDLED_EVENTS = {
     "customer.subscription.created",
@@ -53,8 +62,12 @@ _STATUS_MAP: dict[str, AbonnementStatus] = {
 
 
 def _epoch_to_dt(value: Any) -> datetime | None:
-    """Convertit un timestamp epoch Stripe en datetime UTC (None si absent)."""
-    return datetime.fromtimestamp(int(value), tz=UTC) if value else None
+    """Convertit un timestamp epoch Stripe en datetime UTC ; None si absent ou
+    illisible — donnée externe, on ne fait jamais confiance au format reçu."""
+    try:
+        return datetime.fromtimestamp(int(value), tz=UTC) if value else None
+    except (TypeError, ValueError):
+        return None
 
 
 def _extract_user_id(sub: Any) -> int | None:
@@ -78,12 +91,19 @@ def _extract_price_id(sub: Any) -> str | None:
 
 async def handle_stripe_event(
     session: AsyncSession, *, event: stripe.Event
-) -> Abonnement | None:
-    """Traite un event d'abonnement Stripe — idempotent.
+) -> int | None:
+    """Traite un event d'abonnement Stripe — idempotent et résistant au désordre.
 
-    Renvoie l'`Abonnement` créé ou mis à jour, ou None si l'event n'est pas un
-    type géré, si le payload est inexploitable, ou si aucun utilisateur n'y est
-    rattaché.
+    L'upsert `INSERT … ON CONFLICT … DO UPDATE … WHERE` est atomique : il crée
+    la ligne si absente, ne la met à jour que si l'event est au moins aussi
+    récent que le dernier appliqué (Stripe ne garantit pas l'ordre de
+    livraison), et ne fait rien sinon — deux livraisons concurrentes du même
+    event ne créent jamais de doublon. Renvoie l'id de l'`Abonnement`, ou None
+    (event non géré, statut inconnu, ou event plus ancien ignoré).
+
+    Lève `AbonnementError` si l'event est inexploitable (`user_id`, `price` ou
+    période absents) — anormal : on force le retry Stripe plutôt que d'encaisser
+    un paiement sans rattacher de compte.
     """
     event_type = event["type"]
     if event_type not in _HANDLED_EVENTS:
@@ -105,57 +125,128 @@ async def handle_stripe_event(
         )
         return None
 
-    current_period_end = _epoch_to_dt(getattr(sub, "current_period_end", None))
-    cancel_at_period_end = bool(getattr(sub, "cancel_at_period_end", False))
+    user_id = _extract_user_id(sub)
     price_id = _extract_price_id(sub)
-    canceled_at = _epoch_to_dt(getattr(sub, "canceled_at", None))
-
-    result = await session.execute(
-        select(Abonnement).where(Abonnement.stripe_subscription_id == sub_id)
-    )
-    abonnement = result.scalar_one_or_none()
-
-    if abonnement is None:
-        user_id = _extract_user_id(sub)
-        if user_id is None:
-            log.error(
-                "abonnement.webhook.no_user_id", subscription_id=sub_id, event_id=event.id
-            )
-            return None
-        if current_period_end is None or price_id is None:
-            log.error(
-                "abonnement.webhook.incomplete_payload",
-                subscription_id=sub_id,
-                event_id=event.id,
-            )
-            return None
-        abonnement = Abonnement(
-            user_id=user_id,
-            stripe_customer_id=str(getattr(sub, "customer", None) or ""),
-            stripe_subscription_id=sub_id,
-            stripe_price_id=price_id,
-            status=status,
-            current_period_end=current_period_end,
-            cancel_at_period_end=cancel_at_period_end,
-            canceled_at=canceled_at,
-        )
-        session.add(abonnement)
-        await session.commit()
-        log.info(
-            "abonnement.created",
+    current_period_end = _epoch_to_dt(getattr(sub, "current_period_end", None))
+    if user_id is None or price_id is None or current_period_end is None:
+        # Anormal : notre checkout pose toujours metadata.user_id + le price.
+        # On lève pour forcer le retry Stripe — un paiement sans compte
+        # rattaché ne doit jamais se perdre en silence.
+        log.error(
+            "abonnement.webhook.unusable_payload",
             subscription_id=sub_id,
-            user_id=user_id,
-            status=status.value,
+            event_id=event.id,
+            has_user_id=user_id is not None,
+            has_price=price_id is not None,
+            has_period=current_period_end is not None,
         )
-        return abonnement
+        raise AbonnementError(f"webhook abonnement inexploitable ({sub_id})")
 
-    abonnement.status = status
-    if current_period_end is not None:
-        abonnement.current_period_end = current_period_end
-    abonnement.cancel_at_period_end = cancel_at_period_end
-    if price_id is not None:
-        abonnement.stripe_price_id = price_id
-    abonnement.canceled_at = canceled_at
+    event_created = _epoch_to_dt(getattr(event, "created", None)) or datetime.now(UTC)
+    values: dict[str, Any] = {
+        "user_id": user_id,
+        "stripe_customer_id": str(getattr(sub, "customer", None) or ""),
+        "stripe_subscription_id": sub_id,
+        "stripe_price_id": price_id,
+        "status": status,
+        "current_period_end": current_period_end,
+        "cancel_at_period_end": bool(getattr(sub, "cancel_at_period_end", False)),
+        "canceled_at": _epoch_to_dt(getattr(sub, "canceled_at", None)),
+        "last_event_at": event_created,
+    }
+    stmt = (
+        pg_insert(Abonnement)
+        .values(**values)
+        .on_conflict_do_update(
+            index_elements=["stripe_subscription_id"],
+            set_={
+                k: values[k]
+                for k in (
+                    "status",
+                    "stripe_price_id",
+                    "current_period_end",
+                    "cancel_at_period_end",
+                    "canceled_at",
+                    "last_event_at",
+                )
+            },
+            where=or_(
+                Abonnement.last_event_at.is_(None),
+                Abonnement.last_event_at <= event_created,
+            ),
+        )
+        .returning(Abonnement.id)
+    )
+    abonnement_id = (await session.execute(stmt)).scalar_one_or_none()
     await session.commit()
-    log.info("abonnement.updated", subscription_id=sub_id, status=status.value)
-    return abonnement
+
+    if abonnement_id is None:
+        log.info(
+            "abonnement.webhook.out_of_order_ignored",
+            subscription_id=sub_id,
+            event_id=event.id,
+        )
+        return None
+    log.info(
+        "abonnement.webhook.applied",
+        subscription_id=sub_id,
+        status=status.value,
+        abonnement_id=abonnement_id,
+    )
+    return abonnement_id
+
+
+async def create_subscription_checkout(
+    *, user: User, stripe_client: StripeClient
+) -> str:
+    """Ouvre une Checkout Session d'abonnement et renvoie l'URL de redirection.
+
+    Le `user_id` est propagé en metadata jusqu'à la Subscription : le webhook
+    `customer.subscription.created` le relit pour créer la ligne `Abonnement`.
+    """
+    if not settings.stripe_price_abonnement:
+        raise AbonnementError(
+            "abonnement non configuré (STRIPE_PRICE_ABONNEMENT_MENSUEL absent)"
+        )
+    created = await stripe_client.create_subscription_checkout_session(
+        email=user.email,
+        price_id=settings.stripe_price_abonnement,
+        success_url=f"{settings.public_web_base}/abonnement/merci",
+        cancel_url=f"{settings.public_web_base}/abonnement",
+        metadata={"user_id": str(user.id)},
+    )
+    log.info("abonnement.checkout.created", user_id=user.id, session_id=created.id)
+    return created.url
+
+
+async def get_active_abonnement(
+    session: AsyncSession, user_id: int
+) -> Abonnement | None:
+    """Renvoie l'abonnement qui ouvre l'accès aujourd'hui : statut ACTIVE ou
+    TRIALING et période courante non échue. None si aucun."""
+    now = datetime.now(UTC)
+    result = await session.execute(
+        select(Abonnement)
+        .where(
+            Abonnement.user_id == user_id,
+            Abonnement.status.in_(
+                [AbonnementStatus.ACTIVE, AbonnementStatus.TRIALING]
+            ),
+            Abonnement.current_period_end >= now,
+        )
+        .order_by(Abonnement.current_period_end.desc())
+    )
+    return result.scalars().first()
+
+
+async def get_latest_abonnement(
+    session: AsyncSession, user_id: int
+) -> Abonnement | None:
+    """Renvoie le dernier abonnement connu de l'utilisateur, quel que soit son
+    statut — pour afficher l'état courant (y compris PAST_DUE, CANCELED)."""
+    result = await session.execute(
+        select(Abonnement)
+        .where(Abonnement.user_id == user_id)
+        .order_by(Abonnement.created_at.desc())
+    )
+    return result.scalars().first()

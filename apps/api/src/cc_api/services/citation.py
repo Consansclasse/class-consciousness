@@ -39,6 +39,7 @@ from cc_api.clients.anthropic import (
     AnthropicClient,
     GeneratedAnswer,
     GeneratedPhrase,
+    GenerationUsage,
 )
 from cc_api.core.logging import get_logger
 
@@ -112,6 +113,7 @@ class CitationReport:
     `all_verified` est `True` si chaque phrase est `SUPPORTED` ou
     `REFUSED_BY_LLM`. `flagged_sentences` liste les phrases `CONTRADICTED`
     (détournement sémantique) ; elles figurent aussi dans `refused_sentences`.
+    `judge_usage` cumule les tokens du juge sémantique (vide s'il n'a pas tourné).
     """
 
     sentences: list[SentenceVerdict]
@@ -122,6 +124,7 @@ class CitationReport:
     n_contradicted: int = 0
     refused_sentences: list[str] = field(default_factory=list)
     flagged_sentences: list[str] = field(default_factory=list)
+    judge_usage: GenerationUsage = field(default_factory=GenerationUsage.zero)
 
 
 # --- Contrôle littéral ------------------------------------------------------
@@ -286,6 +289,7 @@ async def verify_response(
     ]
     verdicts = [_classify(ph, pi, chunks, fuzzy_threshold) for pi, ph in flat]
     pending = [i for i, v in enumerate(verdicts) if v.reason == _PENDING]
+    judge_usage = GenerationUsage.zero()
 
     if pending and not verifier_enabled:
         for i in pending:
@@ -300,10 +304,11 @@ async def verify_response(
             v = verdicts[i]
             real = [c for c in v.citations if c != REFUSAL_CITATION]
             items.append((i, v, [chunks[c] for c in real if c in chunks]))
-        raw = await anthropic.judge(
+        judge_result = await anthropic.judge(
             system=_JUDGE_SYSTEM, payload=_judge_payload(items), model=judge_model
         )
-        judged = {jv.index: jv for jv in raw}
+        judge_usage = judge_result.usage
+        judged = {jv.index: jv for jv in judge_result.verdicts}
         for i in pending:
             v = verdicts[i]
             jv = judged.get(i)
@@ -342,6 +347,7 @@ async def verify_response(
         n_contradicted=n_contradicted,
         refused_sentences=refused,
         flagged_sentences=flagged,
+        judge_usage=judge_usage,
     )
 
 

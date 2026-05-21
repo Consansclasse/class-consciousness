@@ -24,6 +24,7 @@ dependencies = [
     "tiktoken>=0.8",
     "stripe>=11.4",
     "cc-corpus",
+    "prometheus-client>=0.21",
 ]
 
 [project.optional-dependencies]

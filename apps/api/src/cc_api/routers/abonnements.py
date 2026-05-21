@@ -9,21 +9,33 @@ identifié, ce que le projet n'expose pas encore.
 
 from __future__ import annotations
 
+from typing import Annotated
+
 import stripe
-from fastapi import APIRouter, Header, HTTPException, Request
-from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 
 from cc_api.clients.db import get_session_maker
 from cc_api.clients.stripe import get_stripe_client
+from cc_api.core.deps import current_user
 from cc_api.core.logging import get_logger
-from cc_api.services.abonnement import handle_stripe_event
+from cc_api.core.ratelimit import limiter
+from cc_api.core.settings import settings
+from cc_api.models.user import User
+from cc_api.schemas.abonnement import (
+    AbonnementCheckoutOut,
+    AbonnementPortalOut,
+    AbonnementStatusOut,
+)
+from cc_api.services.abonnement import (
+    AbonnementError,
+    create_subscription_checkout,
+    get_active_abonnement,
+    get_latest_abonnement,
+    handle_stripe_event,
+)
 
 router = APIRouter(prefix="/abonnements", tags=["abonnements"])
 log = get_logger(__name__)
-
-
-async def _session() -> AsyncSession:
-    return get_session_maker()()
 
 
 @router.post(
@@ -59,11 +71,67 @@ async def post_stripe_webhook(
             status_code=503, detail="webhook Stripe non configuré"
         ) from exc
 
-    async with await _session() as session:
-        abonnement = await handle_stripe_event(session, event=event)
+    try:
+        async with get_session_maker()() as session:
+            abonnement_id = await handle_stripe_event(session, event=event)
+    except AbonnementError as exc:
+        # Webhook inexploitable (ex. user_id absent) → 422 : Stripe ré-essaiera
+        # et l'échec reste visible dans le dashboard Stripe.
+        log.error("abonnements.webhook.unprocessable", error=str(exc))
+        raise HTTPException(status_code=422, detail="webhook inexploitable") from exc
 
     return {
         "received": "true",
         "event_id": event.id,
-        "abonnement_id": str(abonnement.id) if abonnement else "",
+        "abonnement_id": str(abonnement_id) if abonnement_id else "",
     }
+
+
+@router.post("/checkout", response_model=AbonnementCheckoutOut)
+@limiter.limit("10/minute")
+async def checkout(
+    request: Request, user: Annotated[User, Depends(current_user)]
+) -> AbonnementCheckoutOut:
+    """Ouvre un Stripe Checkout d'abonnement pour l'utilisateur connecté."""
+    try:
+        url = await create_subscription_checkout(
+            user=user, stripe_client=get_stripe_client()
+        )
+    except (AbonnementError, RuntimeError, stripe.StripeError) as exc:
+        # Stripe non configuré (clé/price absents) ou en échec : service
+        # d'abonnement indisponible — un 503, pas une erreur serveur nue.
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    return AbonnementCheckoutOut(redirect_url=url)
+
+
+@router.post("/portal", response_model=AbonnementPortalOut)
+@limiter.limit("10/minute")
+async def portal(
+    request: Request, user: Annotated[User, Depends(current_user)]
+) -> AbonnementPortalOut:
+    """Ouvre le Customer Portal Stripe — résiliation, moyen de paiement."""
+    async with get_session_maker()() as session:
+        abonnement = await get_active_abonnement(session, user.id)
+    if abonnement is None:
+        raise HTTPException(status_code=404, detail="aucun abonnement actif")
+    url = await get_stripe_client().create_billing_portal_session(
+        customer_id=abonnement.stripe_customer_id,
+        return_url=f"{settings.public_web_base}/compte",
+    )
+    return AbonnementPortalOut(portal_url=url)
+
+
+@router.get("/me", response_model=AbonnementStatusOut)
+async def me(
+    request: Request, user: Annotated[User, Depends(current_user)]
+) -> AbonnementStatusOut:
+    """État de l'abonnement de l'utilisateur connecté."""
+    async with get_session_maker()() as session:
+        latest = await get_latest_abonnement(session, user.id)
+        active = await get_active_abonnement(session, user.id)
+    return AbonnementStatusOut(
+        active=active is not None,
+        status=latest.status.value if latest else None,
+        current_period_end=latest.current_period_end if latest else None,
+        cancel_at_period_end=latest.cancel_at_period_end if latest else False,
+    )

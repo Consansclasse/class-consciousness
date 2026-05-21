@@ -14,13 +14,19 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
+from cc_api.models.rag_feedback import RagFeedbackKind
 from cc_api.schemas.corpus import _CamelModel
 
 
 class QaRequest(BaseModel):
-    """Question utilisateur — bornes : 3..500 caractères."""
+    """Question utilisateur — bornes : 3..500 caractères.
+
+    `conversationId` rattache la question à un fil existant (de l'utilisateur).
+    Absent → le serveur ouvre un nouveau fil et renvoie son id dans la réponse.
+    """
 
     question: str = Field(min_length=3, max_length=500)
+    conversation_id: int | None = Field(default=None, alias="conversationId")
 
 
 class Citation(_CamelModel):
@@ -84,3 +90,15 @@ class QaResponse(_CamelModel):
     model: str
     retrieval_count: int  # nb chunks Qdrant top-k retournés (avant rerank)
     rerank_count: int  # nb chunks gardés après rerank (= taille de cited_chunks)
+    # id de la ligne rag_interactions — permet au client de rattacher un feedback.
+    interaction_id: int | None = None
+    # id du fil de conversation — le client le réutilise pour la question
+    # suivante (rattachement au même fil) et pour mettre à jour son URL/sidebar.
+    conversation_id: int | None = None
+
+
+class FeedbackRequest(BaseModel):
+    """Retour d'un lecteur sur une réponse RAG — pouce ou signalement."""
+
+    kind: RagFeedbackKind
+    comment: str | None = Field(default=None, max_length=2000)

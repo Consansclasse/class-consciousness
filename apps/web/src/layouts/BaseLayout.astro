@@ -5,12 +5,18 @@ import "../styles/global.css";
 interface Props {
   title?: string;
   description?: string;
+  /** Empêche l'indexation (pages privées, accusés de réception…). */
+  noindex?: boolean;
 }
 
 const {
-  title = "Conscience de classe",
-  description = "Outil pour la révolution communiste. Corpus sourcé : archives du groupe Bilan (1933-1938).",
+  title = "Conscience de classe — archive Bilan à réponses sourcées",
+  description = "Interrogez les archives de Bilan (1933-1938), revue de la Gauche communiste italienne. Chaque réponse est citée et vérifiée dans le corpus, sans hallucination.",
+  noindex = false,
 } = Astro.props;
+
+// URL canonique : protège des doublons (paramètres, slash final, http/https).
+const canonical = new URL(Astro.url.pathname, Astro.site).href;
 
 const matomoUrl = import.meta.env.PUBLIC_MATOMO_URL;
 const matomoSiteId = import.meta.env.PUBLIC_MATOMO_SITE_ID;
@@ -23,7 +29,22 @@ const matomoSiteId = import.meta.env.PUBLIC_MATOMO_SITE_ID;
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="description" content={description} />
     <meta name="color-scheme" content="light dark" />
+    <link rel="canonical" href={canonical} />
+    {noindex && <meta name="robots" content="noindex, nofollow" />}
     <title>{title}</title>
+
+    <!-- Open Graph (partages Facebook, Instagram, messageries) -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Conscience de classe" />
+    <meta property="og:locale" content="fr_FR" />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical} />
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
 
     <script is:inline>
       // Init thème : respecte localStorage, sinon préférence système.

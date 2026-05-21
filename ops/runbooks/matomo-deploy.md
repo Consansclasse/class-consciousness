@@ -68,7 +68,7 @@ services:
     image: matomo:5.10-apache
     entrypoint: ["sh", "-c"]
     command:
-      - 'while true; do sleep 3600; php /var/www/html/console core:archive --url=https://matomo.consciencedeclasse.com/ || true; done'
+      - 'while true; do php /var/www/html/console core:archive --url=http://matomo/ || echo "[matomo-cron] core:archive a échoué"; sleep 3600; done'
     volumes:
       - matomo_data:/var/www/html
     environment:
@@ -87,6 +87,12 @@ volumes:
   matomo_data:
   matomo_db:
 ```
+
+> **Boucle `matomo-cron`** : elle archive **avant** de dormir (un redéploiement
+> ne laisse donc pas une heure sans données), cible le service interne
+> `http://matomo/` (pas le domaine public — voir Phase 4.2), et journalise tout
+> échec via `echo` au lieu de l'avaler avec `|| true`. Tout échec d'archivage est
+> ainsi visible dans `docker logs` du container `matomo-cron`.
 
 **Save**. Coolify détecte les 3 services et propose **Domains for matomo** : saisir `https://matomo.consciencedeclasse.com`.
 
@@ -150,11 +156,19 @@ Vérifier ou ajouter dans la section `[General]` :
 [General]
 force_ssl = 1
 trusted_hosts[] = "matomo.consciencedeclasse.com"
+trusted_hosts[] = "matomo"
 enable_auto_update = 0
 assume_secure_protocol = 1
 proxy_client_headers[] = "HTTP_X_FORWARDED_FOR"
 proxy_host_headers[] = "HTTP_X_FORWARDED_HOST"
 ```
+
+> Le second `trusted_hosts[] = "matomo"` est indispensable : le container
+> `matomo-cron` archive via `--url=http://matomo/` (service interne du compose,
+> cf. Phase 1). Sans cette entrée, `core:archive` est rejeté pour « Untrusted
+> host » et le dashboard reste vide. On vise le service interne — et non le
+> domaine public — pour ne pas dépendre du hairpin NAT, qu'un container Docker
+> ne sait pas toujours faire vers l'IP publique de son propre hôte.
 
 `salt = "..."` doit déjà être renseigné par le wizard ; ne pas le toucher.
 
@@ -216,6 +230,14 @@ Si déjà fait dans `docker-compose.prod.yml > web > build.args`, c'est suffisan
 6. La page `https://consciencedeclasse.com/legal/privacy` doit être accessible et contenir l'opt-out fonctionnel.
 
 Si l'un des 6 points échoue, **NE PAS** valider la Phase 9 — corriger d'abord.
+
+> **Piège « dashboard vide »** : le snippet pousse `setDoNotTrack(true)`. Toute
+> visite faite avec DNT activé (ou un signal GPC, fréquent sur les navigateurs
+> orientés vie privée) n'est **pas** enregistrée — c'est voulu (ADR-0007). Pour
+> vérifier que la mesure fonctionne, tester impérativement avec DNT **désactivé**.
+> Les rapports ne se peuplent qu'après archivage : voir `Visiteurs > Journal des
+> visites` (temps réel) pour distinguer un problème d'ingestion d'un problème
+> d'archivage cron.
 
 ## Phase 10 — Backups MariaDB Matomo
 

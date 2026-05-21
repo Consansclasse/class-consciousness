@@ -11,29 +11,48 @@ Rate limit : 10 req/min par IP via slowapi.
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import hmac
 import json
 from collections.abc import AsyncIterator
-from typing import Any, cast
+from dataclasses import asdict
+from datetime import UTC, datetime, timedelta
+from typing import Annotated, Any, cast
 
 from anthropic import APIError
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
+from sqlalchemy import delete, select
 
-from cc_api.clients.anthropic import AnthropicError, get_anthropic_client
+from cc_api.clients.anthropic import AnthropicError, GenerationUsage, get_anthropic_client
 from cc_api.clients.db import get_session_maker
 from cc_api.clients.embed import EmbedServerError, get_embed_client, get_rerank_client
 from cc_api.clients.qdrant import get_qdrant
+from cc_api.core.deps import current_user
 from cc_api.core.logging import get_logger
+from cc_api.core.metrics import rag_requests_total, record_rag_result
 from cc_api.core.ratelimit import limiter
-from cc_api.schemas.qa import Citation, QaRequest, QaResponse, Sentence
+from cc_api.core.settings import settings
+from cc_api.models.rag_feedback import RagFeedback
+from cc_api.models.rag_interaction import RagInteraction
+from cc_api.models.user import User
+from cc_api.schemas.qa import Citation, FeedbackRequest, QaRequest, QaResponse, Sentence
+from cc_api.services import conversation as conv_service
+from cc_api.services.abonnement import get_active_abonnement
+from cc_api.services.quota import consume_quota, peek_quota
 from cc_api.services.rag import RagResult, answer_question
 
 router = APIRouter(prefix="/qa", tags=["qa"])
 log = get_logger(__name__)
 
 
-def _build_response(result: RagResult) -> QaResponse:
-    cited_chunks = [
+def _cited_chunks(result: RagResult) -> list[Citation]:
+    """Appareil de sources d'une réponse — un Citation par chunk reranké.
+
+    Construit une seule fois, partagé entre la réponse HTTP et la ligne
+    `rag_interactions` (où il est persité pour réafficher l'historique).
+    """
+    return [
         Citation(
             source_id=chunk.source_id,
             issue_slug=cast(str, chunk.payload["issue_slug"]),
@@ -51,6 +70,14 @@ def _build_response(result: RagResult) -> QaResponse:
         )
         for chunk in result.reranked
     ]
+
+
+def _build_response(
+    result: RagResult,
+    interaction_id: int | None,
+    conversation_id: int | None,
+    cited_chunks: list[Citation],
+) -> QaResponse:
     sentences = [
         Sentence(
             text=v.text,
@@ -77,12 +104,189 @@ def _build_response(result: RagResult) -> QaResponse:
         model=result.model,
         retrieval_count=len(result.retrieved),
         rerank_count=len(result.reranked),
+        interaction_id=interaction_id,
+        conversation_id=conversation_id,
     )
+
+
+def _ip_hash(request: Request) -> str | None:
+    """HMAC-SHA-256 (clé = `session_secret`) de l'IP cliente.
+
+    Un hash non réversible sans la clé serveur : un dump de la table ne permet
+    pas de retrouver les IP par force brute (espace IPv4 = 4 milliards, trivial
+    sans clé ; HMAC le ferme). Stable d'une requête à l'autre tant que le
+    secret ne tourne pas — utile pour observer un même visiteur sans jamais
+    stocker son IP en clair.
+    """
+    client = request.client
+    if client is None:
+        return None
+    return hmac.new(
+        settings.session_secret.encode("utf-8"),
+        client.host.encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()
+
+
+def _build_interaction(
+    result: RagResult,
+    request: Request,
+    user_id: int,
+    conversation_id: int,
+    cited_chunks: list[Citation],
+) -> RagInteraction:
+    """Sérialise un RagResult en ligne `rag_interactions` persistable.
+
+    `user_id` et `conversation_id` proviennent de la résolution faite par
+    l'appelant (compte connecté + fil). `usage` détaille génération et juge
+    séparément, modèle compris : leurs tarifs diffèrent. `cited_chunks` persiste
+    l'appareil de sources complet pour réafficher l'historique à l'identique.
+    """
+    judge_usage = (
+        result.citation_report.judge_usage
+        if result.citation_report is not None
+        else GenerationUsage.zero()
+    )
+    return RagInteraction(
+        user_id=user_id,
+        conversation_id=conversation_id,
+        ip_hash=_ip_hash(request),
+        question=result.question,
+        answer=result.answer,
+        incomplete=result.incomplete,
+        refused_reason=result.refused_reason,
+        model=result.model,
+        latency_ms=result.latency_ms,
+        latencies=result.latencies,
+        usage={
+            "generation": {**asdict(result.generation_usage), "model": result.model},
+            "judge": {**asdict(judge_usage), "model": settings.anthropic_judge_model},
+        },
+        sentences=[
+            {
+                "text": v.text,
+                "verdict": v.verdict.value,
+                "verified": v.verified,
+                "citations": v.citations,
+                "paragraphe": v.paragraphe,
+                "best_score": v.best_score,
+                "reason": v.reason,
+            }
+            for v in result.sentences
+        ],
+        cited_source_ids=sorted(
+            {c for v in result.sentences for c in v.citations if c not in ("", "none")}
+        ),
+        cited_chunks=[c.model_dump(mode="json") for c in cited_chunks],
+        retrieval_count=len(result.retrieved),
+        rerank_count=len(result.reranked),
+    )
+
+
+# Plafond strict d'attente sur l'écriture de l'interaction — au-delà, on
+# abandonne (best-effort) plutôt que de bloquer la réponse déjà calculée.
+_PERSIST_TIMEOUT_S = 5
+
+
+async def _persist_interaction(
+    result: RagResult,
+    request: Request,
+    user_id: int,
+    conversation_id_in: int | None,
+    cited_chunks: list[Citation],
+) -> tuple[int | None, int | None]:
+    """Enregistre l'interaction dans son fil et renvoie `(interaction_id,
+    conversation_id)` — `(None, None)` si l'écriture échoue/dépasse le timeout.
+
+    Résout le fil : celui fourni (s'il appartient à l'utilisateur), sinon un fil
+    neuf titré d'après la question. Tout est sous timeout : `record_rag_result`
+    (Prometheus in-memory mais sait lever) comme la session DB. Best-effort —
+    une panne DB ne doit jamais faire échouer la réponse déjà calculée.
+
+    Purge de rétention : seules les interactions SANS fil (`conversation_id IS
+    NULL` — lignes héritées/anonymes) sont effacées au-delà de la fenêtre.
+    L'historique rattaché à un compte est permanent.
+    """
+    try:
+        async with asyncio.timeout(_PERSIST_TIMEOUT_S):
+            async with get_session_maker()() as session:
+                record_rag_result(result)
+                conv = await conv_service.resolve_for_message(
+                    session, user_id, conversation_id_in, result.question
+                )
+                interaction = _build_interaction(
+                    result, request, user_id, conv.id, cited_chunks
+                )
+                session.add(interaction)
+                await conv_service.touch(session, conv.id)
+                cutoff = datetime.now(UTC) - timedelta(
+                    days=settings.rag_interaction_retention_days
+                )
+                await session.execute(
+                    delete(RagInteraction).where(
+                        RagInteraction.conversation_id.is_(None),
+                        RagInteraction.created_at < cutoff,
+                    )
+                )
+                await session.commit()
+                return interaction.id, conv.id
+    except Exception as exc:
+        log.warning(
+            "qa.persist_failed", error=str(exc), error_type=type(exc).__name__
+        )
+        return None, None
+
+
+# Refus survenus AVANT l'appel au LLM de génération — quasi gratuits : ils ne
+# consomment pas le quota. Tout le reste (réponse, ou refus post-génération) a
+# coûté un appel LLM et consomme une unité.
+_PRE_GENERATION_REFUSALS = {"no_chunks_retrieved", "no_relevant_chunks"}
+
+
+async def enforce_rag_quota(request: Request) -> User:
+    """Dépendance : exige un compte (401 sinon) et refuse (402) si le quota
+    d'usage RAG est DÉJÀ atteint. Renvoie l'utilisateur courant.
+
+    L'assistant n'est plus accessible anonymement : poser une question impose un
+    compte. La lecture du corpus, elle, reste libre (cette dépendance n'est posée
+    que sur /qa). Le quota n'est PAS consommé ici : le handler appelle
+    `consume_quota` après une génération réussie — un refus amont ou une panne ne
+    coûte rien. Un abonné actif a un cap plus élevé.
+    """
+    user = await current_user(request)
+    identity = f"user:{user.id}"
+    async with get_session_maker()() as session:
+        abonnement = await get_active_abonnement(session, user.id)
+    limit = (
+        settings.rag_subscriber_cap_per_day
+        if abonnement is not None
+        else settings.rag_free_quota_per_window
+    )
+
+    state = await peek_quota(identity, limit=limit)
+    if not state.allowed:
+        raise HTTPException(
+            status_code=402,
+            detail={
+                "error": "quota_exceeded",
+                "limit": state.limit,
+                "retryAfterS": state.retry_after_s,
+                "message": (
+                    "Quota de l'assistant atteint. La lecture du corpus reste "
+                    "libre ; un abonnement débloque davantage de requêtes."
+                ),
+            },
+        )
+    return user
 
 
 @router.post("", response_model=QaResponse, responses={422: {"model": QaResponse}})
 @limiter.limit("10/minute")
-async def post_qa(request: Request, payload: QaRequest) -> QaResponse:
+async def post_qa(
+    request: Request,
+    payload: QaRequest,
+    user: Annotated[User, Depends(enforce_rag_quota)],
+) -> QaResponse:
     """Pipeline RAG : embed → retrieve → rerank → generate → vérifier citations.
 
     Le paramètre `request` est requis par slowapi pour extraire l'IP du client
@@ -116,6 +320,7 @@ async def post_qa(request: Request, payload: QaRequest) -> QaResponse:
             )
     except EmbedServerError as exc:
         # cc-embed injoignable : dégradation gracieuse (503), pas une 500 nue.
+        rag_requests_total.labels(outcome="error").inc()
         log.warning("qa.embed_unavailable", error=str(exc))
         raise HTTPException(
             status_code=503,
@@ -128,6 +333,7 @@ async def post_qa(request: Request, payload: QaRequest) -> QaResponse:
         # Erreur côté Anthropic — panne/quota/crédits, OU sortie structurée
         # inexploitable (génération ou juge) : 503 propre, jamais de réponse
         # non vérifiée exposée.
+        rag_requests_total.labels(outcome="error").inc()
         log.warning("qa.llm_unavailable", error=str(exc))
         raise HTTPException(
             status_code=503,
@@ -136,7 +342,13 @@ async def post_qa(request: Request, payload: QaRequest) -> QaResponse:
                 "Réessaie dans un instant."
             ),
         ) from exc
-    response = _build_response(result)
+    if result.refused_reason not in _PRE_GENERATION_REFUSALS:
+        await consume_quota(f"user:{user.id}")
+    cited = _cited_chunks(result)
+    interaction_id, conversation_id = await _persist_interaction(
+        result, request, user.id, payload.conversation_id, cited
+    )
+    response = _build_response(result, interaction_id, conversation_id, cited)
     if result.refused_reason is not None:
         log.info(
             "qa.refused",
@@ -170,7 +382,11 @@ def _sse(event: str, data: dict[str, Any]) -> str:
 
 @router.post("/stream")
 @limiter.limit("10/minute")
-async def post_qa_stream(request: Request, payload: QaRequest) -> StreamingResponse:
+async def post_qa_stream(
+    request: Request,
+    payload: QaRequest,
+    user: Annotated[User, Depends(enforce_rag_quota)],
+) -> StreamingResponse:
     """Pipeline RAG en Server-Sent Events.
 
     Le pipeline prend des dizaines de secondes (3 appels LLM + reranking). Un
@@ -202,14 +418,22 @@ async def post_qa_stream(request: Request, payload: QaRequest) -> StreamingRespo
                         session=session,
                         on_stage=on_stage,
                     )
-                await queue.put(("result", result))
+                if result.refused_reason not in _PRE_GENERATION_REFUSALS:
+                    await consume_quota(f"user:{user.id}")
+                cited = _cited_chunks(result)
+                interaction_id, conversation_id = await _persist_interaction(
+                    result, request, user.id, payload.conversation_id, cited
+                )
+                await queue.put(("result", (result, interaction_id, conversation_id, cited)))
             except EmbedServerError as exc:
+                rag_requests_total.labels(outcome="error").inc()
                 log.warning("qa.stream_embed_unavailable", error=str(exc))
                 await queue.put((
                     "error",
                     "Le service d'embedding est momentanément indisponible.",
                 ))
             except (APIError, AnthropicError) as exc:
+                rag_requests_total.labels(outcome="error").inc()
                 log.warning("qa.stream_llm_unavailable", error=str(exc))
                 await queue.put((
                     "error",
@@ -238,12 +462,15 @@ async def post_qa_stream(request: Request, payload: QaRequest) -> StreamingRespo
                 elif kind == "stage":
                     yield _sse("stage", {"label": value})
                 elif kind == "result":
-                    response = _build_response(value)
+                    rag_result, interaction_id, conversation_id, cited = value
+                    response = _build_response(
+                        rag_result, interaction_id, conversation_id, cited
+                    )
                     log.info(
                         "qa.stream_answered",
                         question=payload.question[:80],
-                        refused=value.refused_reason,
-                        incomplete=value.incomplete,
+                        refused=rag_result.refused_reason,
+                        incomplete=rag_result.incomplete,
                     )
                     yield _sse("result", response.model_dump(by_alias=True, mode="json"))
                 elif kind == "error":
@@ -253,3 +480,37 @@ async def post_qa_stream(request: Request, payload: QaRequest) -> StreamingRespo
             await run_task
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+
+@router.post("/interactions/{interaction_id}/feedback", status_code=201)
+@limiter.limit("20/minute")
+async def post_feedback(
+    request: Request,
+    interaction_id: int,
+    payload: FeedbackRequest,
+    user: Annotated[User, Depends(current_user)],
+) -> dict[str, str]:
+    """Enregistre le retour d'un lecteur (pouce ou signalement) sur une réponse.
+
+    Ferme la boucle humaine du closed-loop. Exige un compte ; 404 si
+    l'interaction est inconnue OU n'appartient pas à l'utilisateur — on ne
+    révèle pas les interactions d'autrui. Le paramètre `request` est requis par
+    slowapi (extraction de l'IP).
+    """
+    async with get_session_maker()() as session:
+        owner_id = await session.scalar(
+            select(RagInteraction.user_id).where(RagInteraction.id == interaction_id)
+        )
+        if owner_id is None or owner_id != user.id:
+            raise HTTPException(status_code=404, detail="interaction introuvable")
+        session.add(
+            RagFeedback(
+                rag_interaction_id=interaction_id,
+                kind=payload.kind,
+                comment=payload.comment,
+                ip_hash=_ip_hash(request),
+            )
+        )
+        await session.commit()
+    log.info("qa.feedback", interaction_id=interaction_id, kind=payload.kind.value)
+    return {"status": "recorded"}

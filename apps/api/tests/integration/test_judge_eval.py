@@ -67,11 +67,11 @@ async def test_judge_classifies_canonical_cases() -> None:
         api_key=settings.anthropic_api_key, model=settings.anthropic_judge_model
     )
     try:
-        verdicts = await client.judge(system=_JUDGE_SYSTEM, payload=_payload(_CASES))
+        result = await client.judge(system=_JUDGE_SYSTEM, payload=_payload(_CASES))
     finally:
         await client.aclose()
 
-    by_index = {v.index: v.verdict for v in verdicts}
+    by_index = {v.index: v.verdict for v in result.verdicts}
     assert len(by_index) == len(_CASES), f"verdicts manquants : {by_index}"
     for i, (claim, _, expected) in enumerate(_CASES):
         assert by_index.get(i) == expected, (

@@ -1,6 +1,10 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# Secret de session par défaut, réservé au dev. Le validateur de `Settings`
+# refuse le démarrage hors dev tant qu'il n'est pas surchargé.
+_DEFAULT_SESSION_SECRET = "dev-insecure-session-secret"  # noqa: S105 — défaut dev, pas un secret réel
 
 
 class Settings(BaseSettings):
@@ -58,9 +62,29 @@ class Settings(BaseSettings):
     stripe_webhook_secret: str | None = Field(default=None, alias="STRIPE_WEBHOOK_SECRET")
     # Override de l'endpoint Stripe pour les tests d'intégration (stripe-mock).
     stripe_api_base: str | None = Field(default=None, alias="STRIPE_API_BASE")
+    # Identifiant du Price récurrent mensuel de l'abonnement (créé dans Stripe).
+    stripe_price_abonnement: str | None = Field(
+        default=None, alias="STRIPE_PRICE_ABONNEMENT_MENSUEL"
+    )
     # Base URL publique du site web — pour construire success_url / cancel_url
     # transmises à Stripe Checkout.
     public_web_base: str = Field(default="http://localhost:3000", alias="PUBLIC_WEB_BASE")
+
+    # Authentification — sessions navigateur (cookie signé) + magic-link.
+    # `session_secret` signe le cookie : DOIT être surchargé en production.
+    session_secret: str = Field(
+        default=_DEFAULT_SESSION_SECRET, alias="CC_API_SESSION_SECRET"
+    )
+    # SMTP pour l'envoi du magic-link. Sans `smtp_host`, le lien est seulement
+    # journalisé (mode dev) au lieu d'être expédié — aucun envoi réel.
+    smtp_host: str | None = Field(default=None, alias="CC_API_SMTP_HOST")
+    smtp_port: int = Field(default=587, alias="CC_API_SMTP_PORT")
+    smtp_user: str | None = Field(default=None, alias="CC_API_SMTP_USER")
+    smtp_password: str | None = Field(default=None, alias="CC_API_SMTP_PASSWORD")
+    smtp_from: str = Field(
+        default="noreply@class-consciousness.org", alias="CC_API_SMTP_FROM"
+    )
+    smtp_starttls: bool = Field(default=True, alias="CC_API_SMTP_STARTTLS")
 
     # Pipeline RAG : seuils de la règle d'or « aucune phrase sans citation vérifiée ».
     rag_k_retrieve: int = Field(default=40, alias="CC_API_RAG_K_RETRIEVE")
@@ -92,6 +116,11 @@ class Settings(BaseSettings):
     # les recherches. Réactivable (`CC_API_RAG_DECOMPOSITION=true`) pour gagner
     # en couverture au prix de la latence.
     rag_decomposition_enabled: bool = Field(default=False, alias="CC_API_RAG_DECOMPOSITION")
+    # Routage de complexité : si activé, la décomposition n'est déclenchée que
+    # pour les questions jugées complexes (comparaison, multi-angles), jamais
+    # pour les questions simples — un appel LLM économisé. Remplace la décision
+    # binaire `rag_decomposition_enabled` par une décision par question.
+    rag_routing_enabled: bool = Field(default=False, alias="CC_API_RAG_ROUTING")
     # Recherche hybride : combine la recherche vectorielle (Qdrant) et une
     # recherche plein-texte par mots-clés (Postgres FTS français), fusionnées
     # par Reciprocal Rank Fusion. Rattrape les passages au vocabulaire exact
@@ -107,6 +136,24 @@ class Settings(BaseSettings):
     # par les passages cités. C'est le garde-fou anti-hallucination du mode
     # « explication de texte ». Désactivable uniquement pour les tests offline.
     rag_verifier_enabled: bool = Field(default=True, alias="CC_API_RAG_VERIFIER")
+    # Quota d'usage de l'assistant RAG — fenêtre glissante. La lecture du corpus
+    # n'est jamais limitée ; seul l'assistant (coûteux en calcul) l'est.
+    rag_free_quota_per_window: int = Field(default=2, alias="CC_API_RAG_FREE_QUOTA")
+    rag_quota_window_hours: int = Field(
+        default=24, alias="CC_API_RAG_QUOTA_WINDOW_HOURS"
+    )
+    rag_subscriber_cap_per_day: int = Field(
+        default=6, alias="CC_API_RAG_SUBSCRIBER_CAP"
+    )
+    # Rétention des `rag_interactions` — purge opportuniste à chaque écriture
+    # (pas de cron côté serveur). 90 j par défaut : assez pour les analyses
+    # qualité, court pour limiter la surface RGPD.
+    rag_interaction_retention_days: int = Field(
+        default=90, alias="CC_API_RAG_INTERACTION_RETENTION_DAYS"
+    )
+    # Jeton requis pour `/metrics` (scraping Prometheus). Si None, l'endpoint
+    # est ouvert — acceptable en dev, à renseigner en prod (Coolify Settings).
+    metrics_token: str | None = Field(default=None, alias="CC_API_METRICS_TOKEN")
 
     @property
     def postgres_dsn(self) -> str:
@@ -122,6 +169,22 @@ class Settings(BaseSettings):
     @property
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
+
+    @property
+    def smtp_configured(self) -> bool:
+        """Vrai si un serveur SMTP est configuré ; sinon le magic-link est
+        seulement journalisé (mode dev)."""
+        return bool(self.smtp_host)
+
+    @model_validator(mode="after")
+    def _forbid_default_secret_outside_dev(self) -> "Settings":
+        """Hors dev, le secret de session ne doit jamais rester le défaut : il
+        est public (dépôt AGPL) — un cookie de session serait alors forgeable."""
+        if self.env != "dev" and self.session_secret == _DEFAULT_SESSION_SECRET:
+            raise ValueError(
+                "CC_API_SESSION_SECRET doit être défini lorsque CC_API_ENV != dev"
+            )
+        return self
 
 
 settings = Settings()

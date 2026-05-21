@@ -124,6 +124,19 @@ services:
       # Serveur d'embedding cc-embed (Qwen3 0.6B, CPU) — service du compose,
       # joint via le réseau Docker interne.
       CC_API_EMBED_SERVER_URL: http://cc-embed:8001
+      # URL publique du site — magic-links et redirections Stripe.
+      PUBLIC_WEB_BASE: https://consciencedeclasse.com
+      # Secret de signature du cookie de session — généré par Coolify.
+      # OBLIGATOIRE : sans lui, core/settings.py refuse de démarrer (env=prod).
+      CC_API_SESSION_SECRET: ${SERVICE_PASSWORD_SESSION}
+      # Stripe — injectés via Coolify Settings. Vides tant que l'association
+      # n'a pas de compte Stripe : checkout et webhook renvoient alors 503.
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      STRIPE_PUBLISHABLE_KEY: ${STRIPE_PUBLISHABLE_KEY:-}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+      STRIPE_PRICE_ABONNEMENT_MENSUEL: ${STRIPE_PRICE_ABONNEMENT_MENSUEL:-}
+      # SMTP du magic-link — à renseigner via Coolify Settings quand un serveur
+      # SMTP est disponible (sans lui, /auth/request-link renvoie 503).
     depends_on:
       migrate:
         condition: service_completed_successfully
