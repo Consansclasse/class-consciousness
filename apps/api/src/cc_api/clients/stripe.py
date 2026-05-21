@@ -120,17 +120,19 @@ class StripeClient:
         cancel_url: str,
         metadata: dict[str, str],
     ) -> CheckoutSessionCreated:
-        """Crée une Checkout Session en mode `subscription` (abonnement récurrent).
+        """Crée une Checkout Session en mode `subscription` (pay-as-you-go).
 
-        Le `price_id` référence un Price récurrent du compte Stripe.
-        `subscription_data.metadata` propage les metadata (dont `user_id`)
-        jusqu'à la Subscription — c'est là que le webhook les relit, et non sur
-        la Session de checkout.
+        Le `price_id` référence un Price *metered* adossé à un Billing Meter :
+        la souscription n'a pas de montant fixe, elle facture l'usage agrégé en
+        fin de période. Un line item metered se déclare **sans `quantity`** —
+        Stripe rejette la quantité sur un prix à l'usage, c'est le meter qui
+        porte le volume. `subscription_data.metadata` propage `user_id` jusqu'à
+        la Subscription — c'est là que le webhook le relit.
         """
         session: Any = await stripe.checkout.Session.create_async(
             mode="subscription",
             customer_email=email,
-            line_items=[{"price": price_id, "quantity": 1}],
+            line_items=[{"price": price_id}],
             success_url=success_url,
             cancel_url=cancel_url,
             metadata=metadata,
@@ -162,6 +164,36 @@ class StripeClient:
         )
         log.info("stripe.billing_portal.created", customer_id=customer_id)
         return str(session.url)
+
+    async def record_meter_event(
+        self,
+        *,
+        event_name: str,
+        customer_id: str,
+        value: int,
+        identifier: str,
+    ) -> None:
+        """Enregistre un évènement d'usage sur un Billing Meter (pay-as-you-go).
+
+        API courante `billing.MeterEvent` (et non l'ancienne `usage_records`,
+        dépréciée). `identifier` est la clé d'idempotence : Stripe déduplique
+        deux events de même identifiant sur une fenêtre glissante (≥ 24 h) — on
+        y passe l'id d'interaction RAG, ce qui rend un rejeu (retry réseau,
+        re-livraison) sans effet sur la facture. `value` est le volume agrégé
+        par le meter (ici des tokens, agrégation `sum`).
+        """
+        await stripe.billing.MeterEvent.create_async(
+            event_name=event_name,
+            payload={"value": str(value), "stripe_customer_id": customer_id},
+            identifier=identifier,
+        )
+        log.info(
+            "stripe.meter_event.recorded",
+            event_name=event_name,
+            customer_id=customer_id,
+            value=value,
+            identifier=identifier,
+        )
 
     def construct_event(self, payload: bytes, sig_header: str) -> stripe.Event:
         """Vérifie la signature du webhook et reconstruit l'événement typé.

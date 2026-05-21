@@ -93,6 +93,18 @@ def _login(client: Any, email: str) -> None:
     assert client.post("/auth/verify", json={"token": token}).status_code == 200
 
 
+def _active_abonnement(user_id: int) -> Abonnement:
+    """Abonnement pay-as-you-go actif, couvrant la date courante."""
+    return Abonnement(
+        user_id=user_id,
+        stripe_customer_id="cus_test",
+        stripe_subscription_id="sub_test",
+        stripe_price_id="price_test",
+        status=AbonnementStatus.ACTIVE,
+        current_period_end=datetime.now(UTC) + timedelta(days=20),
+    )
+
+
 async def test_qa_requires_authentication(
     quota_env: None, clean_db: None, client: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -139,39 +151,68 @@ async def test_quota_never_blocks_corpus(
     assert client.get("/corpus").status_code == 200
 
 
-async def test_quota_bypassed_for_active_subscriber(
+async def test_payg_subscriber_unlimited_beyond_free_quota(
     quota_env: None,
     clean_db: None,
     client: Any,
     db_session: Any,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Un abonné actif dépasse le quota gratuit (cap anti-abus plus élevé)."""
+    """Un abonné pay-as-you-go n'a plus de plafond au-delà du quota gratuit.
+
+    L'enregistrement d'usage Stripe est best-effort : ici Stripe n'est pas
+    configuré (`stripe_secret_key` absent), donc `_record_usage` échoue en
+    silence (journalisé, compté) sans jamais bloquer la réponse. On vérifie
+    qu'au-delà du quota gratuit (2), de nombreuses requêtes passent malgré tout.
+    """
 
     async def _fake(q: str, **_: Any) -> RagResult:
         return _success_result(q)
 
     monkeypatch.setattr("cc_api.routers.qa.answer_question", _fake)
 
-    user = User(email="abonne@example.org", consent_data_at=datetime.now(UTC))
+    user = User(email="payg@example.org", consent_data_at=datetime.now(UTC))
     db_session.add(user)
     await db_session.flush()
-    db_session.add(
-        Abonnement(
-            user_id=user.id,
-            stripe_customer_id="cus_test",
-            stripe_subscription_id="sub_test",
-            stripe_price_id="price_test",
-            status=AbonnementStatus.ACTIVE,
-            current_period_end=datetime.now(UTC) + timedelta(days=20),
-        )
-    )
+    db_session.add(_active_abonnement(user.id))
     await db_session.commit()
 
-    _login(client, "abonne@example.org")
-    for i in range(3):  # au-delà du quota gratuit (2), sous le cap abonné (6)
+    _login(client, "payg@example.org")
+    for i in range(6):  # bien au-delà du quota gratuit (2) : aucun plafond
         res = client.post("/qa", json={"question": f"Question {i} ?"})
         assert res.status_code == 200, res.text
+
+
+async def test_payg_daily_cap_blocks_runaway(
+    quota_env: None,
+    clean_db: None,
+    client: Any,
+    db_session: Any,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Le plafond anti-runaway borne un abonné PAYG : au-delà du cap → 402."""
+    from cc_api.core.settings import settings
+
+    async def _fake(q: str, **_: Any) -> RagResult:
+        return _success_result(q)
+
+    monkeypatch.setattr("cc_api.routers.qa.answer_question", _fake)
+    # Quota gratuit 1, plafond de sécurité 3 → 3 requêtes passent, la 4ᵉ casse.
+    monkeypatch.setattr(settings, "rag_free_quota_per_window", 1)
+    monkeypatch.setattr(settings, "rag_payg_daily_cap", 3)
+
+    user = User(email="runaway@example.org", consent_data_at=datetime.now(UTC))
+    db_session.add(user)
+    await db_session.flush()
+    db_session.add(_active_abonnement(user.id))
+    await db_session.commit()
+
+    _login(client, "runaway@example.org")
+    for i in range(3):
+        assert client.post("/qa", json={"question": f"Q{i} ?"}).status_code == 200
+    blocked = client.post("/qa", json={"question": "Q de trop ?"})
+    assert blocked.status_code == 402
+    assert blocked.json()["detail"]["error"] == "payg_daily_cap"
 
 
 async def test_abonnement_checkout_requires_auth(

@@ -108,6 +108,52 @@ def redis_url() -> Iterator[str]:
 
 
 @pytest.fixture(scope="session")
+def stripe_mock_url() -> Iterator[str]:
+    """Lance stripe-mock en testcontainer et renvoie son URL HTTP.
+
+    stripe-mock écoute par défaut sur 12111 (HTTP). Il accepte n'importe quelle
+    clé API `sk_test_…` et renvoie des fixtures conformes à l'OpenAPI Stripe.
+    Partagé par les tests qui exercent des appels Stripe sortants (adhésions
+    one-shot, pay-as-you-go).
+    """
+    import contextlib
+    import time
+
+    try:
+        from testcontainers.core.container import DockerContainer
+        from testcontainers.core.waiting_utils import wait_for_logs
+    except ImportError:
+        pytest.skip("testcontainers not installed")
+
+    # Le démon Docker peut dépasser le timeout API de 60 s de docker-py quand la
+    # machine est chargée : le `containers/create` lève alors un ReadTimeout. On
+    # réessaie le démarrage plutôt que d'errer toute la suite.
+    container = None
+    last_exc: Exception | None = None
+    for _attempt in range(3):
+        candidate = DockerContainer("stripe/stripe-mock:latest").with_exposed_ports(12111)
+        try:
+            candidate.start()
+            container = candidate
+            break
+        except Exception as exc:  # docker-py : ReadTimeout, transport, etc.
+            last_exc = exc
+            with contextlib.suppress(Exception):
+                candidate.stop()
+            time.sleep(3)
+    if container is None:
+        pytest.skip(f"stripe-mock indisponible après 3 tentatives : {last_exc}")
+    try:
+        # stripe-mock >= 0.199 loggue « Listening for HTTP at address: [::]:12111 ».
+        wait_for_logs(container, "Listening for HTTP", timeout=60)
+        host = container.get_container_host_ip()
+        port = container.get_exposed_port(12111)
+        yield f"http://{host}:{port}"
+    finally:
+        container.stop()
+
+
+@pytest.fixture(scope="session")
 def migrated_db(postgres_url: str) -> str:
     """Applique `alembic upgrade head` une fois par session sur le testcontainer."""
     parsed = urlparse(postgres_url)

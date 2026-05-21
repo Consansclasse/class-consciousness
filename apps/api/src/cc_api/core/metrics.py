@@ -41,6 +41,11 @@ rag_quota_redis_errors_total = Counter(
     "cc_rag_quota_redis_errors_total",
     "Pannes Redis du quota — le quota bascule alors en fail-open.",
 )
+rag_billing_errors_total = Counter(
+    "cc_rag_billing_errors_total",
+    "Échecs d'enregistrement d'usage Stripe (pay-as-you-go) — best-effort, "
+    "la réponse RAG n'en est jamais bloquée ; l'usage non facturé est perdu.",
+)
 
 
 def record_rag_result(result: RagResult) -> None:

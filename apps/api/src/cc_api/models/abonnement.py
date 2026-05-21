@@ -8,8 +8,10 @@ client, pas un membre votant — la table n'a aucun lien avec le droit de vote.
 Cycle de vie miroir de Stripe Billing : la ligne est créée puis mise à jour par
 les webhooks `customer.subscription.*`. `status` reflète le statut Stripe.
 
-Usage métier : le quota RAG quotidien est débloqué tant qu'un abonnement ACTIVE
-ou TRIALING couvre la date courante (`current_period_end >= now`).
+Usage métier : un abonnement ACTIVE ou TRIALING couvrant la date courante
+(`current_period_end >= now`) autorise l'accès pay-as-you-go à l'assistant
+au-delà du quota gratuit — chaque requête est alors refacturée à l'usage via un
+Billing Meter Stripe (cf. `services/abonnement.record_token_usage`).
 """
 
 from __future__ import annotations

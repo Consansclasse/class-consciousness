@@ -62,9 +62,15 @@ class Settings(BaseSettings):
     stripe_webhook_secret: str | None = Field(default=None, alias="STRIPE_WEBHOOK_SECRET")
     # Override de l'endpoint Stripe pour les tests d'intégration (stripe-mock).
     stripe_api_base: str | None = Field(default=None, alias="STRIPE_API_BASE")
-    # Identifiant du Price récurrent mensuel de l'abonnement (créé dans Stripe).
-    stripe_price_abonnement: str | None = Field(
-        default=None, alias="STRIPE_PRICE_ABONNEMENT_MENSUEL"
+    # Pay-as-you-go : Price *metered* mensuel adossé à un Stripe Billing Meter
+    # (facturation à l'usage, par tranche de 1000 tokens). Créé via
+    # `ops/scripts/provision-stripe-payg.py`. Remplace l'ancien abonnement
+    # forfaitaire : on ne vend plus un accès, on refacture le coût LLM marginal.
+    stripe_price_payg: str | None = Field(default=None, alias="STRIPE_PRICE_PAYG")
+    # Nom de l'évènement de meter (doit coïncider avec celui du Meter Stripe).
+    # Chaque requête RAG facturable émet un `billing.meter_event` sous ce nom.
+    stripe_meter_event_name: str = Field(
+        default="rag_tokens", alias="STRIPE_METER_EVENT_NAME"
     )
     # Base URL publique du site web — pour construire success_url / cancel_url
     # transmises à Stripe Checkout.
@@ -136,15 +142,20 @@ class Settings(BaseSettings):
     # par les passages cités. C'est le garde-fou anti-hallucination du mode
     # « explication de texte ». Désactivable uniquement pour les tests offline.
     rag_verifier_enabled: bool = Field(default=True, alias="CC_API_RAG_VERIFIER")
-    # Quota d'usage de l'assistant RAG — fenêtre glissante. La lecture du corpus
-    # n'est jamais limitée ; seul l'assistant (coûteux en calcul) l'est.
+    # Quota *gratuit* de l'assistant RAG — fenêtre glissante. La lecture du
+    # corpus n'est jamais limitée ; seul l'assistant (coûteux en calcul) l'est.
+    # Au-delà de ce quota, l'accès passe en pay-as-you-go : chaque requête est
+    # refacturée à l'usage (cf. routers/qa.py `enforce_rag_quota`).
     rag_free_quota_per_window: int = Field(default=2, alias="CC_API_RAG_FREE_QUOTA")
     rag_quota_window_hours: int = Field(
         default=24, alias="CC_API_RAG_QUOTA_WINDOW_HOURS"
     )
-    rag_subscriber_cap_per_day: int = Field(
-        default=6, alias="CC_API_RAG_SUBSCRIBER_CAP"
-    )
+    # Plafond de sécurité anti-runaway en pay-as-you-go : nombre max de requêtes
+    # facturables par fenêtre, MÊME pour un abonné. Ce n'est pas un palier
+    # commercial mais un garde-fou (session volée, boucle client) bornant la
+    # facture. Doit rester > quota gratuit. 0 = désactivé (PAYG strictement sans
+    # plafond). Au-delà → 402 `payg_daily_cap`.
+    rag_payg_daily_cap: int = Field(default=200, alias="CC_API_RAG_PAYG_DAILY_CAP")
     # Rétention des `rag_interactions` — purge opportuniste à chaque écriture
     # (pas de cron côté serveur). 90 j par défaut : assez pour les analyses
     # qualité, court pour limiter la surface RGPD.

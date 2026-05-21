@@ -204,13 +204,13 @@ async def create_subscription_checkout(
     Le `user_id` est propagé en metadata jusqu'à la Subscription : le webhook
     `customer.subscription.created` le relit pour créer la ligne `Abonnement`.
     """
-    if not settings.stripe_price_abonnement:
+    if not settings.stripe_price_payg:
         raise AbonnementError(
-            "abonnement non configuré (STRIPE_PRICE_ABONNEMENT_MENSUEL absent)"
+            "pay-as-you-go non configuré (STRIPE_PRICE_PAYG absent)"
         )
     created = await stripe_client.create_subscription_checkout_session(
         email=user.email,
-        price_id=settings.stripe_price_abonnement,
+        price_id=settings.stripe_price_payg,
         success_url=f"{settings.public_web_base}/abonnement/merci",
         cancel_url=f"{settings.public_web_base}/abonnement",
         metadata={"user_id": str(user.id)},
@@ -250,3 +250,37 @@ async def get_latest_abonnement(
         .order_by(Abonnement.created_at.desc())
     )
     return result.scalars().first()
+
+
+async def record_token_usage(
+    session: AsyncSession,
+    *,
+    user_id: int,
+    tokens: int,
+    identifier: str,
+    stripe_client: StripeClient,
+) -> bool:
+    """Refacture `tokens` à l'usage sur le Billing Meter de l'utilisateur.
+
+    Émet un `meter_event` rattaché au Customer de l'abonnement pay-as-you-go
+    actif. No-op (renvoie False) si `tokens <= 0` ou si l'utilisateur n'a pas
+    d'abonnement actif — cas d'une requête couverte par le quota gratuit, qui
+    ne se facture pas. `identifier` (l'id d'interaction RAG) garantit
+    l'idempotence côté Stripe.
+
+    Peut lever (Stripe injoignable / non configuré) : l'appelant encapsule en
+    best-effort — une panne de facturation ne doit jamais casser une réponse
+    déjà calculée, l'incident est journalisé et compté.
+    """
+    if tokens <= 0:
+        return False
+    abonnement = await get_active_abonnement(session, user_id)
+    if abonnement is None or not abonnement.stripe_customer_id:
+        return False
+    await stripe_client.record_meter_event(
+        event_name=settings.stripe_meter_event_name,
+        customer_id=abonnement.stripe_customer_id,
+        value=tokens,
+        identifier=identifier,
+    )
+    return True

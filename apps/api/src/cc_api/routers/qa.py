@@ -28,9 +28,14 @@ from cc_api.clients.anthropic import AnthropicError, GenerationUsage, get_anthro
 from cc_api.clients.db import get_session_maker
 from cc_api.clients.embed import EmbedServerError, get_embed_client, get_rerank_client
 from cc_api.clients.qdrant import get_qdrant
+from cc_api.clients.stripe import get_stripe_client
 from cc_api.core.deps import current_user
 from cc_api.core.logging import get_logger
-from cc_api.core.metrics import rag_requests_total, record_rag_result
+from cc_api.core.metrics import (
+    rag_billing_errors_total,
+    rag_requests_total,
+    record_rag_result,
+)
 from cc_api.core.ratelimit import limiter
 from cc_api.core.settings import settings
 from cc_api.models.rag_feedback import RagFeedback
@@ -38,7 +43,7 @@ from cc_api.models.rag_interaction import RagInteraction
 from cc_api.models.user import User
 from cc_api.schemas.qa import Citation, FeedbackRequest, QaRequest, QaResponse, Sentence
 from cc_api.services import conversation as conv_service
-from cc_api.services.abonnement import get_active_abonnement
+from cc_api.services.abonnement import get_active_abonnement, record_token_usage
 from cc_api.services.quota import consume_quota, peek_quota
 from cc_api.services.rag import RagResult, answer_question
 
@@ -244,27 +249,35 @@ _PRE_GENERATION_REFUSALS = {"no_chunks_retrieved", "no_relevant_chunks"}
 
 
 async def enforce_rag_quota(request: Request) -> User:
-    """Dépendance : exige un compte (401 sinon) et refuse (402) si le quota
-    d'usage RAG est DÉJÀ atteint. Renvoie l'utilisateur courant.
+    """Dépendance : exige un compte (401 sinon) et arbitre gratuit / pay-as-you-go.
 
     L'assistant n'est plus accessible anonymement : poser une question impose un
     compte. La lecture du corpus, elle, reste libre (cette dépendance n'est posée
     que sur /qa). Le quota n'est PAS consommé ici : le handler appelle
     `consume_quota` après une génération réussie — un refus amont ou une panne ne
-    coûte rien. Un abonné actif a un cap plus élevé.
+    coûte rien.
+
+    Modèle pay-as-you-go pur :
+    - dans le quota gratuit (`rag_free_quota_per_window`) → requête gratuite ;
+    - au-delà → autorisée si un abonnement PAYG est actif (sinon 402), chaque
+      requête étant refacturée à l'usage ;
+    - un plafond de sécurité anti-runaway (`rag_payg_daily_cap`, 0 = désactivé)
+      borne malgré tout le nombre de requêtes facturables par fenêtre → 402.
+
+    `request.state.rag_billable` signale au handler s'il doit émettre un
+    meter_event après la génération.
     """
     user = await current_user(request)
     identity = f"user:{user.id}"
+    state = await peek_quota(identity, limit=settings.rag_free_quota_per_window)
+    if state.allowed:
+        request.state.rag_billable = False
+        return user
+
+    # Quota gratuit épuisé : l'accès continue en pay-as-you-go pour un abonné actif.
     async with get_session_maker()() as session:
         abonnement = await get_active_abonnement(session, user.id)
-    limit = (
-        settings.rag_subscriber_cap_per_day
-        if abonnement is not None
-        else settings.rag_free_quota_per_window
-    )
-
-    state = await peek_quota(identity, limit=limit)
-    if not state.allowed:
+    if abonnement is None:
         raise HTTPException(
             status_code=402,
             detail={
@@ -272,12 +285,64 @@ async def enforce_rag_quota(request: Request) -> User:
                 "limit": state.limit,
                 "retryAfterS": state.retry_after_s,
                 "message": (
-                    "Quota de l'assistant atteint. La lecture du corpus reste "
-                    "libre ; un abonnement débloque davantage de requêtes."
+                    "Quota gratuit de l'assistant atteint. La lecture du corpus "
+                    "reste libre ; activez le paiement à l'usage pour continuer."
                 ),
             },
         )
+    # Garde-fou anti-runaway : borne la facture même pour un abonné.
+    cap = settings.rag_payg_daily_cap
+    if cap > 0:
+        cap_state = await peek_quota(identity, limit=cap)
+        if not cap_state.allowed:
+            raise HTTPException(
+                status_code=402,
+                detail={
+                    "error": "payg_daily_cap",
+                    "limit": cap_state.limit,
+                    "retryAfterS": cap_state.retry_after_s,
+                    "message": (
+                        "Plafond de sécurité de l'assistant atteint pour la "
+                        "période. Réessayez plus tard ou contactez-nous."
+                    ),
+                },
+            )
+    request.state.rag_billable = True
     return user
+
+
+async def _record_usage(
+    request: Request, user_id: int, result: RagResult, interaction_id: int | None
+) -> None:
+    """Refacture l'usage LLM de la requête si elle est en pay-as-you-go.
+
+    Best-effort, comme la persistance : une panne de facturation ne casse jamais
+    une réponse déjà calculée. No-op si la requête est couverte par le quota
+    gratuit (`request.state.rag_billable` faux) ou si la persistance a échoué
+    (pas d'identifiant stable pour l'idempotence Stripe).
+    """
+    if not getattr(request.state, "rag_billable", False):
+        return
+    if interaction_id is None:  # persistance échouée → pas d'identifiant stable
+        return
+    tokens = result.total_usage.billable_tokens
+    try:
+        async with get_session_maker()() as session:
+            await record_token_usage(
+                session,
+                user_id=user_id,
+                tokens=tokens,
+                identifier=f"qa-{interaction_id}",
+                stripe_client=get_stripe_client(),
+            )
+    except Exception as exc:
+        log.warning(
+            "qa.billing_failed",
+            error=str(exc),
+            error_type=type(exc).__name__,
+            tokens=tokens,
+        )
+        rag_billing_errors_total.inc()
 
 
 @router.post("", response_model=QaResponse, responses={422: {"model": QaResponse}})
@@ -348,6 +413,7 @@ async def post_qa(
     interaction_id, conversation_id = await _persist_interaction(
         result, request, user.id, payload.conversation_id, cited
     )
+    await _record_usage(request, user.id, result, interaction_id)
     response = _build_response(result, interaction_id, conversation_id, cited)
     if result.refused_reason is not None:
         log.info(
@@ -424,6 +490,7 @@ async def post_qa_stream(
                 interaction_id, conversation_id = await _persist_interaction(
                     result, request, user.id, payload.conversation_id, cited
                 )
+                await _record_usage(request, user.id, result, interaction_id)
                 await queue.put(("result", (result, interaction_id, conversation_id, cited)))
             except EmbedServerError as exc:
                 rag_requests_total.labels(outcome="error").inc()

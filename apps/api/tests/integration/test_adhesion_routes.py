@@ -18,12 +18,11 @@ Couverture :
 
 from __future__ import annotations
 
-import contextlib
 import hashlib
 import hmac
 import json
 import time
-from collections.abc import AsyncIterator, Iterator
+from collections.abc import AsyncIterator
 from typing import Any
 
 import pytest
@@ -34,50 +33,6 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 _WEBHOOK_SECRET = "whsec_test_for_signing_only"
-
-
-@pytest.fixture(scope="session")
-def stripe_mock_url() -> Iterator[str]:
-    """Lance stripe-mock en testcontainer et renvoie son URL HTTP.
-
-    stripe-mock écoute par défaut sur 12111 (HTTP). Il accepte n'importe quelle
-    clé API `sk_test_…` et renvoie des fixtures Stripe conformes à l'OpenAPI
-    spec officielle.
-    """
-    try:
-        from testcontainers.core.container import DockerContainer
-        from testcontainers.core.waiting_utils import wait_for_logs
-    except ImportError:
-        pytest.skip("testcontainers not installed")
-
-    # Le démon Docker peut dépasser le timeout API de 60 s de docker-py quand
-    # la machine est chargée (suite complète + serveur GPU cc-embed) : le
-    # `containers/create` du conteneur stripe-mock lève alors un ReadTimeout.
-    # On réessaie le démarrage plutôt que d'errer toute la suite adhésion.
-    container = None
-    last_exc: Exception | None = None
-    for _attempt in range(3):
-        candidate = DockerContainer("stripe/stripe-mock:latest").with_exposed_ports(12111)
-        try:
-            candidate.start()
-            container = candidate
-            break
-        except Exception as exc:  # docker-py : ReadTimeout, transport, etc.
-            last_exc = exc
-            with contextlib.suppress(Exception):
-                candidate.stop()
-            time.sleep(3)
-    if container is None:
-        pytest.skip(f"stripe-mock indisponible après 3 tentatives : {last_exc}")
-    try:
-        # stripe-mock >= 0.199 loggue « Listening for HTTP at address: [::]:12111 »
-        # (et non plus « ... on port 12111 ») — on matche le prefixe stable.
-        wait_for_logs(container, "Listening for HTTP", timeout=60)
-        host = container.get_container_host_ip()
-        port = container.get_exposed_port(12111)
-        yield f"http://{host}:{port}"
-    finally:
-        container.stop()
 
 
 @pytest_asyncio.fixture

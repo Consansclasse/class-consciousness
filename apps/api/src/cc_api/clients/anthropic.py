@@ -176,6 +176,17 @@ class GenerationUsage:
             + other.cache_read_input_tokens,
         )
 
+    @property
+    def billable_tokens(self) -> int:
+        """Tokens refacturés en pay-as-you-go : entrée + sortie + création de
+        cache. Les `cache_read_input_tokens` sont exclus : Anthropic les facture
+        ~10 fois moins cher, les compter au plein tarif surfacturerait l'usager."""
+        return (
+            self.input_tokens
+            + self.output_tokens
+            + self.cache_creation_input_tokens
+        )
+
 
 @dataclass(frozen=True)
 class GeneratedPhrase:

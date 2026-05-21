@@ -9,7 +9,6 @@ La règle penche vers « complexe » au moindre indice de pluralité (rappel).
 from __future__ import annotations
 
 import pytest
-
 from cc_api.services.rag import _classify_complexity
 
 
