@@ -2,9 +2,17 @@
         smoke lint typecheck build migrate seed ingest reset clean \
         logs logs-api logs-web logs-db logs-qdrant logs-redis \
         agent-status agent-bootstrap agent-preflight api-check web-check \
-        db-snapshot db-restore
+        db-snapshot db-restore \
+        embed-gpu embed-gpu-stop sandbox-up sandbox-down sandbox-logs sandbox-seed
 
 COMPOSE := docker compose -f infra/docker-compose.yml
+
+# Sandbox prod-like, embeddings/reranking délégués au GPU local (override .gpu).
+# La prod reste CPU (ADR-0008) : ces fichiers ne sont JAMAIS déployés.
+SANDBOX := docker compose -p cc-sandbox --env-file infra/.env.sandbox \
+	-f docker-compose.prod.yml -f infra/docker-compose.sandbox.yml \
+	-f infra/docker-compose.sandbox.gpu.yml
+EMBED_GPU_VENV := .venv-embed-gpu
 
 help:
 	@echo "Targets:"
@@ -198,6 +206,75 @@ db-restore:
 	@test -n "$(SNAP)" || (echo "Usage: make db-restore SNAP=ops/snapshots/cc-YYYYMMDD-HHMMSS.dump"; exit 1)
 	@$(COMPOSE) exec -T postgres pg_restore -U cc -d class_consciousness --clean --if-exists < $(SNAP)
 	@echo "Restored from $(SNAP)"
+
+# ─── Local GPU (OBLIGATOIRE en local — voir feedback_local_gpu_mandatory) ───
+# cc-embed natif sur l'hôte, device=cuda, port 8011 (8001 pris par artedusa).
+# Refuse de démarrer si CUDA indisponible : jamais de fallback CPU silencieux.
+embed-gpu:
+	@test -x $(EMBED_GPU_VENV)/bin/python || (echo "❌ venv GPU absent ($(EMBED_GPU_VENV)). Crée-le : uv venv $(EMBED_GPU_VENV) && uv pip install --python $(EMBED_GPU_VENV)/bin/python --index-url https://download.pytorch.org/whl/cu124 torch && uv pip install --python $(EMBED_GPU_VENV)/bin/python transformers accelerate fastapi 'uvicorn[standard]' pydantic pydantic-settings structlog"; exit 1)
+	@$(EMBED_GPU_VENV)/bin/python -c "import torch,sys; sys.exit(0 if torch.cuda.is_available() else 1)" || (echo "❌ CUDA indisponible dans le venv GPU — refus de fallback CPU en local"; exit 1)
+	@curl -sf http://localhost:8011/health >/dev/null 2>&1 && { echo "✅ cc-embed GPU déjà up (:8011)"; exit 0; } || true
+	@mkdir -p .hf-cache
+	@CC_EMBED_HOST=0.0.0.0 CC_EMBED_PORT=8011 CC_EMBED_DEVICE=cuda CC_EMBED_RERANK_DEVICE=cuda \
+		HF_HOME=$(CURDIR)/.hf-cache PYTHONPATH=$(CURDIR)/apps/embed-server/src USER=ccembed \
+		nohup $(EMBED_GPU_VENV)/bin/python -m cc_embed > .embed-gpu.log 2>&1 &
+	@echo "→ cc-embed GPU démarré (log .embed-gpu.log). Attente du health…"
+	@for i in $$(seq 1 40); do curl -sf http://localhost:8011/health >/dev/null 2>&1 && { curl -s http://localhost:8011/health; echo; exit 0; }; sleep 3; done; echo "❌ timeout health :8011 — voir .embed-gpu.log"; exit 1
+
+embed-gpu-stop:
+	@pkill -f "cc_embed" 2>/dev/null && echo "cc-embed GPU arrêté" || echo "(aucun process cc-embed)"
+
+# Stack sandbox : démarre d'ABORD le GPU embed (dépendance), puis les conteneurs.
+sandbox-up: embed-gpu
+	$(SANDBOX) up -d
+	@echo "✅ Sandbox up — web https://cc.localhost | api https://api.cc.localhost | mails http://localhost:8026"
+
+sandbox-down:
+	$(SANDBOX) down
+
+sandbox-logs:
+	$(SANDBOX) logs -f --tail=200
+
+# Ingestion du corpus RÉEL (repo class-consciousness-corpus, monté sur
+# /app/corpus-prod) DANS la sandbox (Postgres + Qdrant cc-sandbox), via le
+# cc-embed GPU. Lancé depuis l'hôte. Pour ingérer la fixture de test à la place :
+# SANDBOX_SEED_GLOB=/app/corpus/_seed/*.tei.xml make sandbox-seed
+# NB : on n'utilise PAS `cc-corpus` (qui POST /admin/ingest, route montée
+# seulement si CC_API_ENV=dev — absente en sandbox prod-like → 404). On appelle
+# directement `ingest_issue`, qui prend ses connexions des globals de l'app
+# (Postgres/Qdrant cc-sandbox + embed GPU :8011). Idempotent par SHA256.
+SANDBOX_SEED_GLOB ?= /app/corpus-prod/bilan/*.tei.xml
+define SANDBOX_SEED_PY
+import asyncio, glob, os
+from pathlib import Path
+from cc_api.services.ingest import ingest_issue
+from cc_api.clients.embed import get_embed_client
+from cc_api.clients.qdrant import get_qdrant
+async def main():
+    files = sorted(glob.glob(os.environ["SANDBOX_SEED_GLOB"]))
+    if not files:
+        print(f"Aucun .tei.xml pour {os.environ['SANDBOX_SEED_GLOB']}"); return
+    # Clients partagés pour tout le batch : ingest_issue ne ferme que ce qu'il
+    # crée (owns_embed), donc sans partage le 1er appel ferme le client global.
+    embed = get_embed_client(); qdrant = get_qdrant()
+    ok = dup = err = chunks = 0
+    try:
+        for f in files:
+            try:
+                r = await ingest_issue(Path(f), embed=embed, qdrant=qdrant)
+                print(f"✓ {Path(f).name}: {r.n_articles} art, {r.n_chunks} chunks, dup={r.was_duplicate}")
+                dup += r.was_duplicate; ok += (not r.was_duplicate); chunks += r.n_chunks
+            except Exception as exc:
+                err += 1; print(f"✗ {Path(f).name}: {type(exc).__name__}: {str(exc)[:120]}")
+    finally:
+        await embed.aclose()
+    print(f"--- BILAN : {ok} ingéré(s), {dup} doublon(s), {err} échec(s), {chunks} chunks sur {len(files)} fichier(s)")
+asyncio.run(main())
+endef
+export SANDBOX_SEED_PY
+export SANDBOX_SEED_GLOB
+sandbox-seed:
+	@$(SANDBOX) exec -T -e SANDBOX_SEED_GLOB="$(SANDBOX_SEED_GLOB)" api /app/.venv/bin/python -c "$$SANDBOX_SEED_PY"
 
 clean:
 	find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true

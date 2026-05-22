@@ -1,0 +1,41 @@
+# Override GPU local — à composer EN PLUS de docker-compose.prod.yml +
+# infra/docker-compose.sandbox.yml :
+#
+#   docker compose -p cc-sandbox \
+#     --env-file infra/.env.sandbox \
+#     -f docker-compose.prod.yml \
+#     -f infra/docker-compose.sandbox.yml \
+#     -f infra/docker-compose.sandbox.gpu.yml \
+#     up -d
+#
+# Objectif : accélérer l'inférence en LOCAL en déléguant embeddings + reranking
+# à un cc-embed natif tournant sur le GPU de l'hôte (RTX A2000, device=cuda,
+# port 8011), au lieu du cc-embed CPU conteneurisé. La prod reste CPU (ADR-0008) :
+# ce fichier n'est JAMAIS déployé, c'est un confort de dev local uniquement.
+#
+# Le cc-embed CPU du compose est mis en veille via un profil non activé.
+
+services:
+  api:
+    # L'API joint le serveur d'embedding GPU sur l'hôte (host-gateway).
+    environment:
+      CC_API_EMBED_SERVER_URL: http://host.docker.internal:8011
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    # Remplace ENTIÈREMENT depends_on (tag !override : sinon Compose fusionne et
+    # garde la dépendance cc-embed du fichier de base, hors-profil → erreur).
+    depends_on: !override
+      migrate:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      qdrant:
+        condition: service_started
+      mailhog:
+        condition: service_started
+
+  # Profil non activé → ce service ne démarre pas (remplacé par l'hôte GPU).
+  cc-embed:
+    profiles: ["cpu-fallback"]

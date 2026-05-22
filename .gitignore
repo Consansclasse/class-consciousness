@@ -55,3 +55,10 @@ logs/
 
 # Backups
 backups/
+
+# Cache HuggingFace local (modèles Qwen3 du cc-embed GPU) + venv GPU local
+.hf-cache/
+.venv-embed-gpu/
+
+# Config Claude Code perso/locale (jamais publiée)
+.claude/settings.local.json

@@ -1,0 +1,36 @@
+# Caddyfile sandbox prod-like — deux hôtes HTTPS qui reproduisent le couple
+# de prod (web = consciencedeclasse.com / api = api.cdc.consciencedeclasse.com).
+# TLS interne (CA auto-signée Caddy) : valide le chemin cookie SameSite=None;
+# Secure + CORS cross-site, exactement comme en prod.
+#
+#   https://cc.localhost       → web (nginx static, target prod)
+#   https://api.cc.localhost   → api (uvicorn, target prod)
+#
+# *.localhost résout vers 127.0.0.1 dans Chromium sans /etc/hosts.
+{
+	admin off
+	# Émet des certificats via la CA interne de Caddy (pas d'ACME public).
+	local_certs
+}
+
+(secheaders) {
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "interest-cohort=()"
+		-Server
+	}
+}
+
+cc.localhost {
+	encode gzip zstd
+	import secheaders
+	reverse_proxy web:80
+}
+
+api.cc.localhost {
+	encode gzip zstd
+	import secheaders
+	reverse_proxy api:8000
+}

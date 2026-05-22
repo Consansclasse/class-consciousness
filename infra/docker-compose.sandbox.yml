@@ -1,0 +1,85 @@
+# Override sandbox prod-like — à composer AVEC docker-compose.prod.yml :
+#
+#   docker compose -p cc-sandbox \
+#     --env-file infra/.env.sandbox \
+#     -f docker-compose.prod.yml \
+#     -f infra/docker-compose.sandbox.yml \
+#     up -d --build
+#
+# Objectif : faire tourner les images *prod* (api uvicorn, web nginx static,
+# cc-embed Qwen3, migrate) en local, fidèles à la prod Coolify, mais :
+#   • frontées par Caddy en HTTPS sur deux hôtes (cc.localhost / api.cc.localhost)
+#     pour valider cookies SameSite=None;Secure + CORS cross-site ;
+#   • emails captés par Mailhog (UI :8026) ;
+#   • secrets fournis par infra/.env.sandbox (équivalents des magic vars Coolify).
+#
+# Ports hôte choisis pour ÉVITER les conflits avec l'app artedusa (8000/7333/
+# 1025/8025) et le système (5432/6379/3000) : seuls 443, 80 et 8026 sont publiés.
+
+name: cc-sandbox
+
+services:
+  api:
+    # Corpus montés en lecture seule pour `make sandbox-seed` (l'image prod
+    # n'embarque pas le corpus). Local uniquement, jamais déployé.
+    #   /app/corpus       → fixture de test du repo (pipeline tests)
+    #   /app/corpus-prod  → corpus RÉEL (repo séparé class-consciousness-corpus),
+    #                       cloné en sibling. Surchargeable via CC_CORPUS_DIR.
+    volumes:
+      - ./corpus:/app/corpus:ro
+      - ${CC_CORPUS_DIR:-../class-consciousness-corpus}:/app/corpus-prod:ro
+    environment:
+      # Modèles LLM — fidélité à la décision verrouillée (génération Opus 4.7,
+      # juge Haiku 4.5). Le compose prod ne les fixe pas (injectés par Coolify) ;
+      # ici on les force depuis infra/.env.sandbox pour une parité prod réelle.
+      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-opus-4-7}
+      ANTHROPIC_JUDGE_MODEL: ${ANTHROPIC_JUDGE_MODEL:-claude-haiku-4-5}
+      # Origine web autorisée (CORS cross-site, credentials) — cf. main.py.
+      CC_API_CORS_ORIGINS: https://cc.localhost
+      # Liens emails (vérif/reset) et redirections Stripe pointent vers le web local.
+      PUBLIC_WEB_BASE: https://cc.localhost
+      # SMTP → Mailhog (pas d'auth, pas de STARTTLS).
+      CC_API_SMTP_HOST: mailhog
+      CC_API_SMTP_PORT: "1025"
+      CC_API_SMTP_STARTTLS: "false"
+      CC_API_SMTP_FROM: noreply@cc.localhost
+      # Stripe (mode test) — lus par settings.py. Vides tant que Phase 4 non faite.
+      STRIPE_PUBLISHABLE_KEY: ${STRIPE_PUBLISHABLE_KEY:-}
+      STRIPE_PRICE_PAYG: ${STRIPE_PRICE_PAYG:-}
+      STRIPE_METER_EVENT_NAME: rag_tokens
+    depends_on:
+      mailhog:
+        condition: service_started
+
+  web:
+    build:
+      args:
+        # Le SPA static est buildé avec l'URL de l'API cross-site (comme en prod).
+        PUBLIC_API_BASE_URL: https://api.cc.localhost
+    environment:
+      SERVICE_FQDN_WEB_80: cc.localhost
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "443:443"
+      - "80:80"
+    volumes:
+      - ./infra/caddy/Caddyfile.sandbox:/etc/caddy/Caddyfile:ro
+      - caddy_sandbox_data:/data
+      - caddy_sandbox_config:/config
+    depends_on:
+      - api
+      - web
+
+  mailhog:
+    image: mailhog/mailhog:v1.0.1
+    restart: unless-stopped
+    # UI web sur 8026 (8025 est pris par l'app artedusa). SMTP 1025 interne seul.
+    ports:
+      - "127.0.0.1:8026:8025"
+
+volumes:
+  caddy_sandbox_data:
+  caddy_sandbox_config:
