@@ -4,7 +4,6 @@ import ManifestoQuote from "../components/ManifestoQuote.astro";
 import ProjectExplain from "../components/ProjectExplain.astro";
 import SiteFooter from "../components/SiteFooter.astro";
 import TwoPaths from "../components/TwoPaths.astro";
-import ThemeToggle from "../components/ThemeToggle.astro";
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import BaseLayout from "../layouts/BaseLayout.astro";
 
@@ -33,42 +32,11 @@ const t = {
   description="Bibliothèque et outil de travail pour l'étude du marxisme."
 >
   <main class="relative bg-white dark:bg-black">
-    <!-- Top bar : logotype + theme toggle (sticky pour rester visible au scroll) -->
-    <header
-      class="sticky top-0 z-30 flex items-center justify-between px-6 py-5 lg:px-10 bg-white/95 dark:bg-black/95 backdrop-blur"
-    >
-      <a
-        href="/"
-        class="font-Scheherazade text-sm uppercase tracking-[0.2em] text-black dark:text-white transition-colors hover:text-darkpink"
-      >
-        Conscience de classe
-      </a>
-      <div class="flex items-center gap-6">
-        <a
-          href="#projet"
-          class="hidden sm:inline font-Scheherazade text-xs uppercase tracking-[0.25em] text-black dark:text-white hover:text-darkpink transition-colors"
-        >
-          Le projet
-        </a>
-        <a
-          href="/corpus"
-          class="hidden sm:inline font-Scheherazade text-xs uppercase tracking-[0.25em] text-black dark:text-white hover:text-darkpink transition-colors"
-        >
-          Le corpus
-        </a>
-        <a
-          href="/login"
-          class="font-Scheherazade text-xs uppercase tracking-[0.25em] text-black dark:text-white hover:text-darkpink transition-colors"
-        >
-          Connexion
-        </a>
-        <ThemeToggle />
-      </div>
-    </header>
-
-    <!-- HERO : titre + AIButton + exemples + pitch + promesse -->
+    <!-- HERO : titre + AIButton + exemples + pitch + promesse.
+         Le header global (fixe) surplombe le haut du héro ; on prévoit donc
+         une marge haute pour ne pas masquer le titre. -->
     <section
-      class="relative w-full bg-white dark:bg-black flex flex-col justify-center items-center px-6 md:px-12 lg:px-16 pt-8 md:pt-12 lg:pt-16 pb-16 min-h-[calc(100dvh-72px)]"
+      class="relative w-full bg-white dark:bg-black flex flex-col justify-center items-center px-6 md:px-12 lg:px-16 pt-28 md:pt-32 lg:pt-32 pb-16 min-h-[100dvh]"
     >
       <div
         class="w-full max-w-4xl md:max-w-5xl lg:max-w-6xl xl:max-w-7xl flex flex-col items-center text-center gap-16 sm:gap-10 md:gap-12"

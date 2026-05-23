@@ -1,0 +1,534 @@
+---
+// SPDX-License-Identifier: AGPL-3.0-or-later
+//
+// En-tête unique du site — réplique fidèle du header artedusa
+// (artedusa-frontend/src/components/header/HeaderClient.tsx), porté en Astro
+// + JS vanilla (aucun React), conforme à la palette stricte noir/blanc/darkpink.
+//
+// Structure : barre fine (hamburger gauche / wordmark centré dans l'overlay /
+// actions droite) + overlay plein écran à onglets (style Zara) + masquage au
+// scroll + panneau citation. Détection d'auth côté client via /auth/me.
+import ThemeToggle from "./ThemeToggle.astro";
+
+interface Props {
+  /** "solid" : texte noir/blanc (défaut). "overlap" : texte blanc sur héro sombre. */
+  variant?: "solid" | "overlap";
+}
+
+const { variant = "solid" } = Astro.props;
+
+const apiBase = import.meta.env.PUBLIC_API_BASE_URL ?? "http://localhost:8000";
+
+// ─── Onglet LE CORPUS : publications réellement indexées (série Bilan).
+//     On ne récupère que les résumés (une requête, pas de N+1). Échec → liste
+//     vide, l'onglet renvoie alors uniquement vers /corpus.
+interface IssueSummary {
+  slug: string;
+  title: string;
+  issueNumber: number | null;
+}
+let issues: IssueSummary[] = [];
+try {
+  const res = await fetch(`${apiBase}/corpus?size=200`);
+  if (res.ok) {
+    issues = ((await res.json()) as IssueSummary[]) ?? [];
+  }
+} catch {
+  issues = [];
+}
+
+// ─── Données de navigation (équivalent nav1/nav2/navEditorial d'artedusa).
+const corpusItems = issues.map((i) => ({
+  text: i.issueNumber ? `Bilan nº ${i.issueNumber}` : i.title,
+  link: `/corpus#${i.slug}`,
+}));
+
+const projetItems = [
+  { text: "Le projet", link: "/#projet" },
+  { text: "L'assistant", link: "/chat" },
+  { text: "Adhérer", link: "/join" },
+];
+
+const infoItems = [
+  { text: "Contact", link: "/contact" },
+  { text: "Aide", link: "/help" },
+  { text: "Confidentialité", link: "/legal/privacy" },
+];
+
+const tabs = [
+  { key: "corpus", label: "LE CORPUS" },
+  { key: "projet", label: "LE PROJET" },
+  { key: "info", label: "INFO" },
+];
+
+// Couleur du texte de la barre selon le contexte de page.
+const textColor =
+  variant === "overlap" ? "text-white" : "text-black dark:text-white";
+
+// Classes de liens du contenu d'onglet (gris artedusa → darkpink ici).
+const linkClass =
+  "text-[15px] tracking-[0.3em] uppercase text-black dark:text-white hover:text-darkpink transition-colors duration-300 font-Scheherazade";
+const linkClassMobile =
+  "text-[12px] tracking-[0.08em] uppercase text-black dark:text-white hover:text-darkpink transition-colors duration-300 font-Scheherazade whitespace-nowrap";
+const actionClass =
+  "font-Scheherazade text-xs uppercase tracking-[0.25em] hover:text-darkpink transition-colors whitespace-nowrap";
+---
+
+{/* ════════════════════════════════════════════════════════════════════
+    BARRE FINE — fixe, masquée au scroll vers le bas (cf. HeaderPortal).
+    ════════════════════════════════════════════════════════════════════ */}
+<div
+  id="site-header"
+  data-state="top"
+  class="fixed inset-x-0 top-0 z-[9999] transition-transform duration-300 ease-in-out"
+>
+  {/* Desktop */}
+  <div
+    class={`${textColor} hidden lg:flex justify-between items-start px-8 w-full pt-8 font-Scheherazade`}
+  >
+    <button
+      type="button"
+      data-menu-open
+      class="mr-20"
+      aria-label="Ouvrir le menu de navigation"
+      aria-expanded="false"
+      aria-controls="site-menu"
+    >
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        width="62"
+        height="36"
+        viewBox="0 0 62 36"
+        fill="none"
+        aria-hidden="true"
+      >
+        <path
+          d="M2 25H60M2 11H60"
+          stroke="currentColor"
+          stroke-width="1.5"
+          stroke-linecap="round"
+          stroke-linejoin="round"></path>
+      </svg>
+    </button>
+
+    <div class="inline-flex items-center gap-8 justify-end uppercase">
+      <a href="/corpus" class={actionClass}>Le corpus</a>
+      <a href="/login" data-auth-link="anon" class={actionClass}>Connexion</a>
+      <a
+        href="/chat"
+        data-auth-link="user"
+        class={`${actionClass} hidden`}
+        data-account>Mon compte</a
+      >
+      <button
+        type="button"
+        data-auth-link="user"
+        data-logout
+        class={`${actionClass} hidden`}
+        aria-label="Se déconnecter">Déconnexion</button
+      >
+      <ThemeToggle />
+    </div>
+  </div>
+
+  {/* Mobile */}
+  <div class={`${textColor} lg:hidden px-5 py-3`}>
+    <div class="flex items-center justify-between">
+      <button
+        type="button"
+        data-menu-open
+        aria-label="Ouvrir le menu de navigation"
+        aria-expanded="false"
+        aria-controls="site-menu"
+      >
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="22"
+          height="22"
+          viewBox="0 0 32 32"
+          fill="none"
+          aria-hidden="true"
+        >
+          <path
+            d="M4 20H28M4 12H28"
+            stroke="currentColor"
+            stroke-width="1.5"
+            stroke-linecap="round"
+            stroke-linejoin="round"></path>
+        </svg>
+      </button>
+      <div class="flex items-center gap-x-3">
+        <a href="/login" data-auth-link="anon" aria-label="Connexion">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path>
+            <circle cx="12" cy="7" r="4"></circle>
+          </svg>
+        </a>
+        <a
+          href="/chat"
+          data-auth-link="user"
+          class="hidden"
+          aria-label="Mon compte"
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path>
+            <circle cx="12" cy="7" r="4"></circle>
+          </svg>
+        </a>
+        <ThemeToggle />
+      </div>
+    </div>
+  </div>
+</div>
+
+{/* ════════════════════════════════════════════════════════════════════
+    OVERLAY PLEIN ÉCRAN À ONGLETS — clic sur le fond = fermeture.
+    ════════════════════════════════════════════════════════════════════ */}
+<div
+  id="site-menu"
+  data-open="false"
+  class="fixed inset-0 z-[10000] bg-white dark:bg-black font-Scheherazade flex flex-col opacity-0 pointer-events-none transition-opacity duration-[400ms] ease-in-out"
+  role="dialog"
+  aria-modal="true"
+  aria-label="Navigation principale"
+  data-menu-overlay
+>
+  <div class="flex flex-col h-full w-full max-w-[1600px] mx-auto">
+    {/* En-tête de l'overlay */}
+    <div
+      class="flex-shrink-0 flex items-center justify-between px-5 lg:px-8 pt-3 lg:pt-8 relative"
+    >
+      <div class="w-5 lg:w-8"></div>
+
+      <a
+        href="/"
+        data-menu-close
+        class="absolute left-1/2 -translate-x-1/2 text-black dark:text-white text-lg lg:text-4xl tracking-[0.25em] font-Scheherazade uppercase whitespace-nowrap"
+      >
+        Conscience de classe
+      </a>
+
+      {/* Actions desktop */}
+      <div
+        class="hidden lg:flex items-center gap-8 uppercase relative z-10 text-black dark:text-white"
+      >
+        <a href="/corpus" data-menu-close class={actionClass}>Le corpus</a>
+        <a href="/login" data-auth-link="anon" data-menu-close class={actionClass}
+          >Connexion</a
+        >
+        <a
+          href="/chat"
+          data-auth-link="user"
+          data-menu-close
+          class={`${actionClass} hidden`}>Mon compte</a
+        >
+        <button
+          type="button"
+          data-auth-link="user"
+          data-logout
+          class={`${actionClass} hidden`}
+          aria-label="Se déconnecter">Déconnexion</button
+        >
+      </div>
+
+      {/* Actions mobile */}
+      <div
+        class="lg:hidden flex items-center gap-3 relative z-10 text-black dark:text-white"
+      >
+        <a href="/login" data-auth-link="anon" data-menu-close aria-label="Connexion">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path>
+            <circle cx="12" cy="7" r="4"></circle>
+          </svg>
+        </a>
+      </div>
+    </div>
+
+    {/* Onglets — desktop */}
+    <div class="hidden lg:flex gap-10 px-8 mt-24 flex-shrink-0">
+      {
+        tabs.map((tab, i) => (
+          <button
+            type="button"
+            data-tab={tab.key}
+            data-tab-active={i === 0 ? "true" : "false"}
+            class="text-[15px] tracking-[0.25em] uppercase pb-2 transition-all duration-200 border-b text-black dark:text-white border-transparent data-[tab-active=true]:border-black dark:data-[tab-active=true]:border-white"
+          >
+            {tab.label}
+          </button>
+        ))
+      }
+    </div>
+
+    {/* Onglets — mobile */}
+    <div class="lg:hidden flex flex-wrap gap-x-5 gap-y-2 px-6 mt-8 flex-shrink-0">
+      {
+        tabs.map((tab, i) => (
+          <button
+            type="button"
+            data-tab={tab.key}
+            data-tab-active={i === 0 ? "true" : "false"}
+            class="text-[12px] tracking-[0.08em] uppercase pb-1 transition-all duration-200 border-b text-black dark:text-white font-Scheherazade border-transparent data-[tab-active=true]:border-black dark:data-[tab-active=true]:border-white"
+          >
+            {tab.label}
+          </button>
+        ))
+      }
+    </div>
+
+    {/* Contenu d'onglet + panneau citation */}
+    <div class="flex-1 overflow-y-auto mt-8 lg:mt-16">
+      <div class="flex h-full min-h-0">
+        <div class="flex-1 px-6 lg:px-8">
+          {/* ── LE CORPUS ── */}
+          <div data-panel="corpus">
+            <div class="hidden lg:grid grid-cols-2 gap-x-20 gap-y-7 max-w-3xl">
+              {
+                corpusItems.map((item) => (
+                  <a href={item.link} data-menu-close class={linkClass}>
+                    {item.text}
+                  </a>
+                ))
+              }
+            </div>
+            <div class="lg:hidden grid grid-cols-2 gap-x-4 gap-y-6">
+              {
+                corpusItems.map((item) => (
+                  <a href={item.link} data-menu-close class={linkClassMobile}>
+                    {item.text}
+                  </a>
+                ))
+              }
+            </div>
+            <div class="mt-5 lg:mt-10">
+              <a
+                href="/corpus"
+                data-menu-close
+                class={`${linkClass} hidden lg:inline`}>Explorer tout le corpus &rarr;</a
+              >
+              <a
+                href="/corpus"
+                data-menu-close
+                class={`${linkClassMobile} lg:hidden`}
+                >Explorer tout le corpus &rarr;</a
+              >
+            </div>
+          </div>
+
+          {/* ── LE PROJET ── */}
+          <div data-panel="projet" class="hidden flex-col gap-6 lg:gap-7">
+            {
+              projetItems.map((item) => (
+                <a href={item.link} data-menu-close class={linkClass}>
+                  {item.text}
+                </a>
+              ))
+            }
+          </div>
+
+          {/* ── INFO ── */}
+          <div data-panel="info" class="hidden flex-col gap-6 lg:gap-7">
+            {
+              infoItems.map((item) => (
+                <a href={item.link} data-menu-close class={linkClass}>
+                  {item.text}
+                </a>
+              ))
+            }
+          </div>
+        </div>
+
+        {/* Panneau droit : wordmark + citation (desktop) */}
+        <div
+          class="hidden lg:flex flex-col items-center justify-center w-[40%] pr-8 min-h-0 text-black dark:text-white"
+        >
+          <div
+            class="text-center text-3xl xl:text-4xl tracking-[0.3em] uppercase leading-relaxed select-none"
+            aria-hidden="true"
+          >
+            Conscience<br />de classe
+          </div>
+          <div class="mt-8 text-center">
+            <div class="italic text-[18px] leading-relaxed normal-case">
+              &laquo; Prolétaires de tous les pays, unissez-vous ! &raquo;
+            </div>
+            <div class="text-[15px] mt-2 tracking-[0.1em]">
+              &mdash; Manifeste du parti communiste, 1848
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {/* Citation — mobile, ancrée en bas */}
+    <div class="lg:hidden flex-shrink-0 px-6 pb-6 pt-4 text-black dark:text-white">
+      <div class="italic text-[12px] tracking-[0.08em] leading-relaxed normal-case">
+        &laquo; Prolétaires de tous les pays, unissez-vous ! &raquo;
+      </div>
+      <div class="text-[11px] mt-1.5 tracking-[0.08em]">
+        &mdash; Manifeste du parti communiste, 1848
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const API_BASE =
+    (import.meta.env.PUBLIC_API_BASE_URL as string | undefined) ??
+    "http://localhost:8000";
+
+  const header = document.getElementById("site-header");
+  const menu = document.getElementById("site-menu");
+  if (header && menu) {
+    const openButtons =
+      document.querySelectorAll<HTMLElement>("[data-menu-open]");
+
+    // ─── Ouverture / fermeture de l'overlay ───
+    const setOpen = (open: boolean) => {
+      menu.dataset.open = String(open);
+      menu.classList.toggle("opacity-0", !open);
+      menu.classList.toggle("pointer-events-none", !open);
+      menu.classList.toggle("opacity-100", open);
+      menu.classList.toggle("pointer-events-auto", open);
+      document.body.style.overflow = open ? "hidden" : "";
+      openButtons.forEach((b) => b.setAttribute("aria-expanded", String(open)));
+      if (open) {
+        activateTab("corpus");
+        header.style.transform = "translateY(0)";
+      }
+    };
+
+    openButtons.forEach((b) =>
+      b.addEventListener("click", () => setOpen(true)),
+    );
+
+    // Clic sur le fond de l'overlay → fermeture (les onglets stoppent la
+    // propagation pour ne pas fermer en changeant d'onglet).
+    menu.addEventListener("click", (e) => {
+      const target = e.target as HTMLElement;
+      if (target.closest("[data-menu-close]")) {
+        setOpen(false);
+        return;
+      }
+      if (target === menu || target.closest("[data-menu-overlay]") === menu) {
+        // Ne ferme que si le clic n'est pas sur un élément interactif interne.
+        if (
+          !target.closest("a") &&
+          !target.closest("button") &&
+          !target.closest("[data-tab]")
+        ) {
+          setOpen(false);
+        }
+      }
+    });
+
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && menu.dataset.open === "true") setOpen(false);
+    });
+
+    // ─── Onglets ───
+    const tabButtons = menu.querySelectorAll<HTMLElement>("[data-tab]");
+    const panels = menu.querySelectorAll<HTMLElement>("[data-panel]");
+    const activateTab = (key: string) => {
+      tabButtons.forEach((b) =>
+        b.setAttribute("data-tab-active", String(b.dataset.tab === key)),
+      );
+      panels.forEach((p) => {
+        const match = p.dataset.panel === key;
+        p.classList.toggle("hidden", !match);
+        // Les panneaux non-corpus sont en flex-col quand visibles.
+        if (p.dataset.panel !== "corpus") {
+          p.classList.toggle("flex", match);
+        }
+      });
+    };
+    tabButtons.forEach((b) =>
+      b.addEventListener("click", (e) => {
+        e.stopPropagation();
+        activateTab(b.dataset.tab as string);
+      }),
+    );
+
+    // ─── Masquage au scroll (cf. useScrollDirection : top/up = visible) ───
+    let lastY = 0;
+    const onScroll = () => {
+      const y = window.scrollY || document.documentElement.scrollTop;
+      if (menu.dataset.open === "true") return;
+      const reduce = window.matchMedia(
+        "(prefers-reduced-motion: reduce)",
+      ).matches;
+      if (reduce) {
+        header.style.transform = "translateY(0)";
+      } else if (y < 10) {
+        header.style.transform = "translateY(0)";
+      } else if (y > lastY && y > 80) {
+        header.style.transform = "translateY(-100%)";
+      } else if (y < lastY) {
+        header.style.transform = "translateY(0)";
+      }
+      lastY = y;
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+
+    // ─── Détection d'auth : bascule liens Connexion ↔ Compte/Déconnexion ───
+    const withCreds: RequestInit = { credentials: "include" };
+    const setAuth = (authed: boolean) => {
+      document
+        .querySelectorAll<HTMLElement>('[data-auth-link="anon"]')
+        .forEach((el) => el.classList.toggle("hidden", authed));
+      document
+        .querySelectorAll<HTMLElement>('[data-auth-link="user"]')
+        .forEach((el) => el.classList.toggle("hidden", !authed));
+    };
+    fetch(`${API_BASE}/auth/me`, withCreds)
+      .then((r) => setAuth(r.ok))
+      .catch(() => setAuth(false));
+
+    document.querySelectorAll<HTMLElement>("[data-logout]").forEach((el) =>
+      el.addEventListener("click", async () => {
+        try {
+          await fetch(`${API_BASE}/auth/logout`, {
+            method: "POST",
+            ...withCreds,
+          });
+        } catch {
+          /* ignore */
+        }
+        window.location.href = "/";
+      }),
+    );
+  }
+</script>

@@ -1,0 +1,40 @@
+---
+// SPDX-License-Identifier: AGPL-3.0-or-later
+import BaseLayout from "../layouts/BaseLayout.astro";
+
+const email = "contact@consciencedeclasse.com";
+---
+
+<BaseLayout
+  title="Conscience de classe — Contact"
+  description="Écrire au projet Conscience de classe : corrections, critiques, propositions d'indexation."
+>
+  <div class="flex min-h-dvh flex-col bg-white dark:bg-black">
+    <main class="flex flex-1 items-center justify-center px-6 py-24">
+      <div class="mx-auto w-full max-w-2xl text-center">
+        <h1
+          class="font-Scheherazade text-4xl sm:text-5xl md:text-6xl leading-none text-black dark:text-white uppercase"
+        >
+          Contact
+        </h1>
+        <p
+          class="mt-8 font-Scheherazade text-base sm:text-lg text-black dark:text-white max-w-xl mx-auto leading-relaxed text-pretty"
+        >
+          Ce travail est un projet ouvert. Les critiques sont les bienvenues —
+          sur le corpus, sur la méthode citationnelle, sur le code, sur les
+          positions théoriques retenues. Pour signaler une faille de
+          transcription ou de raisonnement, proposer une correction ou un corpus
+          à indexer, écrivez&nbsp;:
+        </p>
+        <p class="mt-10">
+          <a
+            href={`mailto:${email}`}
+            class="font-Scheherazade text-xl sm:text-2xl text-black dark:text-white hover:text-darkpink underline decoration-1 underline-offset-8 hover:decoration-darkpink transition-colors"
+          >
+            {email}
+          </a>
+        </p>
+      </div>
+    </main>
+  </div>
+</BaseLayout>

@@ -1,18 +1,25 @@
 ---
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import "../styles/global.css";
+import SiteHeader from "../components/SiteHeader.astro";
 
 interface Props {
   title?: string;
   description?: string;
   /** Empêche l'indexation (pages privées, accusés de réception…). */
   noindex?: boolean;
+  /** Variante de couleur du header. "overlap" = texte blanc sur héro sombre. */
+  headerVariant?: "solid" | "overlap";
+  /** Désactive le header global (pages au chrome dédié, ex. /chat). */
+  noHeader?: boolean;
 }
 
 const {
   title = "Conscience de classe — bibliothèque et outil du marxisme",
   description = "Bibliothèque et outil de travail pour l'étude du marxisme.",
   noindex = false,
+  headerVariant = "solid",
+  noHeader = false,
 } = Astro.props;
 
 // URL canonique : protège des doublons (paramètres, slash final, http/https).
@@ -91,6 +98,7 @@ const matomoSiteId = import.meta.env.PUBLIC_MATOMO_SITE_ID;
     )}
   </head>
   <body class="bg-white text-black dark:bg-black dark:text-white antialiased font-Scheherazade">
+    {!noHeader && <SiteHeader variant={headerVariant} />}
     <slot />
   </body>
 </html>
