@@ -29,7 +29,13 @@ interface IssueSummary {
 }
 let issues: IssueSummary[] = [];
 try {
-  const res = await fetch(`${apiBase}/corpus?size=200`);
+  // Timeout court : ce composant est dans BaseLayout (toutes les pages). Au
+  // build (Docker/Coolify), l'API peut être injoignable et la connexion
+  // *pendre* — un try/catch ne protège pas d'un hang. AbortSignal.timeout
+  // garantit que le build ne se bloque jamais sur le header.
+  const res = await fetch(`${apiBase}/corpus?size=200`, {
+    signal: AbortSignal.timeout(1500),
+  });
   if (res.ok) {
     issues = ((await res.json()) as IssueSummary[]) ?? [];
   }

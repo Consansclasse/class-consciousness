@@ -23,7 +23,11 @@ const apiBase = import.meta.env.PUBLIC_API_BASE_URL ?? "http://localhost:8000";
 
 let issues: (IssueSummary & { articles: ArticleSummary[] })[] = [];
 try {
-  const res = await fetch(`${apiBase}/corpus?size=200`);
+  // Timeout court : au build (Docker/Coolify) l'API peut pendre — le build ne
+  // doit jamais se bloquer sur un fetch (AbortSignal.timeout fail-fast).
+  const res = await fetch(`${apiBase}/corpus?size=200`, {
+    signal: AbortSignal.timeout(2000),
+  });
   if (res.ok) {
     const body = (await res.json()) as { items?: IssueSummary[] };
     const summaries = body.items ?? [];
@@ -31,7 +35,9 @@ try {
     issues = await Promise.all(
       summaries.map(async (issue) => {
         try {
-          const detailRes = await fetch(`${apiBase}/corpus/${issue.slug}`);
+          const detailRes = await fetch(`${apiBase}/corpus/${issue.slug}`, {
+            signal: AbortSignal.timeout(2000),
+          });
           if (!detailRes.ok) return { ...issue, articles: [] };
           const detail = (await detailRes.json()) as { articles?: ArticleSummary[] };
           return { ...issue, articles: detail.articles ?? [] };

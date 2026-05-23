@@ -28,12 +28,16 @@ const apiBase = import.meta.env.PUBLIC_API_BASE_URL ?? "http://localhost:8000";
 export async function getStaticPaths() {
   const apiBase = import.meta.env.PUBLIC_API_BASE_URL ?? "http://localhost:8000";
   try {
-    const res = await fetch(`${apiBase}/corpus?size=200`);
+    const res = await fetch(`${apiBase}/corpus?size=200`, {
+      signal: AbortSignal.timeout(2000),
+    });
     if (!res.ok) return [];
     const body = (await res.json()) as { items: { slug: string }[] };
     const paths = [];
     for (const issue of body.items) {
-      const detailRes = await fetch(`${apiBase}/corpus/${issue.slug}`);
+      const detailRes = await fetch(`${apiBase}/corpus/${issue.slug}`, {
+        signal: AbortSignal.timeout(2000),
+      });
       if (!detailRes.ok) continue;
       const detail = (await detailRes.json()) as { articles: { slug: string }[] };
       for (const article of detail.articles) {
@@ -51,9 +55,13 @@ const { issue, article } = Astro.params;
 let detail: ArticleDetail | null = null;
 let issueInfo: IssueSummary | null = null;
 try {
-  const res = await fetch(`${apiBase}/corpus/${issue}/${article}`);
+  const res = await fetch(`${apiBase}/corpus/${issue}/${article}`, {
+    signal: AbortSignal.timeout(2000),
+  });
   if (res.ok) detail = (await res.json()) as ArticleDetail;
-  const issueRes = await fetch(`${apiBase}/corpus/${issue}`);
+  const issueRes = await fetch(`${apiBase}/corpus/${issue}`, {
+    signal: AbortSignal.timeout(2000),
+  });
   if (issueRes.ok) issueInfo = (await issueRes.json()) as IssueSummary;
 } catch {
   detail = null;
