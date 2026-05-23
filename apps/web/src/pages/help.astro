@@ -1,14 +1,231 @@
 ---
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import BaseLayout from "../layouts/BaseLayout.astro";
-import ProjectExplain from "../components/ProjectExplain.astro";
+import Disclosure from "../components/Disclosure.astro";
+
+const email = "contact@consciencedeclasse.com";
 ---
 
 <BaseLayout
   title="Conscience de classe — Aide"
-  description="Aide et questions fréquentes : fonctionnement de l'archive, garantie citationnelle, corpus."
+  description="Aide pratique : lire le corpus, utiliser l'assistant, gérer son compte, comprendre les réponses sourcées."
 >
-  <main class="bg-white dark:bg-black">
-    <ProjectExplain />
+  <main class="bg-white dark:bg-black px-6 md:px-12 lg:px-16 pt-28 lg:pt-32 pb-24 md:pb-32">
+    <div class="mx-auto w-full max-w-4xl">
+      <!-- En-tête -->
+      <header class="mb-12 md:mb-16">
+        <h1
+          class="font-Scheherazade text-4xl sm:text-5xl md:text-6xl leading-none text-black dark:text-white uppercase"
+        >
+          Aide
+        </h1>
+        <p
+          class="mt-4 font-Scheherazade italic text-base sm:text-lg md:text-xl text-black dark:text-white max-w-2xl text-pretty"
+        >
+          Comment se servir de l'archive, au concret. Pour le « pourquoi » du
+          projet, voir <a
+            href="/#projet"
+            class="not-italic underline underline-offset-4 hover:text-darkpink hover:decoration-darkpink transition-colors"
+            >Le projet</a
+          >.
+        </p>
+      </header>
+
+      <!-- ─── Lire le corpus ─── -->
+      <section class="mb-14 md:mb-20">
+        <h2
+          class="mb-2 font-Scheherazade text-xs sm:text-sm uppercase tracking-[0.3em] text-darkpink"
+        >
+          Lire le corpus
+        </h2>
+        <div class="border-t border-black dark:border-white">
+          <Disclosure index="01" question="Faut-il un compte pour lire les textes ?">
+            <p>
+              Non. La lecture du corpus et la recherche plein texte sont
+              <strong>ouvertes, sans inscription ni limite</strong>. Rendez-vous
+              sur <a
+                href="/corpus"
+                class="underline underline-offset-4 hover:text-darkpink hover:decoration-darkpink transition-colors"
+                >Le corpus</a
+              > et parcourez les numéros et leurs articles.
+            </p>
+          </Disclosure>
+
+          <Disclosure index="02" question="Que contient exactement le corpus ?">
+            <p>
+              Pour l'instant, et exclusivement, les archives du groupe
+              <span class="text-darkpink">Bilan</span> — la revue théorique de la
+              Fraction de gauche du Parti communiste d'Italie (1933-1938). La
+              liste de la page Corpus reflète l'état réel de l'indexation&nbsp;:
+              un numéro n'y apparaît qu'une fois ingéré, vectorisé et vérifié.
+            </p>
+            <p class="mt-4">
+              <em>La suite n'a pas encore été décidée.</em>
+            </p>
+          </Disclosure>
+
+          <Disclosure index="03" question="Comment chercher dans les textes ?">
+            <p>
+              La recherche plein texte est accessible depuis la page Corpus.
+              Elle interroge directement les transcriptions&nbsp;: les résultats
+              renvoient au passage exact dans l'article, jamais à un résumé.
+            </p>
+          </Disclosure>
+        </div>
+      </section>
+
+      <!-- ─── L'assistant ─── -->
+      <section class="mb-14 md:mb-20">
+        <h2
+          class="mb-2 font-Scheherazade text-xs sm:text-sm uppercase tracking-[0.3em] text-darkpink"
+        >
+          L'assistant
+        </h2>
+        <div class="border-t border-black dark:border-white">
+          <Disclosure index="04" question="À quoi sert l'assistant, et que ne fait-il pas ?">
+            <p>
+              L'assistant répond à vos questions <strong>uniquement à partir du
+              corpus</strong>. Il explique et analyse les textes, mais
+              n'utilise aucune connaissance extérieure&nbsp;: ni date, ni nom, ni
+              thèse qui ne soit soutenue par un passage cité.
+            </p>
+            <p class="mt-4">
+              Si le corpus ne permet pas de répondre, il répond
+              «&nbsp;je ne sais pas&nbsp;» plutôt que d'inventer. Le silence est
+              préféré à l'approximation.
+            </p>
+          </Disclosure>
+
+          <Disclosure index="05" question="Comment poser une question ?">
+            <p>
+              Depuis la page d'accueil ou depuis <a
+                href="/chat"
+                class="underline underline-offset-4 hover:text-darkpink hover:decoration-darkpink transition-colors"
+                >L'assistant</a
+              >, saisissez votre question et validez. Vous pouvez aussi cliquer
+              l'un des exemples proposés sur l'accueil pour le pré-remplir.
+            </p>
+          </Disclosure>
+
+          <Disclosure index="06" question="L'assistant demande-t-il un compte ?">
+            <p>
+              Oui. À la différence de la lecture, l'assistant nécessite un
+              compte. Son usage est facturé au coût réel — chaque réponse a un
+              coût de calcul (paiement à l'usage). La lecture du corpus et la
+              recherche plein texte, elles, restent gratuites et sans compte.
+            </p>
+          </Disclosure>
+        </div>
+      </section>
+
+      <!-- ─── Comprendre les réponses ─── -->
+      <section class="mb-14 md:mb-20">
+        <h2
+          class="mb-2 font-Scheherazade text-xs sm:text-sm uppercase tracking-[0.3em] text-darkpink"
+        >
+          Comprendre les réponses
+        </h2>
+        <div class="border-t border-black dark:border-white">
+          <Disclosure index="07" question="Pourquoi chaque phrase porte-t-elle une source ?">
+            <p>
+              C'est la règle fondatrice du projet&nbsp;: aucune phrase n'affirme
+              quoi que ce soit qui ne soit soutenu par un passage cité, et toute
+              citation entre guillemets est reproduite mot pour mot. Chaque
+              réponse est vérifiée, phrase par phrase, avant de vous être
+              montrée.
+            </p>
+          </Disclosure>
+
+          <Disclosure index="08" question="Pourquoi l'assistant refuse parfois de répondre ?">
+            <p>
+              Parce que la réponse n'est pas dans le corpus, ou qu'une phrase
+              n'a pas pu être rattachée à un passage vérifié. Un refus explicite
+              est volontaire&nbsp;: il vaut mieux qu'une réponse plausible mais
+              non sourcée.
+            </p>
+          </Disclosure>
+        </div>
+      </section>
+
+      <!-- ─── Compte ─── -->
+      <section class="mb-14 md:mb-20">
+        <h2
+          class="mb-2 font-Scheherazade text-xs sm:text-sm uppercase tracking-[0.3em] text-darkpink"
+        >
+          Compte
+        </h2>
+        <div class="border-t border-black dark:border-white">
+          <Disclosure index="09" question="Comment créer un compte ?">
+            <p>
+              Depuis <a
+                href="/register"
+                class="underline underline-offset-4 hover:text-darkpink hover:decoration-darkpink transition-colors"
+                >Créer un compte</a
+              >, avec une adresse e-mail et un mot de passe (10 caractères
+              minimum). Vous recevez un lien de confirmation&nbsp;: tant que
+              l'adresse n'est pas vérifiée, le compte n'est pas actif.
+            </p>
+          </Disclosure>
+
+          <Disclosure index="10" question="Je n'arrive pas à me connecter / j'ai oublié mon mot de passe">
+            <p>
+              Vérifiez d'abord que votre adresse e-mail a bien été confirmée via
+              le lien reçu. Pour réinitialiser le mot de passe, utilisez <a
+                href="/forgot-password"
+                class="underline underline-offset-4 hover:text-darkpink hover:decoration-darkpink transition-colors"
+                >Mot de passe oublié</a
+              >. Si le problème persiste, écrivez-nous.
+            </p>
+          </Disclosure>
+        </div>
+      </section>
+
+      <!-- ─── Contribuer / signaler ─── -->
+      <section>
+        <h2
+          class="mb-2 font-Scheherazade text-xs sm:text-sm uppercase tracking-[0.3em] text-darkpink"
+        >
+          Contribuer, signaler
+        </h2>
+        <div class="border-t border-black dark:border-white">
+          <Disclosure index="11" question="J'ai repéré une erreur de transcription ou de raisonnement">
+            <p>
+              Signalez-la — c'est précieux. L'archive est un projet ouvert et la
+              rigueur exige la contradiction. Décrivez le passage concerné et
+              l'erreur constatée à <a
+                href={`mailto:${email}`}
+                class="underline underline-offset-4 hover:text-darkpink hover:decoration-darkpink transition-colors"
+                >{email}</a
+              > (voir aussi la page <a
+                href="/contact"
+                class="underline underline-offset-4 hover:text-darkpink hover:decoration-darkpink transition-colors"
+                >Contact</a
+              >).
+            </p>
+          </Disclosure>
+
+          <Disclosure index="12" question="Puis-je héberger l'archive moi-même ?">
+            <p>
+              Oui. Le code est sous licence <em>AGPL-3.0</em> et le corpus dérivé
+              sous <em>CC-BY-SA-4.0</em>&nbsp;: vous pouvez forker la base, refaire
+              les calculs, contester un résultat. Toute modification publique
+              doit elle aussi rester ouverte.
+            </p>
+          </Disclosure>
+        </div>
+      </section>
+
+      <!-- Pied : renvoi contact -->
+      <p
+        class="mt-16 font-Scheherazade text-sm sm:text-base text-black dark:text-white"
+      >
+        Une question qui n'est pas ici&nbsp;?
+        <a
+          href="/contact"
+          class="underline underline-offset-4 hover:text-darkpink hover:decoration-darkpink transition-colors"
+          >Écrivez-nous</a
+        >.
+      </p>
+    </div>
   </main>
 </BaseLayout>

@@ -691,7 +691,7 @@ import BaseLayout from "../layouts/BaseLayout.astro";
         if (res.status === 402) {
           waiter.stop();
           slot.innerHTML = noteHtml(
-            "Vous avez atteint le quota offert du jour. La lecture du corpus et des textes reste libre, sans limite ; revenez demain pour de nouvelles questions offertes.",
+            "L'usage de l'assistant est facturé au coût réel (paiement à l'usage) : un règlement est requis pour continuer. La lecture du corpus et des textes, elle, reste libre et sans limite.",
           );
           scrollDown();
           return;
