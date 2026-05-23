@@ -37,7 +37,9 @@ try {
     signal: AbortSignal.timeout(1500),
   });
   if (res.ok) {
-    issues = ((await res.json()) as IssueSummary[]) ?? [];
+    // L'endpoint renvoie { items: [...] } (cf. corpus.astro), pas un tableau nu.
+    const body = (await res.json()) as { items?: IssueSummary[] };
+    issues = body.items ?? [];
   }
 } catch {
   issues = [];
