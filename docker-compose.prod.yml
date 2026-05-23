@@ -135,8 +135,17 @@ services:
       STRIPE_PUBLISHABLE_KEY: ${STRIPE_PUBLISHABLE_KEY:-}
       STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
       STRIPE_PRICE_ABONNEMENT_MENSUEL: ${STRIPE_PRICE_ABONNEMENT_MENSUEL:-}
-      # SMTP du magic-link — à renseigner via Coolify Settings quand un serveur
-      # SMTP est disponible (sans lui, /auth/request-link renvoie 503).
+      # SMTP des emails transactionnels (vérification d'adresse, reset mot de
+      # passe). Sans CC_API_SMTP_HOST, /auth/register renvoie 503 → aucun compte
+      # activable. OVH Email Pro : serveur = cluster du webmail (pro3.mail.ovh.net),
+      # 587 + STARTTLS, identifiant = adresse complète. Le mot de passe est un
+      # secret Coolify (SMTP_PASSWORD) — JAMAIS en clair dans le dépôt.
+      CC_API_SMTP_HOST: ${CC_API_SMTP_HOST:-pro3.mail.ovh.net}
+      CC_API_SMTP_PORT: ${CC_API_SMTP_PORT:-587}
+      CC_API_SMTP_STARTTLS: ${CC_API_SMTP_STARTTLS:-true}
+      CC_API_SMTP_USER: ${CC_API_SMTP_USER:-contact@consciencedeclasse.com}
+      CC_API_SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      CC_API_SMTP_FROM: ${CC_API_SMTP_FROM:-contact@consciencedeclasse.com}
     depends_on:
       migrate:
         condition: service_completed_successfully
