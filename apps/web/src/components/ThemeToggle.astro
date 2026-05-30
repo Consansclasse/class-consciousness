@@ -6,6 +6,7 @@
   id="theme-toggle"
   type="button"
   aria-label="Basculer le thème clair / sombre"
+  aria-pressed="false"
   class="inline-flex h-9 w-9 items-center justify-center rounded-full border border-black dark:border-white text-black dark:text-white transition-colors hover:border-darkpink hover:text-darkpink"
 >
   <!-- soleil (visible en dark) -->
@@ -41,10 +42,16 @@
 
 <script>
   const btn = document.getElementById("theme-toggle");
+  const root = document.documentElement;
+  // aria-pressed = true quand le thème sombre est actif (état annoncé aux
+  // lecteurs d'écran). Synchronisé à l'init puis à chaque bascule.
+  const syncPressed = () =>
+    btn?.setAttribute("aria-pressed", String(root.classList.contains("dark")));
+  syncPressed();
   btn?.addEventListener("click", () => {
-    const root = document.documentElement;
     const next = !root.classList.contains("dark");
     root.classList.toggle("dark", next);
     localStorage.setItem("theme", next ? "dark" : "light");
+    syncPressed();
   });
 </script>

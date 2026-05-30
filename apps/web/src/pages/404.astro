@@ -1,0 +1,45 @@
+---
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Page 404 de marque — atteinte pour toute URL inconnue (y compris un article
+// hors du corpus indexé en mode statique). Offre toujours un chemin de retour.
+import BaseLayout from "../layouts/BaseLayout.astro";
+---
+
+<BaseLayout title="Page introuvable — Conscience de classe" noindex>
+  <div class="flex min-h-dvh flex-col bg-white dark:bg-black">
+    <main class="flex flex-1 items-center justify-center px-6 py-24">
+      <div class="mx-auto w-full max-w-2xl text-center">
+        <h1
+          class="font-Scheherazade text-4xl sm:text-5xl md:text-6xl leading-none text-black dark:text-white uppercase"
+        >
+          Page introuvable
+        </h1>
+        <p
+          class="mt-10 font-Scheherazade italic text-xl sm:text-2xl text-black dark:text-white"
+        >
+          Cette page n'existe pas, ou plus.
+        </p>
+        <p
+          class="mt-6 font-Scheherazade text-sm sm:text-base text-black dark:text-white max-w-xl mx-auto leading-relaxed text-pretty"
+        >
+          L'adresse demandée n'a pas été trouvée. Vous pouvez revenir à l'accueil
+          ou parcourir le corpus indexé.
+        </p>
+        <p class="mt-10 flex flex-wrap items-center justify-center gap-6">
+          <a
+            href="/"
+            class="font-Scheherazade text-sm sm:text-base uppercase tracking-[0.2em] text-black dark:text-white hover:text-darkpink transition-colors"
+          >
+            Retour à l'accueil &rarr;
+          </a>
+          <a
+            href="/corpus"
+            class="font-Scheherazade text-sm sm:text-base uppercase tracking-[0.2em] text-black dark:text-white hover:text-darkpink transition-colors"
+          >
+            Explorer le corpus &rarr;
+          </a>
+        </p>
+      </div>
+    </main>
+  </div>
+</BaseLayout>

@@ -18,6 +18,7 @@ const { question, index, open = false } = Astro.props;
   open={open}
 >
   <summary
+    aria-expanded={open ? "true" : "false"}
     class="flex cursor-pointer list-none items-baseline justify-between gap-6 py-6 outline-none transition-colors hover:text-darkpink focus-visible:text-darkpink"
   >
     <div class="flex items-baseline gap-4 md:gap-6">
@@ -55,6 +56,18 @@ const { question, index, open = false } = Astro.props;
     <slot />
   </div>
 </details>
+
+<script>
+  // <details> natif ne reflète pas l'état ouvert/fermé sur aria-expanded :
+  // on le synchronise à chaque bascule (un seul handler pour tous les Disclosure).
+  for (const d of document.querySelectorAll<HTMLDetailsElement>("details")) {
+    const s = d.querySelector("summary");
+    if (!s) continue;
+    d.addEventListener("toggle", () =>
+      s.setAttribute("aria-expanded", String(d.open)),
+    );
+  }
+</script>
 
 <style>
   details > summary::-webkit-details-marker {

@@ -1,7 +1,7 @@
 ---
+import Disclosure from "../components/Disclosure.astro";
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import BaseLayout from "../layouts/BaseLayout.astro";
-import Disclosure from "../components/Disclosure.astro";
 
 const email = "contact@consciencedeclasse.com";
 ---
@@ -42,7 +42,7 @@ const email = "contact@consciencedeclasse.com";
           <Disclosure index="01" question="Faut-il un compte pour lire les textes ?">
             <p>
               Non. La lecture du corpus et la recherche plein texte sont
-              <strong>ouvertes, sans inscription ni limite</strong>. Rendez-vous
+              <em>ouvertes, sans inscription ni limite</em>. Rendez-vous
               sur <a
                 href="/corpus"
                 class="underline underline-offset-4 hover:text-darkpink hover:decoration-darkpink transition-colors"
@@ -84,8 +84,8 @@ const email = "contact@consciencedeclasse.com";
         <div class="border-t border-black dark:border-white">
           <Disclosure index="04" question="À quoi sert l'assistant, et que ne fait-il pas ?">
             <p>
-              L'assistant répond à vos questions <strong>uniquement à partir du
-              corpus</strong>. Il explique et analyse les textes, mais
+              L'assistant répond à vos questions <em>uniquement à partir du
+              corpus</em>. Il explique et analyse les textes, mais
               n'utilise aucune connaissance extérieure&nbsp;: ni date, ni nom, ni
               thèse qui ne soit soutenue par un passage cité.
             </p>

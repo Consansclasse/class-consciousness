@@ -9,6 +9,7 @@ from __future__ import annotations
 import subprocess
 from typing import Any
 
+import anyio.to_thread
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import text
 
@@ -53,6 +54,27 @@ def _alembic_head() -> str:
         return result or "(none)"
     except Exception:
         return "unknown"
+
+
+def _run_alembic_upgrade_head() -> str:
+    """Rejoue les migrations jusqu'à head (sync, lancé via to_thread)."""
+    try:
+        subprocess.run(
+            ["alembic", "upgrade", "head"],
+            cwd="/app/apps/api",
+            check=True,
+            capture_output=True,
+            timeout=120,
+        )
+        return "migrated to head"
+    except subprocess.CalledProcessError as exc:
+        return f"migration error: {exc.stderr.decode(errors='replace')[-300:]}"
+    except Exception as exc:  # noqa: BLE001 — dev endpoint, on remonte le message
+        return f"migration error: {exc}"
+
+
+async def _alembic_upgrade_head() -> str:
+    return await anyio.to_thread.run_sync(_run_alembic_upgrade_head)
 
 
 @router.get("/state")
@@ -188,13 +210,17 @@ async def reset() -> dict[str, Any]:
     """Drop+recreate DB schemas + collections Qdrant + flush Redis. Dev only."""
     results: dict[str, Any] = {}
 
-    # Postgres : drop all + recreate public schema
+    # Postgres : drop all + recreate public schema, PUIS re-migrer.
+    # Sans la re-migration, le schéma est vide (aucune table) et toute requête
+    # ultérieure échoue en 500 « relation ... does not exist » : l'API resterait
+    # cassée jusqu'à un `alembic upgrade` manuel.
     try:
         async with get_session_maker()() as session:
             await session.execute(text("DROP SCHEMA public CASCADE"))
             await session.execute(text("CREATE SCHEMA public"))
             await session.commit()
-        results["postgres"] = "dropped+recreated public schema"
+        migrated = await _alembic_upgrade_head()
+        results["postgres"] = f"dropped+recreated public schema; {migrated}"
     except Exception as exc:
         results["postgres"] = f"error: {exc}"
 

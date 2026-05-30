@@ -1,6 +1,7 @@
 ---
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import "../styles/global.css";
+import SiteFooter from "../components/SiteFooter.astro";
 import SiteHeader from "../components/SiteHeader.astro";
 
 interface Props {
@@ -12,6 +13,8 @@ interface Props {
   headerVariant?: "solid" | "overlap";
   /** Désactive le header global (pages au chrome dédié, ex. /chat). */
   noHeader?: boolean;
+  /** Désactive le footer global (pages au chrome dédié, ex. /chat). */
+  noFooter?: boolean;
 }
 
 const {
@@ -20,6 +23,7 @@ const {
   noindex = false,
   headerVariant = "solid",
   noHeader = false,
+  noFooter = false,
 } = Astro.props;
 
 // URL canonique : protège des doublons (paramètres, slash final, http/https).
@@ -100,5 +104,6 @@ const matomoSiteId = import.meta.env.PUBLIC_MATOMO_SITE_ID;
   <body class="bg-white text-black dark:bg-black dark:text-white antialiased font-Scheherazade">
     {!noHeader && <SiteHeader variant={headerVariant} />}
     <slot />
+    {!noFooter && <SiteFooter />}
   </body>
 </html>

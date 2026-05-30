@@ -4,7 +4,7 @@ import ThemeToggle from "../components/ThemeToggle.astro";
 import BaseLayout from "../layouts/BaseLayout.astro";
 ---
 
-<BaseLayout title="Conscience de classe — Conversation" noHeader>
+<BaseLayout title="Conscience de classe — Conversation" noHeader noFooter>
   <div class="flex h-dvh bg-white dark:bg-black">
     <!-- Barre latérale : historique des conversations (façon fil persistant). -->
     <aside
@@ -779,7 +779,10 @@ import BaseLayout from "../layouts/BaseLayout.astro";
     // ───────────────────────────── Garde d'authentification ─────────────────
 
     const redirectToLogin = () => {
-      window.location.href = "/login";
+      // On préserve la destination (et la question ?q=…) pour y revenir après
+      // connexion réussie : /login?next=<chemin courant>.
+      const next = window.location.pathname + window.location.search;
+      window.location.href = `/login?next=${encodeURIComponent(next)}`;
     };
 
     const requireAuth = async (): Promise<boolean> => {
