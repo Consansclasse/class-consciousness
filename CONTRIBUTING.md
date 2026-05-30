@@ -107,4 +107,4 @@ make dev
 ## Questions ?
 
 - Discussions GitHub pour les questions techniques
-- Email mainteneurs : `maintainers@class-consciousness.org` *(à activer en phase 0)*
+- Email : `contact@consciencedeclasse.com`

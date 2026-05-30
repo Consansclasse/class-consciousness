@@ -1,6 +1,9 @@
 # Auto-héberger class-consciousness
 
-> **Statut** : phase 0 — guide à compléter au fur et à mesure que chaque service est intégré. Pour l'instant, seul le périmètre dev local est opérationnel.
+> **Statut** : en production sur consciencedeclasse.com. Le déploiement canonique
+> utilise Coolify v4 sur OVH (voir [ADR-0006](../adr/0006-deployment-coolify.md)) ;
+> `docker-compose.prod.yml` est livré à la racine du dépôt. Ce guide couvre le dev
+> local et l'alternative de production manuelle (Docker Compose).
 
 ## Pré-requis
 
@@ -13,7 +16,7 @@
 ## Dev local
 
 ```sh
-git clone <repo>
+git clone https://github.com/Consansclasse/class-consciousness
 cd class-consciousness
 cp .env.example .env       # ajuster les valeurs si besoin
 docker compose -f infra/docker-compose.yml up -d
@@ -28,11 +31,13 @@ Services exposés :
 - `localhost:6379` — Redis
 - `localhost:80` — Caddy (reverse-proxy unifié)
 
-## Production (à compléter en phase 5)
+## Production (auto-hébergement manuel)
 
-Cible : VPS Hetzner CCX23/CCX33 ou Scaleway équivalent (UE).
+Cible : VPS UE (ex. Hetzner CCX23/CCX33, Scaleway, OVH). Le déploiement canonique
+de consciencedeclasse.com tourne sur OVH via Coolify ([ADR-0006](../adr/0006-deployment-coolify.md)) ;
+les étapes ci-dessous décrivent l'alternative manuelle équivalente.
 
-Étapes prévues :
+Étapes :
 1. Provisionner le VPS, configurer SSH key-only + fail2ban
 2. Installer Docker + Compose
 3. `git clone` du dépôt et copier `.env` rempli avec secrets de production
@@ -42,7 +47,8 @@ Cible : VPS Hetzner CCX23/CCX33 ou Scaleway équivalent (UE).
 7. Activer monitoring Prometheus + Grafana + Loki
 8. Tester le runbook DR (RTO < 4 h)
 
-> Le fichier `docker-compose.prod.yml` et les runbooks détaillés seront livrés en phase 5.
+> `docker-compose.prod.yml` est présent à la racine du dépôt. Les runbooks DR
+> détaillés sont en cours de durcissement.
 
 ## Ressources externes nécessaires
 
@@ -52,7 +58,7 @@ Cible : VPS Hetzner CCX23/CCX33 ou Scaleway équivalent (UE).
 | Backups S3-compatible | 5-10 € | Backblaze B2, Scaleway |
 | Domaine + DNS | 5 € | |
 | API Claude (Opus 4.7) | 200-1500 € | très variable, prompt caching essentiel |
-| Plausible analytics | 0-15 € | self-host gratuit |
+| Matomo (analytics) | 0-15 € | self-host gratuit (ADR-0007) |
 
 [VÉRIFIER tarifs avril 2026 avant déploiement]
 

@@ -2,7 +2,7 @@
 
 > Archive open-source de la théorie marxiste — textes primaires, commentaires, et outil d'analyse classée et sourcée.
 
-**Statut.** Phase 0 — fondations. Pas encore déployable. Roadmap dans [`docs/`](./docs/).
+**Statut.** En production sur [consciencedeclasse.com](https://consciencedeclasse.com) : lecture libre du corpus (revue *Bilan*), moteur Q&A sourcé, comptes et paiement à l'usage au coût réel. Auto-hébergeable (AGPL-3.0). Roadmap dans [`docs/`](./docs/).
 
 ## Principes
 
@@ -34,7 +34,7 @@
 > Pré-requis : Docker, Docker Compose, `uv`, `pnpm`.
 
 ```sh
-git clone https://github.com/<org>/class-consciousness
+git clone https://github.com/Consansclasse/class-consciousness
 cd class-consciousness
 cp .env.example .env                    # à remplir
 docker compose -f infra/docker-compose.yml up -d
@@ -72,7 +72,7 @@ tests/rag-eval/     # test set red-team RAG
 
 - Gouvernance : [`GOVERNANCE.md`](./GOVERNANCE.md). BDFL → conseil mainteneurs (an 1+).
 - Code de conduite : [`CODE_OF_CONDUCT.md`](./CODE_OF_CONDUCT.md) (Contributor Covenant 3.0).
-- Financement : OpenCollective (à créer en phase 0). Pas d'ads, pas de tier payant, pas de tracking.
+- Financement : adhésions + subventions. La lecture du corpus est libre ; le moteur Q&A est facturé à l'usage **au coût réel** (pas de marge, pas de tier premium). Pas d'ads, pas de tracking.
 
 ## Licences
 
@@ -83,9 +83,9 @@ tests/rag-eval/     # test set red-team RAG
 
 | Phase | Statut |
 |---|---|
-| 0 — Fondations | en cours |
-| 1 — Corpus minimal | à venir |
-| 2 — Lecture & navigation | à venir |
-| 3 — Moteur RAG sourcé | à venir |
-| 4 — Commentaires & contributions | à venir |
-| 5 — Hardening & production | à venir |
+| 0 — Fondations | fait |
+| 1 — Corpus minimal (*Bilan*) | en cours (ingestion) |
+| 2 — Lecture & navigation | en production |
+| 3 — Moteur RAG sourcé | en production |
+| 4 — Commentaires & contributions | en cours |
+| 5 — Hardening & production | en production, durcissement continu |
