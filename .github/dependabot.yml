@@ -4,23 +4,38 @@ updates:
     directory: "/"
     schedule: { interval: "weekly" }
     open-pull-requests-limit: 5
+    groups:
+      github-actions:
+        patterns: ["*"]
 
   - package-ecosystem: "pip"
     directory: "/apps/api"
     schedule: { interval: "weekly" }
     open-pull-requests-limit: 5
+    groups:
+      api-pip:
+        patterns: ["*"]
 
   - package-ecosystem: "pip"
     directory: "/packages/corpus-tools"
     schedule: { interval: "weekly" }
     open-pull-requests-limit: 5
+    groups:
+      corpus-tools-pip:
+        patterns: ["*"]
 
   - package-ecosystem: "npm"
     directory: "/apps/web"
     schedule: { interval: "weekly" }
     open-pull-requests-limit: 5
+    groups:
+      web-npm:
+        patterns: ["*"]
 
   - package-ecosystem: "docker"
     directory: "/infra"
     schedule: { interval: "weekly" }
     open-pull-requests-limit: 5
+    groups:
+      infra-docker:
+        patterns: ["*"]
