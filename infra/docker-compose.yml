@@ -101,6 +101,13 @@ services:
     env_file:
       - path: ../.env
         required: false
+    environment:
+      # Base API INTERNE réservée au SSR (frontmatter Astro = code serveur, exécuté
+      # DANS ce conteneur). Depuis le conteneur web, `localhost:8000` est injoignable :
+      # il faut viser le service `api` par son nom DNS Docker. NON préfixée PUBLIC_
+      # pour rester serveur-only (jamais inlinée dans les bundles client → le
+      # navigateur continue d'utiliser PUBLIC_API_BASE_URL / localhost:8000).
+      API_INTERNAL_BASE_URL: http://api:8000
     # Remap host 3001 → container 3000 pour cohabiter avec un autre service sur 3000.
     ports: ["127.0.0.1:3001:3000"]
     depends_on:
