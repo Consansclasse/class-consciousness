@@ -1,0 +1,40 @@
+# Contexte de build : exclure tout ce qui est volumineux et inutile aux images.
+# Sans ça, `context: ..` envoie node_modules + .venv + .git (plusieurs Go) au
+# démon Docker à chaque build → builds très lents. Le Dockerfile ne COPY que
+# pyproject/uv.lock + apps/api + packages/corpus-tools + scripts.
+
+# Dépendances installées (réinstallées dans l'image via uv sync / pnpm install)
+**/node_modules
+**/.venv
+.venv
+.venv-embed-gpu
+
+# VCS & métadonnées
+.git
+**/.git
+.gitignore
+.gitattributes
+
+# Caches outils
+**/__pycache__
+**/*.pyc
+**/.pytest_cache
+**/.mypy_cache
+**/.ruff_cache
+**/.astro
+**/.vite
+**/dist
+**/build
+**/.cache
+.hf-cache
+
+# Divers
+**/.DS_Store
+ops/snapshots
+**/*.dump
+*.log
+.embed-gpu.log
+
+# Secrets locaux (ne jamais embarquer dans une image)
+.env
+**/.env.local

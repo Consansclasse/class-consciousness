@@ -22,6 +22,13 @@ FROM deps AS dev
 COPY apps/api /app/apps/api
 COPY packages/corpus-tools /app/packages/corpus-tools
 COPY scripts /app/scripts
+# Installe cc-api (+ workspace dep cc-corpus) en éditable dans le venv : sans ça
+# `uvicorn cc_api.main:app` échoue (ModuleNotFoundError). L'étape `deps` ne pose
+# que les dépendances (--no-install-project) ; comme en prod, dev doit finir
+# l'install du projet. L'éditable pointe sur /app/apps/api/src, lui-même monté
+# en volume → le code de l'hôte est suivi en direct avec --reload.
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --frozen --package cc-api
 ENV PATH="/app/.venv/bin:$PATH"
 EXPOSE 8000
 # --proxy-headers : derrière Caddy/Traefik, uvicorn doit honorer X-Forwarded-For
