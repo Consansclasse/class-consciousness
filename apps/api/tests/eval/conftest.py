@@ -25,7 +25,9 @@ import pytest_asyncio
 REPO_ROOT = Path(__file__).resolve().parents[4]
 # Le corpus Bilan vit dans le dépôt séparé `class-consciousness-corpus`
 # (voisin du repo code par défaut, surchargeable via CC_CORPUS_DIR).
-CORPUS_REPO = Path(os.environ.get("CC_CORPUS_DIR") or REPO_ROOT.parent / "class-consciousness-corpus")
+CORPUS_REPO = Path(
+    os.environ.get("CC_CORPUS_DIR") or REPO_ROOT.parent / "class-consciousness-corpus"
+)
 BILAN_REAL_CORPUS = CORPUS_REPO / "bilan" / "bilan-001.tei.xml"
 GOLDEN_QUESTIONS_PATH = Path(__file__).parent / "golden_questions.json"
 

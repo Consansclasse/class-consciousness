@@ -205,11 +205,12 @@ class StripeClient:
             raise RuntimeError(
                 "STRIPE_WEBHOOK_SECRET manquant : impossible de vérifier les webhooks"
             )
-        return stripe.Webhook.construct_event(
+        event: stripe.Event = stripe.Webhook.construct_event(  # type: ignore[no-untyped-call]
             payload=payload,
             sig_header=sig_header,
             secret=self.webhook_secret,
         )
+        return event
 
 
 @lru_cache(maxsize=1)

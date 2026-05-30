@@ -21,6 +21,7 @@ import secrets
 from datetime import UTC, datetime, timedelta
 
 from fastapi_mail import ConnectionConfig, FastMail, MessageSchema, MessageType
+from pydantic import SecretStr
 from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -113,7 +114,7 @@ async def _send_email(email: str, subject: str, body: str, link: str) -> None:
         raise AuthError("service d'envoi d'email indisponible")
     config = ConnectionConfig(
         MAIL_USERNAME=settings.smtp_user or "",
-        MAIL_PASSWORD=settings.smtp_password or "",
+        MAIL_PASSWORD=SecretStr(settings.smtp_password or ""),
         MAIL_FROM=settings.smtp_from,
         MAIL_PORT=settings.smtp_port,
         MAIL_SERVER=settings.smtp_host or "",
@@ -122,7 +123,10 @@ async def _send_email(email: str, subject: str, body: str, link: str) -> None:
         USE_CREDENTIALS=bool(settings.smtp_user),
     )
     message = MessageSchema(
-        subject=subject, recipients=[email], body=body, subtype=MessageType.plain
+        subject=subject,
+        recipients=[email],  # type: ignore[list-item]
+        body=body,
+        subtype=MessageType.plain,
     )
     await FastMail(config).send_message(message)
     log.info("auth.email.sent")
