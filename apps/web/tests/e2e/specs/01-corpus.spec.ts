@@ -5,8 +5,16 @@
 import { expect, test } from "../fixtures/seeded-corpus";
 
 test.describe("corpus — page liste", () => {
+  // DESTRUCTIF : POST /__debug/reset efface toute la base (puis re-migre). En
+  // mode `fullyParallel`, lancer ce reset pendant que d'autres specs tournent
+  // racerait avec elles (données effacées, 500 transitoires pendant la
+  // re-migration). On le réserve donc à un run opt-in dédié (E2E_DESTRUCTIVE=1,
+  // idéalement avec --workers=1).
   test("affiche l'état vide quand la DB est vierge", async ({ page, request }) => {
-    // Reset avant le test pour avoir un état déterministe.
+    test.skip(
+      !process.env.E2E_DESTRUCTIVE,
+      "destructif (reset global) — activer via E2E_DESTRUCTIVE=1",
+    );
     await request.post(`${process.env.PUBLIC_API_BASE_URL ?? "http://localhost:8000"}/__debug/reset`);
 
     await page.goto("/corpus");
@@ -14,12 +22,15 @@ test.describe("corpus — page liste", () => {
     await expect(page.getByText(/0 numéros? indexés?/)).toBeVisible();
   });
 
-  test("affiche au moins une entrée après seed", async ({ page, seededCorpus }) => {
-    void seededCorpus;
+  test("affiche au moins une entrée quand le corpus est peuplé", async ({ page }) => {
     await page.goto("/corpus");
-    // Compteur > 0 et au moins 1 item dans la liste
-    await expect(page.getByText(/\d+ numéros? indexés?/)).toBeVisible();
-    await expect(page.getByText("Fixture de test — pipeline ingestion")).toBeVisible();
+    const count = page.getByText(/(\d+) numéros? indexés?/);
+    await expect(count).toBeVisible();
+    // Le compteur doit être > 0 (au moins le numéro de démonstration seedé).
+    const txt = (await count.textContent()) ?? "";
+    expect(Number(txt.match(/(\d+)/)?.[1] ?? "0")).toBeGreaterThan(0);
+    // Et au moins un numéro doit être listé (élément <details> dépliable).
+    await expect(page.locator("ol details").first()).toBeVisible();
   });
 
   test("aucun <strong> ni font-bold dans le DOM (règle UI dure)", async ({ page }) => {
