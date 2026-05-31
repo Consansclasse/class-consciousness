@@ -1,0 +1,375 @@
+---
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Lecture à haute voix du texte du corpus (Couche 1 : Web Speech API navigateur).
+//
+// Aucune infrastructure, aucun coût : la synthèse vocale tourne chez le lecteur.
+//
+// SUIVI VISUEL — architecture « une utterance par phrase ».
+// Le suivi fin ne repose PAS sur l'événement `boundary` (mot-à-mot), qui est
+// structurellement non fiable sur Chrome (non émis pour la plupart des voix).
+// On segmente chaque bloc en PHRASES (`Intl.Segmenter`), on enveloppe chaque
+// phrase dans un <span>, et on prononce UNE utterance par phrase. Le surlignage
+// de la phrase active se déclenche sur `onstart` — un événement fiable PARTOUT.
+// Trois étages, chacun dégradant en silence :
+//   1. garanti  — granularité PHRASE (start/end) ;
+//   2. bonus    — granularité MOT (karaoké via `boundary`), activé seulement
+//                 après réception d'un vrai événement boundary, jamais estimé ;
+//   3. filet    — si `Intl.Segmenter` est absent, granularité BLOC (paragraphe).
+//
+// Principe directeur : on ne surligne QUE ce qui est réellement prononcé. Un
+// surlignage désynchronisé mentirait à l'œil — même éthique anti-distorsion que
+// le pipeline RAG. Le silence (granularité plus grossière) prime sur la fausse
+// précision.
+//
+// Si `speechSynthesis` est absent, la barre se masque d'elle-même (dégradation
+// silencieuse — jamais de texte grisé, jamais de bouton mort).
+
+interface Props {
+  /** Sélecteur des blocs de texte à lire, dans l'ordre. */
+  target?: string;
+  /** Sélecteur optionnel d'un bloc (ex. le titre) lu en premier. */
+  titleTarget?: string;
+}
+const { target = "[data-readaloud-content] p", titleTarget } = Astro.props;
+---
+
+<div
+  data-readaloud-bar
+  data-readaloud-target={target}
+  data-readaloud-title-target={titleTarget}
+  role="group"
+  aria-label="Lecture à haute voix de l'article"
+  hidden
+  class="mt-10 flex flex-wrap items-center gap-3"
+>
+  <button
+    type="button"
+    data-readaloud-toggle
+    aria-label="Écouter l'article"
+    aria-pressed="false"
+    class="inline-flex items-center gap-2 h-9 rounded-full border border-black dark:border-white px-4 font-Scheherazade text-sm uppercase tracking-[0.2em] text-black dark:text-white transition-colors hover:border-darkpink hover:text-darkpink focus-visible:border-darkpink focus-visible:text-darkpink"
+  >
+    <!-- play (état repos / pause) -->
+    <svg
+      data-icon="play"
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      class="h-4 w-4"
+      aria-hidden="true"><path d="M8 5v14l11-7z"></path></svg>
+    <!-- pause (état lecture) -->
+    <svg
+      data-icon="pause"
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      class="hidden h-4 w-4"
+      aria-hidden="true"
+      ><path d="M6 5h4v14H6zM14 5h4v14h-4z"></path></svg>
+    <span data-readaloud-label>Écouter</span>
+  </button>
+
+  <button
+    type="button"
+    data-readaloud-stop
+    aria-label="Arrêter la lecture"
+    hidden
+    class="inline-flex items-center gap-2 h-9 rounded-full border border-black dark:border-white px-4 font-Scheherazade text-sm uppercase tracking-[0.2em] text-black dark:text-white transition-colors hover:border-darkpink hover:text-darkpink focus-visible:border-darkpink focus-visible:text-darkpink"
+  >
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      class="h-4 w-4"
+      aria-hidden="true"><path d="M6 6h12v12H6z"></path></svg>
+    <span>Arrêter</span>
+  </button>
+
+  <label class="inline-flex items-center gap-2 font-Scheherazade text-sm">
+    <span class="uppercase tracking-[0.2em] text-black dark:text-white">Vitesse</span>
+    <select
+      data-readaloud-rate
+      aria-label="Vitesse de lecture"
+      class="h-9 rounded-full border border-black dark:border-white bg-transparent px-3 font-Scheherazade text-sm text-black dark:text-white transition-colors hover:border-darkpink focus-visible:border-darkpink"
+    >
+      <option value="0.75" class="text-black">× 0,75</option>
+      <option value="1" selected class="text-black">× 1</option>
+      <option value="1.25" class="text-black">× 1,25</option>
+      <option value="1.5" class="text-black">× 1,5</option>
+    </select>
+  </label>
+</div>
+
+<style is:global>
+  /* Phrase en cours de lecture : darkpink plein, aucun grisage. Changement de
+     couleur uniquement → reflow nul, lisible en clair comme en sombre. */
+  .cc-reading {
+    color: #e27ecc;
+  }
+  /* Mot en cours (bonus karaoké, là où l'événement boundary est réellement émis).
+     Fond plein darkpink + texte noir : le mot ressort par-dessus la phrase. */
+  ::highlight(cc-reading-word) {
+    background-color: #e27ecc;
+    color: #000;
+  }
+</style>
+
+<script>
+  type ReaderState = "idle" | "playing" | "paused";
+
+  const bar = document.querySelector<HTMLElement>("[data-readaloud-bar]");
+  const synth = typeof window !== "undefined" ? window.speechSynthesis : undefined;
+
+  // Pas de synthèse vocale → la barre reste masquée, point final.
+  if (bar && synth) {
+    const target = bar.dataset.readaloudTarget ?? "[data-readaloud-content] p";
+    const titleTarget = bar.dataset.readaloudTitleTarget || undefined;
+
+    // Blocs à lire, dans l'ordre : titre optionnel, puis paragraphes non vides.
+    const blocks: HTMLElement[] = [];
+    if (titleTarget) {
+      const titleEl = document.querySelector<HTMLElement>(titleTarget);
+      if (titleEl && (titleEl.textContent ?? "").trim()) blocks.push(titleEl);
+    }
+    for (const p of Array.from(document.querySelectorAll<HTMLElement>(target))) {
+      if ((p.textContent ?? "").trim()) blocks.push(p);
+    }
+
+    if (blocks.length > 0) {
+      bar.hidden = false;
+
+      const toggleBtn = bar.querySelector<HTMLButtonElement>("[data-readaloud-toggle]")!;
+      const stopBtn = bar.querySelector<HTMLButtonElement>("[data-readaloud-stop]")!;
+      const label = bar.querySelector<HTMLElement>("[data-readaloud-label]")!;
+      const playIcon = bar.querySelector<SVGElement>('[data-icon="play"]')!;
+      const pauseIcon = bar.querySelector<SVGElement>('[data-icon="pause"]')!;
+      const rateSelect = bar.querySelector<HTMLSelectElement>("[data-readaloud-rate]")!;
+
+      // Custom Highlight API (mot-à-mot) : détectée, jamais requise.
+      const highlightApi =
+        typeof (globalThis as any).Highlight !== "undefined" && "highlights" in CSS;
+      // Segmenteur de phrases ; absent → on retombe sur la granularité bloc.
+      const segmenter =
+        typeof (Intl as any).Segmenter !== "undefined"
+          ? new (Intl as any).Segmenter("fr", { granularity: "sentence" })
+          : null;
+      const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+      // ----- Segmentation : chaque bloc → une ou plusieurs UNITÉS de lecture.
+      // Une unité = un élément à surligner dont le texte est exactement l'énoncé
+      // d'une utterance. On n'enveloppe en phrases QUE les blocs de texte pur
+      // (aucun enfant élément) : sûr, et préserve tout balisage inline éventuel.
+      const segmentBlock = (el: HTMLElement): HTMLElement[] => {
+        const text = el.textContent ?? "";
+        if (!segmenter || el.childElementCount > 0) return [el];
+        const spans: HTMLElement[] = [];
+        const frag = document.createDocumentFragment();
+        for (const part of segmenter.segment(text)) {
+          const raw: string = part.segment;
+          if (!raw) continue;
+          if (!raw.trim()) {
+            // Espace inter-phrases : conservé hors span pour ne pas le surligner.
+            frag.appendChild(document.createTextNode(raw));
+            continue;
+          }
+          const span = document.createElement("span");
+          span.textContent = raw;
+          frag.appendChild(span);
+          spans.push(span);
+        }
+        if (spans.length === 0) return [el];
+        el.textContent = "";
+        el.appendChild(frag);
+        return spans;
+      };
+
+      const units: HTMLElement[] = [];
+      for (const block of blocks) {
+        for (const u of segmentBlock(block)) {
+          if ((u.textContent ?? "").trim()) units.push(u);
+        }
+      }
+
+      let state: ReaderState = "idle";
+      let currentIndex = 0;
+      let rate = 1;
+      let frVoice: SpeechSynthesisVoice | null = null;
+      let keepAlive: ReturnType<typeof setInterval> | undefined;
+
+      // Voix française si l'OS en propose une (sinon le lang suffit comme indice).
+      const pickVoice = () => {
+        const voices = synth.getVoices();
+        frVoice = voices.find((v) => v.lang.toLowerCase().startsWith("fr")) ?? null;
+      };
+      pickVoice();
+      synth.addEventListener("voiceschanged", pickVoice);
+
+      // Chrome tronque les longues lectures (~15 s) : filet de sécurité. Les
+      // utterances par phrase étant courtes, le cas est rare — on le garde par
+      // prudence pour les phrases très longues.
+      const startKeepAlive = () => {
+        stopKeepAlive();
+        keepAlive = setInterval(() => {
+          if (state === "playing") {
+            synth.pause();
+            synth.resume();
+          }
+        }, 13000);
+      };
+      const stopKeepAlive = () => {
+        if (keepAlive) clearInterval(keepAlive);
+        keepAlive = undefined;
+      };
+
+      const clearWord = () => {
+        if (highlightApi) (CSS as any).highlights.delete("cc-reading-word");
+      };
+      const clearReading = () => {
+        for (const u of units) u.classList.remove("cc-reading");
+        clearWord();
+      };
+
+      const highlightUnit = (i: number) => {
+        clearReading();
+        currentIndex = i;
+        const el = units[i];
+        if (!el) return;
+        el.classList.add("cc-reading");
+        // `nearest` : ne défile que si la phrase sort du cadre → suivi naturel,
+        // pas de recentrage permanent qui donnerait le tournis.
+        el.scrollIntoView({
+          block: "nearest",
+          behavior: reduceMotion ? "auto" : "smooth",
+        });
+      };
+
+      // Mappe un (charIndex, charLength) — relatif au texte de l'unité — vers un
+      // Range, en parcourant ses nœuds texte (robuste au balisage inline).
+      const rangeForChar = (el: HTMLElement, start: number, len: number): Range | null => {
+        const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+        let offset = 0;
+        let startNode: Text | null = null;
+        let startOff = 0;
+        let endNode: Text | null = null;
+        let endOff = 0;
+        let last: Text | null = null;
+        const end = start + len;
+        for (let n = walker.nextNode() as Text | null; n; n = walker.nextNode() as Text | null) {
+          last = n;
+          const l = n.textContent?.length ?? 0;
+          if (startNode === null && start < offset + l) {
+            startNode = n;
+            startOff = start - offset;
+          }
+          if (startNode !== null && end <= offset + l) {
+            endNode = n;
+            endOff = end - offset;
+            break;
+          }
+          offset += l;
+        }
+        if (!startNode) return null;
+        if (!endNode) {
+          endNode = last;
+          endOff = last?.textContent?.length ?? 0;
+        }
+        const range = new Range();
+        range.setStart(startNode, Math.max(0, startOff));
+        range.setEnd(endNode!, Math.max(0, endOff));
+        return range;
+      };
+
+      const highlightWord = (e: SpeechSynthesisEvent, i: number) => {
+        if (!highlightApi) return;
+        if (e.name && e.name !== "word") return;
+        const el = units[i];
+        if (!el) return;
+        const text = el.textContent ?? "";
+        const start = e.charIndex ?? 0;
+        let len = e.charLength ?? 0;
+        if (len <= 0) {
+          const m = text.slice(start).match(/^\S+/);
+          len = m ? m[0].length : 0;
+        }
+        if (len <= 0) return;
+        const range = rangeForChar(el, start, len);
+        if (!range) return;
+        (CSS as any).highlights.set(
+          "cc-reading-word",
+          new (globalThis as any).Highlight(range),
+        );
+      };
+
+      const setState = (next: ReaderState) => {
+        state = next;
+        const active = next !== "idle";
+        stopBtn.hidden = !active;
+        const playing = next === "playing";
+        playIcon.classList.toggle("hidden", playing);
+        pauseIcon.classList.toggle("hidden", !playing);
+        label.textContent =
+          next === "playing" ? "Pause" : next === "paused" ? "Reprendre" : "Écouter";
+        toggleBtn.setAttribute("aria-pressed", playing ? "true" : "false");
+        toggleBtn.setAttribute(
+          "aria-label",
+          next === "playing"
+            ? "Mettre la lecture en pause"
+            : next === "paused"
+              ? "Reprendre la lecture"
+              : "Écouter l'article",
+        );
+      };
+
+      const speakFrom = (startIndex: number) => {
+        synth.cancel();
+        units.slice(startIndex).forEach((el, k) => {
+          const i = startIndex + k;
+          const u = new SpeechSynthesisUtterance(el.textContent ?? "");
+          u.lang = "fr-FR";
+          u.rate = rate;
+          if (frVoice) u.voice = frVoice;
+          u.onstart = () => highlightUnit(i);
+          u.onboundary = (ev) => highlightWord(ev, i);
+          if (i === units.length - 1) u.onend = () => finish();
+          synth.speak(u);
+        });
+        setState("playing");
+        startKeepAlive();
+      };
+
+      const finish = () => {
+        stopKeepAlive();
+        clearReading();
+        setState("idle");
+      };
+
+      const stop = () => {
+        synth.cancel();
+        finish();
+      };
+
+      toggleBtn.addEventListener("click", () => {
+        if (state === "idle") speakFrom(0);
+        else if (state === "playing") {
+          synth.pause();
+          stopKeepAlive();
+          setState("paused");
+        } else {
+          synth.resume();
+          startKeepAlive();
+          setState("playing");
+        }
+      });
+
+      stopBtn.addEventListener("click", stop);
+
+      rateSelect.addEventListener("change", () => {
+        rate = Number(rateSelect.value) || 1;
+        if (state !== "idle") speakFrom(currentIndex);
+      });
+
+      // Quitter / recharger la page coupe la voix proprement.
+      window.addEventListener("pagehide", () => synth.cancel());
+    }
+  }
+</script>

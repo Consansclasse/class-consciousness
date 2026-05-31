@@ -1,6 +1,7 @@
 ---
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import BaseLayout from "../../../layouts/BaseLayout.astro";
+import ReadAloud from "../../../components/ReadAloud.astro";
 
 type AuthorOut = {
   id: number;
@@ -82,7 +83,10 @@ try {
                 {issueInfo.title}
               </p>
             )}
-            <h1 class="font-Scheherazade text-3xl sm:text-4xl md:text-5xl leading-tight text-black dark:text-white uppercase">
+            <h1
+              data-article-title
+              class="font-Scheherazade text-3xl sm:text-4xl md:text-5xl leading-tight text-black dark:text-white uppercase"
+            >
               {detail.title}
             </h1>
             <p class="mt-3 font-Scheherazade italic text-base sm:text-lg text-black dark:text-white">
@@ -92,40 +96,8 @@ try {
               {detail.ark}
             </p>
 
-            {/* Lecture audio (TTS) — Web Speech API, 100% navigateur, aucun appel réseau. */}
-            <div
-              id="tts-controls"
-              class="mt-8 flex flex-wrap items-center gap-3"
-              data-tts-title={detail.title}
-            >
-              <button
-                id="tts-toggle"
-                type="button"
-                aria-pressed="false"
-                aria-label="Écouter l'article"
-                class="inline-flex items-center gap-2 rounded-full border border-black dark:border-white px-4 py-2 font-Scheherazade text-sm text-black dark:text-white transition-colors hover:border-darkpink hover:text-darkpink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-darkpink"
-              >
-                <span id="tts-toggle-icon" aria-hidden="true">▶</span>
-                <span id="tts-toggle-label">Écouter</span>
-              </button>
-              <button
-                id="tts-stop"
-                type="button"
-                aria-label="Arrêter la lecture"
-                hidden
-                class="inline-flex items-center gap-2 rounded-full border border-black dark:border-white px-4 py-2 font-Scheherazade text-sm text-black dark:text-white transition-colors hover:border-darkpink hover:text-darkpink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-darkpink"
-              >
-                <span aria-hidden="true">■</span>
-                <span>Stop</span>
-              </button>
-              <p
-                id="tts-unsupported"
-                hidden
-                class="font-Scheherazade italic text-sm text-black/70 dark:text-white/70"
-              >
-                La lecture audio n'est pas disponible dans ce navigateur.
-              </p>
-            </div>
+            {/* Lecture audio + suivi visuel — Web Speech API, 100% navigateur. */}
+            <ReadAloud target="[data-article-body] p" titleTarget="[data-article-title]" />
 
             <article class="mt-12 space-y-6" data-article-body>
               {detail.paragraphs.map((p) => (
@@ -152,124 +124,3 @@ try {
     </main>
   </div>
 </BaseLayout>
-
-<script>
-  // Îlot client — Lecture audio via Web Speech API (aucune dépendance, aucun réseau).
-  const controls = document.getElementById("tts-controls");
-  const toggleBtn = document.getElementById("tts-toggle") as HTMLButtonElement | null;
-  const toggleLabel = document.getElementById("tts-toggle-label");
-  const toggleIcon = document.getElementById("tts-toggle-icon");
-  const stopBtn = document.getElementById("tts-stop") as HTMLButtonElement | null;
-  const unsupported = document.getElementById("tts-unsupported");
-
-  const synth = typeof window !== "undefined" ? window.speechSynthesis : undefined;
-
-  // Si l'API n'est pas disponible : on masque les contrôles, on affiche le message.
-  if (!synth || !controls || !toggleBtn) {
-    toggleBtn?.setAttribute("hidden", "");
-    stopBtn?.setAttribute("hidden", "");
-    unsupported?.removeAttribute("hidden");
-  } else {
-    // Récupère les énoncés à lire : titre puis chaque paragraphe rendu (DOM only).
-    function collectChunks(): string[] {
-      const chunks: string[] = [];
-      const title = controls?.getAttribute("data-tts-title")?.trim();
-      if (title) chunks.push(title);
-      const body = document.querySelector("[data-article-body]");
-      if (body) {
-        for (const p of Array.from(body.querySelectorAll("p"))) {
-          const text = (p.textContent ?? "").trim();
-          if (text) chunks.push(text);
-        }
-      }
-      return chunks;
-    }
-
-    // getVoices() peut être vide au 1er appel → on écoute aussi `voiceschanged`.
-    let frVoice: SpeechSynthesisVoice | null = null;
-    function pickFrVoice() {
-      const voices = synth!.getVoices();
-      frVoice =
-        voices.find((v) => v.lang?.toLowerCase().startsWith("fr")) ?? null;
-    }
-    pickFrVoice();
-    synth.addEventListener("voiceschanged", pickFrVoice);
-
-    let speaking = false;
-    let paused = false;
-
-    function setIdleUI() {
-      speaking = false;
-      paused = false;
-      if (toggleLabel) toggleLabel.textContent = "Écouter";
-      if (toggleIcon) toggleIcon.textContent = "▶";
-      toggleBtn!.setAttribute("aria-pressed", "false");
-      toggleBtn!.setAttribute("aria-label", "Écouter l'article");
-      stopBtn?.setAttribute("hidden", "");
-    }
-
-    function setPlayingUI() {
-      if (toggleLabel) toggleLabel.textContent = "Pause";
-      if (toggleIcon) toggleIcon.textContent = "⏸";
-      toggleBtn!.setAttribute("aria-pressed", "true");
-      toggleBtn!.setAttribute("aria-label", "Mettre la lecture en pause");
-      stopBtn?.removeAttribute("hidden");
-    }
-
-    function setPausedUI() {
-      if (toggleLabel) toggleLabel.textContent = "Reprendre";
-      if (toggleIcon) toggleIcon.textContent = "▶";
-      toggleBtn!.setAttribute("aria-pressed", "false");
-      toggleBtn!.setAttribute("aria-label", "Reprendre la lecture");
-      stopBtn?.removeAttribute("hidden");
-    }
-
-    function start() {
-      const chunks = collectChunks();
-      if (chunks.length === 0) return;
-      synth!.cancel(); // repart propre
-      speaking = true;
-      paused = false;
-      setPlayingUI();
-      chunks.forEach((chunk, i) => {
-        const u = new SpeechSynthesisUtterance(chunk);
-        u.lang = "fr-FR";
-        if (frVoice) u.voice = frVoice;
-        if (i === chunks.length - 1) {
-          u.addEventListener("end", () => {
-            // Fin naturelle de la lecture (pas un cancel).
-            if (speaking) setIdleUI();
-          });
-        }
-        synth!.speak(u);
-      });
-    }
-
-    toggleBtn.addEventListener("click", () => {
-      if (!speaking) {
-        start();
-        return;
-      }
-      if (paused) {
-        synth.resume();
-        paused = false;
-        setPlayingUI();
-      } else {
-        synth.pause();
-        paused = true;
-        setPausedUI();
-      }
-    });
-
-    stopBtn?.addEventListener("click", () => {
-      synth.cancel();
-      setIdleUI();
-    });
-
-    // Coupe la synthèse si on quitte la page (évite une voix qui continue).
-    window.addEventListener("beforeunload", () => synth.cancel());
-    window.addEventListener("pagehide", () => synth.cancel());
-
-    setIdleUI();
-  }
-</script>
