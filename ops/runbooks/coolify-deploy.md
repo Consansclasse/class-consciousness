@@ -286,37 +286,44 @@ Voir `coolify-backup-restore.md` pour la procédure complète. Résumé :
 
 ---
 
-## Phase 8 — Ingestion du corpus
+## Phase 8 — Corpus (auto-synchro)
 
 Le déploiement applique les migrations automatiquement (service `migrate`, qui
-s'exécute avant `api`) et démarre `cc-embed`. Mais **Qdrant démarre vide** : il
-faut ingérer le corpus une fois, puis à chaque mise à jour.
+s'exécute avant `api`) et démarre `cc-embed`. Qdrant démarre vide, **mais
+l'ingestion est désormais AUTOMATIQUE** : `docker-compose.prod.yml` active
+`CC_API_CORPUS_SYNC_ENABLED=true`, et l'API (`services/corpus_sync.py`) ingère
+toute seule le corpus public au premier démarrage, puis chaque nouveau numéro à
+l'intervalle configuré (24 h) — **sans `git pull`, sans conteneur jetable, sans
+geste**. La revue éditoriale se fait en amont, au merge dans le dépôt corpus.
 
-Le corpus vit dans le dépôt public `class-consciousness-corpus`. Sur le VPS, en SSH :
+Rien à lancer en routine. Vérifier que ça s'est bien passé après un déploiement :
 
 ```sh
-# 1. Cloner le dépôt corpus (public, CC-BY-SA — clone HTTPS anonyme)
+# Logs de l'auto-synchro (1ʳᵉ passe au boot, puis cycles)
+docker compose -f docker-compose.prod.yml logs api | grep corpus_sync
+# → corpus_sync.loop_start … puis corpus_sync.ingested / corpus_sync.cycle_done
+```
+
+- Le glob `**/bilan/bilan-[0-9][0-9][0-9].tei.xml` ingère les 46 numéros
+  monolithiques et ignore les `bilan-001-*.tei.xml` (articles séparés du n°1).
+- Idempotent (dédup SHA256) : un numéro déjà connu n'est jamais ré-ingéré.
+- **Couvre les ajouts.** Le ré-encodage d'un numéro existant n'est pas remplacé
+  automatiquement (échec loggé, non fatal) → ré-ingestion manuelle si besoin.
+- Après l'ingestion de NOUVEAUX numéros, **redéployer le service `web`** : son
+  build statique liste le corpus au moment du build.
+
+### Bootstrap / fallback manuel (sync désactivée)
+
+Si `CC_API_CORPUS_SYNC_ENABLED=false`, ou pour forcer une ingestion ponctuelle :
+
+```sh
 git clone https://github.com/Consansclasse/class-consciousness-corpus.git /tmp/cc-corpus
-
-# 2. Se placer dans le dossier du compose déployé par Coolify
 cd /data/coolify/applications/<id-ressource>   # [VÉRIFIER] l'id dans l'UI Coolify
-
-# 3. Ingestion via un conteneur jetable basé sur le service `api` (même image,
-#    même environnement → joint postgres + qdrant + cc-embed)
 docker compose -f docker-compose.prod.yml run --rm \
   -v /tmp/cc-corpus:/corpus:ro \
   api python scripts/ingest_corpus.py "/corpus/bilan/bilan-[0-9][0-9][0-9].tei.xml"
-
-# 4. Nettoyer
 rm -rf /tmp/cc-corpus
 ```
-
-- Le glob `bilan-[0-9][0-9][0-9].tei.xml` ingère les 46 numéros monolithiques et
-  ignore les fichiers `bilan-001-*.tei.xml` (articles séparés du n°1).
-- Le script est idempotent (dédup SHA256) : le relancer ne ré-ingère pas un
-  numéro déjà connu.
-- Après ingestion, **redéployer le service `web`** : son build statique liste le
-  corpus au moment du build.
 
 Vérification finale :
 

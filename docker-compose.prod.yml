@@ -146,6 +146,13 @@ services:
       CC_API_SMTP_USER: ${CC_API_SMTP_USER:-contact@consciencedeclasse.com}
       CC_API_SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       CC_API_SMTP_FROM: ${CC_API_SMTP_FROM:-contact@consciencedeclasse.com}
+      # Auto-synchro du corpus : l'API récupère et ingère les nouveaux numéros du
+      # repo corpus public toute seule (sans `git pull`, sans geste). ACTIVÉE par
+      # défaut → le site et les self-hébergeurs se mettent à jour seuls. La 1ʳᵉ
+      # passe sur une base neuve ingère d'office le corpus (remplace l'ingestion
+      # manuelle du runbook). Opt-out : passer à "false". Voir services/corpus_sync.py.
+      CC_API_CORPUS_SYNC_ENABLED: ${CC_API_CORPUS_SYNC_ENABLED:-true}
+      CC_API_CORPUS_SYNC_INTERVAL_HOURS: ${CC_API_CORPUS_SYNC_INTERVAL_HOURS:-24}
     depends_on:
       migrate:
         condition: service_completed_successfully

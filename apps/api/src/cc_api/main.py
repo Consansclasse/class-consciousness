@@ -1,5 +1,8 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-from collections.abc import Awaitable, Callable
+import asyncio
+import contextlib
+from collections.abc import AsyncIterator, Awaitable, Callable
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -9,7 +12,7 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 
-from cc_api.core.logging import configure_logging
+from cc_api.core.logging import configure_logging, get_logger
 from cc_api.core.ratelimit import limiter
 from cc_api.core.settings import settings
 from cc_api.routers import (
@@ -24,8 +27,32 @@ from cc_api.routers import (
 )
 
 configure_logging()
+log = get_logger(__name__)
 
-app = FastAPI(title="class-consciousness API", version="0.0.1")
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+    """Démarre la tâche de fond d'auto-synchro du corpus si elle est activée.
+
+    No-op par défaut (`corpus_sync_enabled=False`) : tests, dev et embedders tiers
+    ne déclenchent jamais d'appel réseau GitHub. Activée dans les artefacts de
+    déploiement → prod et self-host récupèrent les nouveaux numéros tout seuls.
+    """
+    task: asyncio.Task[None] | None = None
+    if settings.corpus_sync_enabled:
+        from cc_api.services.corpus_sync import corpus_sync_loop
+
+        task = asyncio.create_task(corpus_sync_loop())
+    try:
+        yield
+    finally:
+        if task is not None:
+            task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
+
+
+app = FastAPI(title="class-consciousness API", version="0.0.1", lifespan=lifespan)
 app.state.limiter = limiter
 app.add_middleware(SlowAPIMiddleware)
 # Sessions navigateur — cookie signé (itsdangerous).

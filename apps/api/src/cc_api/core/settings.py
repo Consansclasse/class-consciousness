@@ -167,6 +167,38 @@ class Settings(BaseSettings):
     # est ouvert — acceptable en dev, à renseigner en prod (Coolify Settings).
     metrics_token: str | None = Field(default=None, alias="CC_API_METRICS_TOKEN")
 
+    # ── Auto-synchronisation du corpus ────────────────────────────────────────
+    # Le corpus TEI vit dans un repo GitHub public séparé. Quand il s'enrichit,
+    # une tâche de fond (lifespan, services/corpus_sync.py) détecte le nouveau
+    # SHA de tête, télécharge le tarball et ingère les nouveaux numéros
+    # (idempotent SHA256) — SANS `git pull` ni geste utilisateur. Défaut OFF dans
+    # le code (tests/dev n'appellent jamais GitHub par surprise) ; ACTIVÉ dans les
+    # artefacts de déploiement (docker-compose.prod.yml) → prod et self-host se
+    # mettent à jour seuls. La revue éditoriale se fait au merge dans le repo
+    # corpus (source canonique de confiance).
+    corpus_sync_enabled: bool = Field(default=False, alias="CC_API_CORPUS_SYNC_ENABLED")
+    corpus_sync_interval_hours: int = Field(
+        default=24, alias="CC_API_CORPUS_SYNC_INTERVAL_HOURS"
+    )
+    corpus_sync_repo: str = Field(
+        default="Consansclasse/class-consciousness-corpus",
+        alias="CC_API_CORPUS_SYNC_REPO",
+    )
+    corpus_sync_ref: str = Field(default="main", alias="CC_API_CORPUS_SYNC_REF")
+    # Glob (relatif à la racine du tarball extrait) des TEI canoniques à ingérer.
+    # Strict 3 chiffres → exclut les variantes découpées (bilan-001-introduction…),
+    # exactement comme l'ingestion prod du runbook.
+    corpus_sync_glob: str = Field(
+        default="**/bilan/bilan-[0-9][0-9][0-9].tei.xml",
+        alias="CC_API_CORPUS_SYNC_GLOB",
+    )
+    # Jeton GitHub optionnel : relève le quota API de 60→5000 req/h. Inutile au
+    # rythme par défaut (1 requête SHA / cycle, le tarball passe par le CDN
+    # codeload hors-quota).
+    corpus_sync_token: str | None = Field(
+        default=None, alias="CC_API_CORPUS_SYNC_TOKEN"
+    )
+
     @property
     def postgres_dsn(self) -> str:
         return (

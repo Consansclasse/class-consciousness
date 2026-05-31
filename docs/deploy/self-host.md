@@ -50,6 +50,37 @@ les étapes ci-dessous décrivent l'alternative manuelle équivalente.
 > `docker-compose.prod.yml` est présent à la racine du dépôt. Les runbooks DR
 > détaillés sont en cours de durcissement.
 
+## Corpus — récupération et mise à jour automatiques
+
+**Vous n'avez rien à faire, et surtout pas de `git pull`.** Le corpus TEI vit dans
+un dépôt public séparé ([`class-consciousness-corpus`](https://github.com/Consansclasse/class-consciousness-corpus)).
+L'API embarque une **auto-synchro** (`apps/api/src/cc_api/services/corpus_sync.py`,
+**activée par défaut** dans `docker-compose.prod.yml`) : périodiquement, elle lit le
+SHA de tête du dépôt corpus, et s'il a changé, télécharge le tarball (HTTPS, aucun
+`git` requis) et **ingère les nouveaux numéros tout seule** (idempotent par SHA256,
+embeddings via cc-embed).
+
+Conséquences pour vous :
+
+- **Premier démarrage** : sur une base neuve, la première passe ingère d'office
+  tout le corpus — pas d'étape d'ingestion manuelle à lancer.
+- **Mises à jour** : quand un nouveau numéro est publié en amont, votre instance le
+  récupère seule au cycle suivant (24 h par défaut). Aucun geste, aucune commande.
+- **Réglages** (`.env`, facultatifs) :
+  - `CC_API_CORPUS_SYNC_ENABLED` — `true` par défaut en prod ; passez à `false`
+    pour **désactiver** (vous gérez alors l'ingestion vous-même).
+  - `CC_API_CORPUS_SYNC_INTERVAL_HOURS` — intervalle de vérification (défaut 24).
+  - `CC_API_CORPUS_SYNC_TOKEN` — jeton GitHub optionnel (relève le quota API ;
+    inutile au rythme par défaut).
+- **GPU local** : si vous faites tourner cc-embed sur GPU, l'ingestion des nouveaux
+  numéros est quasi instantanée (la prod reste sur CPU, cf. [ADR-0008](../adr/0008-architecture-embedding-vps-cpu.md)).
+- **Bootstrap manuel** (optionnel, sync désactivée) : `python scripts/ingest_corpus.py
+  <chemin>/bilan/bilan-[0-9][0-9][0-9].tei.xml` reste disponible.
+
+> Limite connue : l'auto-synchro couvre les **ajouts** de numéros. Le ré-encodage
+> d'un numéro déjà ingéré (même identité, contenu corrigé) n'est pas remplacé
+> automatiquement (l'échec est loggé, non fatal) — ré-ingestion manuelle requise.
+
 ## Ressources externes nécessaires
 
 | Service | Coût mensuel estimé | Notes |
