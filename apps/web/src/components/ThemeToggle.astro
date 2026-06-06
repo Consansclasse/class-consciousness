@@ -3,7 +3,7 @@
 ---
 
 <button
-  id="theme-toggle"
+  data-theme-toggle
   type="button"
   aria-label="Basculer le thème clair / sombre"
   aria-pressed="false"
@@ -41,17 +41,27 @@
 </button>
 
 <script>
-  const btn = document.getElementById("theme-toggle");
+  // Le composant peut être rendu PLUSIEURS fois sur une page (barre desktop +
+  // barre mobile du header, menu compte…). On évite donc un `id` (qui serait
+  // dupliqué) et on câble TOUTES les instances via `[data-theme-toggle]`. Le
+  // script d'un composant Astro n'est inclus qu'une fois par page, même si le
+  // composant est monté N fois → ce querySelectorAll les couvre toutes.
   const root = document.documentElement;
+  const toggles = document.querySelectorAll("[data-theme-toggle]");
   // aria-pressed = true quand le thème sombre est actif (état annoncé aux
-  // lecteurs d'écran). Synchronisé à l'init puis à chaque bascule.
-  const syncPressed = () =>
-    btn?.setAttribute("aria-pressed", String(root.classList.contains("dark")));
+  // lecteurs d'écran). Synchronisé à l'init puis à chaque bascule, sur toutes
+  // les instances pour qu'elles restent cohérentes.
+  const syncPressed = () => {
+    const dark = root.classList.contains("dark");
+    toggles.forEach((b) => b.setAttribute("aria-pressed", String(dark)));
+  };
   syncPressed();
-  btn?.addEventListener("click", () => {
-    const next = !root.classList.contains("dark");
-    root.classList.toggle("dark", next);
-    localStorage.setItem("theme", next ? "dark" : "light");
-    syncPressed();
-  });
+  toggles.forEach((btn) =>
+    btn.addEventListener("click", () => {
+      const next = !root.classList.contains("dark");
+      root.classList.toggle("dark", next);
+      localStorage.setItem("theme", next ? "dark" : "light");
+      syncPressed();
+    }),
+  );
 </script>
