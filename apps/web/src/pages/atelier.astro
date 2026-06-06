@@ -1,0 +1,806 @@
+---
+// SPDX-License-Identifier: AGPL-3.0-or-later
+import AccountMenu from "../components/AccountMenu.astro";
+import SiteHeader from "../components/SiteHeader.astro";
+import BaseLayout from "../layouts/BaseLayout.astro";
+---
+
+<BaseLayout title="Conscience de classe — Atelier" noindex noHeader noFooter>
+  {/* Page applicative : chrome dédié + garde d'accès côté client (statique). */}
+  <SiteHeader barless />
+  <div
+    id="atelier-root"
+    hidden
+    class="flex min-h-dvh flex-col bg-white dark:bg-black"
+  >
+    <!-- En-tête minimal façon application. -->
+    <header
+      class="flex shrink-0 items-center gap-4 border-b border-black px-6 py-5 dark:border-white lg:px-10"
+    >
+      <button
+        type="button"
+        data-menu-open
+        aria-controls="site-menu"
+        aria-label="Ouvrir le menu de navigation"
+        class="font-Scheherazade text-xl leading-none text-black transition-colors hover:text-darkpink dark:text-white"
+      >
+        ☰
+      </button>
+      <div class="relative ml-auto flex items-center gap-6">
+        <a
+          href="/chat"
+          class="font-Scheherazade text-xs uppercase tracking-[0.25em] text-black transition-colors hover:text-darkpink dark:text-white"
+        >
+          Le chat
+        </a>
+        <a
+          href="/corpus"
+          class="font-Scheherazade text-xs uppercase tracking-[0.25em] text-black transition-colors hover:text-darkpink dark:text-white"
+        >
+          Le corpus
+        </a>
+        <AccountMenu
+          triggerId="atelier-account-trigger"
+          menuId="atelier-account-menu"
+          showThemeToggle
+          logoutRedirect="/login"
+          triggerClass="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-black font-Scheherazade text-xs uppercase tracking-[0.1em] text-black transition-colors hover:border-darkpink hover:text-darkpink dark:border-white dark:text-white"
+        />
+      </div>
+    </header>
+
+    <!-- Barre d'actions de la page (brouillon local). -->
+    <div
+      class="flex shrink-0 flex-wrap items-center gap-3 border-b border-black px-6 py-3 dark:border-white lg:px-10"
+    >
+      <span
+        data-saved
+        class="mr-auto font-Scheherazade text-xs uppercase tracking-[0.2em] text-black dark:text-white"
+        aria-live="polite"
+      ></span>
+      <button
+        type="button"
+        id="atelier-new"
+        class="border border-black px-3 py-2 font-Scheherazade text-xs uppercase tracking-[0.2em] text-black transition-colors hover:bg-black hover:text-white dark:border-white dark:text-white dark:hover:bg-white dark:hover:text-black"
+      >
+        Nouvelle page
+      </button>
+      <button
+        type="button"
+        id="atelier-copy"
+        class="border border-black px-3 py-2 font-Scheherazade text-xs uppercase tracking-[0.2em] text-black transition-colors hover:bg-darkpink hover:border-darkpink hover:text-white dark:border-white dark:text-white"
+      >
+        Copier (Markdown)
+      </button>
+      <button
+        type="button"
+        id="atelier-export"
+        class="border border-black px-3 py-2 font-Scheherazade text-xs uppercase tracking-[0.2em] text-black transition-colors hover:bg-black hover:text-white dark:border-white dark:text-white dark:hover:bg-white dark:hover:text-black"
+      >
+        Exporter .md
+      </button>
+      <button
+        type="button"
+        id="atelier-notion"
+        class="bg-darkpink px-3 py-2 font-Scheherazade text-xs uppercase tracking-[0.2em] text-white transition-opacity hover:opacity-90"
+      >
+        Envoyer vers Notion
+      </button>
+    </div>
+
+    <!-- Zone d'écriture : page blanche centrée. -->
+    <main class="flex-1 overflow-y-auto">
+      <div class="mx-auto w-full max-w-3xl px-6 py-10 md:px-10">
+        <input
+          id="atelier-title"
+          type="text"
+          maxlength="200"
+          placeholder="Titre de l'article"
+          aria-label="Titre de l'article"
+          class="mb-6 w-full border-none bg-transparent font-Scheherazade text-3xl font-bold leading-tight text-black outline-none placeholder:text-black/40 dark:text-white dark:placeholder:text-white/40"
+        />
+        <div id="editor" class="font-Scheherazade text-black dark:text-white"></div>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    import EditorJS from "@editorjs/editorjs";
+    import Header from "@editorjs/header";
+    import List from "@editorjs/list";
+    import Quote from "@editorjs/quote";
+    import Marker from "@editorjs/marker";
+    import InlineCode from "@editorjs/inline-code";
+    import Delimiter from "@editorjs/delimiter";
+
+    const API_BASE = (
+      import.meta.env.PUBLIC_API_BASE_URL ?? "http://localhost:8000"
+    ).replace(/\/$/, "");
+    const withCreds: RequestInit = { credentials: "include" };
+
+    const redirectToLogin = () => {
+      const next = window.location.pathname + window.location.search;
+      window.location.href = `/login?next=${encodeURIComponent(next)}`;
+    };
+    // Garde d'accès client : l'app est statique, le vrai verrou reste l'API.
+    const requireAuth = async (): Promise<boolean> => {
+      try {
+        if ((await fetch(`${API_BASE}/auth/me`, withCreds)).ok) return true;
+      } catch {
+        /* réseau : traité comme non authentifié */
+      }
+      redirectToLogin();
+      return false;
+    };
+
+    // ───────────────────────── Conversion JSON → Markdown ────────────────────
+    // Sortie pour « copier dans Notion/Word » en attendant le push Notion 1-clic.
+    const inlineToMd = (html: string): string =>
+      (html || "")
+        .replace(/<\/?(b|strong)>/gi, "**")
+        .replace(/<\/?(i|em)>/gi, "_")
+        .replace(/<code[^>]*>(.*?)<\/code>/gi, "`$1`")
+        .replace(/<mark[^>]*>(.*?)<\/mark>/gi, "==$1==")
+        .replace(/<a[^>]*href="([^"]*)"[^>]*>(.*?)<\/a>/gi, "[$2]($1)")
+        .replace(/<br\s*\/?>(?:\n)?/gi, "\n")
+        .replace(/<[^>]+>/g, "")
+        .replace(/&nbsp;/g, " ")
+        .replace(/&amp;/g, "&")
+        .replace(/&lt;/g, "<")
+        .replace(/&gt;/g, ">")
+        .replace(/&quot;/g, '"')
+        .replace(/&#39;/g, "'");
+
+    // Lignes Markdown d'une liste Editor.js, sous-listes imbriquées incluses.
+    const listItemsToMd = (
+      items: any[],
+      ordered: boolean,
+      depth: number,
+    ): string[] => {
+      const lines: string[] = [];
+      (items ?? []).forEach((it: any, i: number) => {
+        const txt = typeof it === "string" ? it : (it.content ?? "");
+        lines.push(
+          "  ".repeat(depth) + (ordered ? `${i + 1}. ` : "- ") + inlineToMd(txt),
+        );
+        const sub = typeof it === "object" && it && it.items ? it.items : [];
+        if (sub.length) lines.push(...listItemsToMd(sub, ordered, depth + 1));
+      });
+      return lines;
+    };
+
+    const jsonToMarkdown = (data: any): string => {
+      const blocks: any[] = data?.blocks ?? [];
+      const out: string[] = [];
+      for (const b of blocks) {
+        const d = b.data ?? {};
+        if (b.type === "header") {
+          out.push("#".repeat(d.level || 2) + " " + inlineToMd(d.text));
+        } else if (b.type === "paragraph") {
+          out.push(inlineToMd(d.text));
+        } else if (b.type === "list") {
+          out.push(
+            listItemsToMd(d.items ?? [], d.style === "ordered", 0).join("\n"),
+          );
+        } else if (b.type === "quote") {
+          out.push(
+            "> " +
+              inlineToMd(d.text) +
+              (d.caption ? `\n> — ${inlineToMd(d.caption)}` : ""),
+          );
+        } else if (b.type === "delimiter") {
+          out.push("---");
+        } else if (b.type === "sourcedAnswer") {
+          out.push(sourcedToMarkdown(d));
+        } else if (d.text) {
+          out.push(inlineToMd(d.text));
+        }
+      }
+      return out.join("\n\n");
+    };
+
+    // ──────────────── Bloc « réponse sourcée » (envoyé depuis le chat) ───────
+    const escapeHtml = (s: string) =>
+      (s || "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+    const issueLabel = (slug: string) => {
+      const m = (slug || "").match(/^bilan-0*(\d+)$/);
+      return m ? `Bilan n°${m[1]}` : slug;
+    };
+
+    // Construit la prose vérifiée (renvois numérotés) + l'appareil de sources, à
+    // partir des données structurées {question, sentences, citedChunks}. Tout est
+    // échappé : pas d'injection même si le rendu utilise innerHTML.
+    const buildSourcedHtml = (d: any): string => {
+      const sentences = (d.sentences ?? []).filter((s: any) => s.verified);
+      const cited = d.citedChunks ?? [];
+      const byId = new Map<string, any>(cited.map((c: any) => [c.sourceId, c]));
+      const order: string[] = [];
+      const numFor = (id: string) => {
+        let i = order.indexOf(id);
+        if (i === -1) {
+          order.push(id);
+          i = order.length - 1;
+        }
+        return i + 1;
+      };
+      const paras = new Map<number, any[]>();
+      for (const s of sentences) {
+        const arr = paras.get(s.paragraphe) ?? [];
+        arr.push(s);
+        paras.set(s.paragraphe, arr);
+      }
+      let html =
+        `<p class="mb-2 font-Scheherazade text-xs uppercase tracking-[0.2em] text-darkpink">Réponse sourcée</p>` +
+        `<p class="mb-3 font-Scheherazade text-base italic leading-relaxed text-black dark:text-white">${escapeHtml(d.question)}</p>`;
+      for (const [, group] of [...paras.entries()].sort((a, b) => a[0] - b[0])) {
+        const inner = group
+          .map((s: any) => {
+            const sup = (s.citations ?? [])
+              .filter((id: string) => id !== "none")
+              .map((id: string) => `<sup class="text-darkpink">(${numFor(id)})</sup>`)
+              .join("");
+            return `${escapeHtml(s.text)}${sup}`;
+          })
+          .join(" ");
+        html += `<p class="mb-2 font-Scheherazade leading-relaxed text-black dark:text-white">${inner}</p>`;
+      }
+      if (order.length > 0) {
+        const items = order
+          .map((id, idx) => {
+            const c: any = byId.get(id);
+            if (c) {
+              const ref = `${escapeHtml(c.authorName)}, « ${escapeHtml(c.articleTitle)} », ${escapeHtml(issueLabel(c.issueSlug))}`;
+              const url = `/corpus/${encodeURIComponent(c.issueSlug)}/${encodeURIComponent(c.articleSlug)}`;
+              return `<li class="font-Scheherazade text-xs text-black dark:text-white"><a href="${url}" class="underline decoration-1 underline-offset-2 hover:text-darkpink">(${idx + 1}) ${ref}</a> — ${escapeHtml(c.articleArk)}, car. ${c.charStart}–${c.charEnd}</li>`;
+            }
+            return `<li class="font-Scheherazade text-xs text-black dark:text-white">(${idx + 1}) ${escapeHtml(id)}</li>`;
+          })
+          .join("");
+        html += `<div class="mt-3 border-t border-black/40 pt-2 dark:border-white/40"><ol class="space-y-1">${items}</ol></div>`;
+      }
+      return html;
+    };
+
+    // Même contenu, en Markdown (pour l'export du document).
+    const sourcedToMarkdown = (d: any): string => {
+      const sentences = (d.sentences ?? []).filter((s: any) => s.verified);
+      const cited = d.citedChunks ?? [];
+      const byId = new Map<string, any>(cited.map((c: any) => [c.sourceId, c]));
+      const order: string[] = [];
+      const numFor = (id: string) => {
+        let i = order.indexOf(id);
+        if (i === -1) {
+          order.push(id);
+          i = order.length - 1;
+        }
+        return i + 1;
+      };
+      const paras = new Map<number, any[]>();
+      for (const s of sentences) {
+        const arr = paras.get(s.paragraphe) ?? [];
+        arr.push(s);
+        paras.set(s.paragraphe, arr);
+      }
+      let md = `> **${d.question}**\n\n`;
+      for (const [, group] of [...paras.entries()].sort((a, b) => a[0] - b[0])) {
+        const para = group
+          .map(
+            (s: any) =>
+              `${s.text}` +
+              (s.citations ?? [])
+                .filter((id: string) => id !== "none")
+                .map((id: string) => `(${numFor(id)})`)
+                .join(""),
+          )
+          .join(" ");
+        md += `${para}\n\n`;
+      }
+      if (order.length > 0) {
+        md += "**Sources**\n\n";
+        order.forEach((id, idx) => {
+          const c: any = byId.get(id);
+          if (c) {
+            const ref = `${c.authorName}, « ${c.articleTitle} », ${issueLabel(c.issueSlug)}`;
+            const url = `${window.location.origin}/corpus/${encodeURIComponent(c.issueSlug)}/${encodeURIComponent(c.articleSlug)}`;
+            md += `${idx + 1}. [${ref}](${url}) — ${c.articleArk}, car. ${c.charStart}–${c.charEnd}\n`;
+          } else {
+            md += `${idx + 1}. ${id}\n`;
+          }
+        });
+        md += "\n";
+      }
+      return md;
+    };
+
+    // Block Tool Editor.js : « réponse sourcée », en LECTURE SEULE (préserve la
+    // citation), visuellement distincte de la prose libre de l'auteur.
+    class SourcedAnswer {
+      data: any;
+      static get toolbox() {
+        return {
+          title: "Réponse sourcée",
+          icon: '<svg width="17" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16v12H7l-3 3z"/></svg>',
+        };
+      }
+      static get isReadOnlySupported() {
+        return true;
+      }
+      constructor({ data }: any) {
+        this.data = data || {};
+      }
+      render() {
+        const wrap = document.createElement("div");
+        wrap.contentEditable = "false";
+        wrap.className = "my-2 border border-black px-4 py-3 dark:border-white";
+        wrap.style.borderLeftWidth = "4px";
+        wrap.style.borderLeftColor = "#e27ecc";
+        wrap.innerHTML = buildSourcedHtml(this.data);
+        return wrap;
+      }
+      save() {
+        return this.data;
+      }
+    }
+
+    // ───────────────────── Export Notion (blocs API Notion) ─────────────────
+    const rt = (content: string, ann: any = {}): any => {
+      const node: any = {
+        type: "text",
+        text: { content: (content || "").slice(0, 2000) },
+      };
+      if (ann.link) node.text.link = { url: ann.link };
+      const a: any = {};
+      if (ann.bold) a.bold = true;
+      if (ann.italic) a.italic = true;
+      if (ann.code) a.code = true;
+      if (ann.color) a.color = ann.color;
+      if (Object.keys(a).length) node.annotations = a;
+      return node;
+    };
+    // Notion : 100 éléments max par tableau rich_text, 2000 caractères max par
+    // texte. capRich plafonne le tableau ; textToRich découpe un texte long en
+    // morceaux ≤2000 (au lieu de le tronquer) ; absUrl rend les liens absolus.
+    const MAX_RT = 100;
+    const capRich = (arr: any[]): any[] => arr.slice(0, MAX_RT);
+    const textToRich = (text: string, ann: any = {}): any[] => {
+      const t = text || "";
+      if (!t) return [rt("", ann)];
+      const out: any[] = [];
+      for (let i = 0; i < t.length && out.length < MAX_RT; i += 2000) {
+        out.push(rt(t.slice(i, i + 2000), ann));
+      }
+      return out;
+    };
+    const absUrl = (href: string | null): string | null => {
+      if (!href) return null;
+      try {
+        return new URL(href, window.location.origin).toString();
+      } catch {
+        return null;
+      }
+    };
+
+    // HTML inline (Editor.js) → rich_text Notion via le DOM (gras/italique/code/
+    // lien/surligneur conservés ; texte long découpé, lien relatif absolutisé).
+    const inlineToRich = (html: string): any[] => {
+      const tmp = document.createElement("div");
+      tmp.innerHTML = html || "";
+      const out: any[] = [];
+      const walk = (node: Node, ann: any) => {
+        node.childNodes.forEach((n) => {
+          if (n.nodeType === Node.TEXT_NODE) {
+            const c = n.textContent || "";
+            if (c) for (const seg of textToRich(c, ann)) out.push(seg);
+          } else if (n.nodeType === Node.ELEMENT_NODE) {
+            const el = n as HTMLElement;
+            const tag = el.tagName.toLowerCase();
+            const a = { ...ann };
+            if (tag === "b" || tag === "strong") a.bold = true;
+            if (tag === "i" || tag === "em") a.italic = true;
+            if (tag === "code") a.code = true;
+            if (tag === "mark") a.color = "pink_background";
+            if (tag === "a") a.link = absUrl(el.getAttribute("href")) || ann.link;
+            walk(el, a);
+          }
+        });
+      };
+      walk(tmp, {});
+      return capRich(out.length ? out : [rt("")]);
+    };
+    const para = (rich: any[]): any => ({
+      object: "block",
+      type: "paragraph",
+      paragraph: { rich_text: capRich(rich) },
+    });
+
+    // Bloc « réponse sourcée » → suite de blocs Notion (titre, citation, prose,
+    // sources en liens cliquables vers le corpus).
+    const sourcedToNotion = (d: any): any[] => {
+      const sentences = (d.sentences ?? []).filter((s: any) => s.verified);
+      const cited = d.citedChunks ?? [];
+      const byId = new Map<string, any>(cited.map((c: any) => [c.sourceId, c]));
+      const order: string[] = [];
+      const numFor = (id: string) => {
+        let i = order.indexOf(id);
+        if (i === -1) {
+          order.push(id);
+          i = order.length - 1;
+        }
+        return i + 1;
+      };
+      const paras = new Map<number, any[]>();
+      for (const s of sentences) {
+        const arr = paras.get(s.paragraphe) ?? [];
+        arr.push(s);
+        paras.set(s.paragraphe, arr);
+      }
+      const blocks: any[] = [
+        {
+          object: "block",
+          type: "heading_3",
+          heading_3: { rich_text: [rt("Réponse sourcée")] },
+        },
+        { object: "block", type: "quote", quote: { rich_text: [rt(d.question || "")] } },
+      ];
+      for (const [, group] of [...paras.entries()].sort((a, b) => a[0] - b[0])) {
+        // Une phrase = texte + marqueurs (n) en clair → un seul flux de texte
+        // (évite d'empiler trop d'objets rich_text et le plafond Notion de 100).
+        const text = group
+          .map(
+            (s: any) =>
+              s.text +
+              (s.citations ?? [])
+                .filter((id: string) => id !== "none")
+                .map((id: string) => `(${numFor(id)})`)
+                .join(""),
+          )
+          .join(" ");
+        blocks.push(para(textToRich(text)));
+      }
+      if (order.length > 0) {
+        blocks.push(para([rt("Sources", { bold: true })]));
+        order.forEach((id, idx) => {
+          const c: any = byId.get(id);
+          const rich: any[] = [];
+          if (c) {
+            const ref = `${c.authorName}, « ${c.articleTitle} », ${issueLabel(c.issueSlug)}`;
+            const url = `${window.location.origin}/corpus/${encodeURIComponent(c.issueSlug)}/${encodeURIComponent(c.articleSlug)}`;
+            rich.push(rt(`(${idx + 1}) `));
+            rich.push(rt(ref, { link: url }));
+            rich.push(rt(` — ${c.articleArk}, car. ${c.charStart}–${c.charEnd}`));
+          } else {
+            rich.push(rt(`(${idx + 1}) ${id}`));
+          }
+          blocks.push({
+            object: "block",
+            type: "bulleted_list_item",
+            bulleted_list_item: { rich_text: rich },
+          });
+        });
+      }
+      return blocks;
+    };
+
+    // Liste Editor.js → blocs Notion list_item, sous-listes imbriquées incluses
+    // (chaque sous-niveau devient les `children` du bloc parent).
+    const listToNotion = (items: any[], ordered: boolean): any[] =>
+      (items ?? []).map((it: any) => {
+        const txt = typeof it === "string" ? it : (it.content ?? "");
+        const t = ordered ? "numbered_list_item" : "bulleted_list_item";
+        const block: any = {
+          object: "block",
+          type: t,
+          [t]: { rich_text: inlineToRich(txt) },
+        };
+        const sub = typeof it === "object" && it && it.items ? it.items : [];
+        if (sub.length) block[t].children = listToNotion(sub, ordered);
+        return block;
+      });
+
+    // Document Editor.js → tableau de blocs « children » pour l'API Notion.
+    const buildNotionBlocks = (data: any): any[] => {
+      const blocks: any[] = [];
+      for (const b of data?.blocks ?? []) {
+        const d = b.data ?? {};
+        if (b.type === "header") {
+          const lvl = d.level === 2 ? "heading_2" : "heading_3";
+          blocks.push({
+            object: "block",
+            type: lvl,
+            [lvl]: { rich_text: inlineToRich(d.text) },
+          });
+        } else if (b.type === "paragraph") {
+          blocks.push(para(inlineToRich(d.text)));
+        } else if (b.type === "list") {
+          for (const blk of listToNotion(d.items ?? [], d.style === "ordered")) {
+            blocks.push(blk);
+          }
+        } else if (b.type === "quote") {
+          blocks.push({
+            object: "block",
+            type: "quote",
+            quote: { rich_text: inlineToRich(d.text) },
+          });
+        } else if (b.type === "delimiter") {
+          blocks.push({ object: "block", type: "divider", divider: {} });
+        } else if (b.type === "sourcedAnswer") {
+          blocks.push(...sourcedToNotion(d));
+        } else if (d.text) {
+          blocks.push(para(inlineToRich(d.text)));
+        }
+      }
+      return blocks;
+    };
+
+    // ───────────────────────── État local (brouillon) ───────────────────────
+    const KEY = "cc-atelier-doc-v1";
+    const titleEl = document.getElementById("atelier-title") as HTMLInputElement;
+    const savedEl = document.querySelector("[data-saved]") as HTMLElement;
+    const setSaved = (msg: string) => {
+      if (savedEl) savedEl.textContent = msg;
+    };
+
+    let initialData: any = { blocks: [] };
+    try {
+      const raw = JSON.parse(localStorage.getItem(KEY) ?? "null");
+      if (raw) {
+        initialData = raw.data ?? { blocks: [] };
+        titleEl.value = raw.title ?? "";
+      }
+    } catch {
+      /* brouillon illisible — on repart d'une page vide */
+    }
+
+    let editor: EditorJS;
+    let saveTimer: number | undefined;
+
+    const persist = async (): Promise<boolean> => {
+      try {
+        const data = await editor.save();
+        localStorage.setItem(
+          KEY,
+          JSON.stringify({ title: titleEl.value, data, savedAt: Date.now() }),
+        );
+        setSaved("Enregistré ✓");
+        return true;
+      } catch {
+        setSaved("Échec de l'enregistrement");
+        return false;
+      }
+    };
+    const scheduleSave = () => {
+      setSaved("Enregistrement…");
+      window.clearTimeout(saveTimer);
+      saveTimer = window.setTimeout(persist, 600);
+    };
+
+    const buildMarkdown = async (): Promise<string> => {
+      const data = await editor.save();
+      return `# ${titleEl.value || "Sans titre"}\n\n` + jsonToMarkdown(data);
+    };
+
+    const flash = (btn: HTMLButtonElement | null, msg: string) => {
+      if (!btn) return;
+      const prev = btn.textContent;
+      btn.textContent = msg;
+      window.setTimeout(() => {
+        btn.textContent = prev;
+      }, 2000);
+    };
+
+    // ───────────────────────────── Amorçage ─────────────────────────────────
+    void (async () => {
+      if (!(await requireAuth())) return;
+      document.getElementById("atelier-root")?.removeAttribute("hidden");
+
+      editor = new EditorJS({
+        holder: "editor",
+        autofocus: true,
+        placeholder: "Écris ici, ou insère une réponse sourcée depuis le chat…",
+        data: initialData,
+        onChange: scheduleSave,
+        tools: {
+          header: {
+            class: Header as any,
+            inlineToolbar: true,
+            config: { levels: [2, 3], defaultLevel: 2 },
+          },
+          list: { class: List as any, inlineToolbar: true },
+          quote: { class: Quote as any, inlineToolbar: true },
+          delimiter: { class: Delimiter as any },
+          marker: { class: Marker as any },
+          inlineCode: { class: InlineCode as any },
+          sourcedAnswer: { class: SourcedAnswer as any },
+        },
+      });
+
+      // Vide la file « Envoyer vers l'atelier » : chaque réponse sourcée reçue du
+      // chat est insérée comme bloc lecture seule en fin de document.
+      await editor.isReady;
+      try {
+        const inbox: any[] = JSON.parse(
+          localStorage.getItem("cc-atelier-inbox") ?? "[]",
+        );
+        if (Array.isArray(inbox) && inbox.length > 0) {
+          for (const it of inbox) {
+            editor.blocks.insert(
+              "sourcedAnswer",
+              it,
+              {},
+              editor.blocks.getBlocksCount(),
+              false,
+            );
+          }
+          // Sauver D'ABORD ; ne vider la file qu'après écriture confirmée
+          // (sinon, si localStorage échoue, on perdrait les blocs des 2 côtés).
+          window.clearTimeout(saveTimer);
+          if (await persist()) {
+            localStorage.removeItem("cc-atelier-inbox");
+          }
+        }
+      } catch {
+        /* file illisible — on ignore */
+      }
+
+      titleEl.addEventListener("input", scheduleSave);
+
+      document
+        .getElementById("atelier-copy")
+        ?.addEventListener("click", async (e) => {
+          const btn = e.currentTarget as HTMLButtonElement;
+          try {
+            await navigator.clipboard.writeText(await buildMarkdown());
+            flash(btn, "Copié ✓");
+          } catch {
+            flash(btn, "Copie impossible");
+          }
+        });
+
+      document
+        .getElementById("atelier-export")
+        ?.addEventListener("click", async () => {
+          const blob = new Blob([await buildMarkdown()], {
+            type: "text/markdown;charset=utf-8",
+          });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = `article-cdc-${new Date().toISOString().slice(0, 10)}.md`;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          URL.revokeObjectURL(url);
+        });
+
+      // Push Notion 1-clic : le front bâtit les blocs, le backend (qui détient le
+      // token) crée la page. 503 = Notion non configuré côté serveur.
+      document
+        .getElementById("atelier-notion")
+        ?.addEventListener("click", async (e) => {
+          const btn = e.currentTarget as HTMLButtonElement;
+          const data = await editor.save();
+          const children = buildNotionBlocks(data);
+          if (children.length === 0) {
+            flash(btn, "Document vide");
+            return;
+          }
+          const prev = btn.textContent;
+          btn.disabled = true;
+          btn.textContent = "Envoi…";
+          try {
+            const res = await fetch(`${API_BASE}/atelier/notion`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                title: titleEl.value || "Sans titre",
+                children,
+              }),
+              ...withCreds,
+            });
+            if (res.status === 401) {
+              redirectToLogin();
+              return;
+            }
+            if (res.status === 503) {
+              btn.textContent = "Notion non configuré";
+              return;
+            }
+            if (!res.ok) {
+              btn.textContent = "Échec Notion";
+              return;
+            }
+            const out = await res.json();
+            btn.textContent = "Ouvert dans Notion ✓";
+            if (out.url) window.open(out.url, "_blank", "noopener");
+          } catch {
+            btn.textContent = "Échec réseau";
+          } finally {
+            btn.disabled = false;
+            window.setTimeout(() => {
+              btn.textContent = prev;
+            }, 3000);
+          }
+        });
+
+      // « Nouvelle page » en deux temps (évite d'effacer le brouillon par accident).
+      const newBtn = document.getElementById(
+        "atelier-new",
+      ) as HTMLButtonElement | null;
+      let armed = false;
+      newBtn?.addEventListener("click", async () => {
+        if (!armed) {
+          armed = true;
+          newBtn.textContent = "Confirmer ?";
+          window.setTimeout(() => {
+            armed = false;
+            newBtn.textContent = "Nouvelle page";
+          }, 3000);
+          return;
+        }
+        editor.clear();
+        titleEl.value = "";
+        armed = false;
+        newBtn.textContent = "Nouvelle page";
+        await persist();
+        titleEl.focus();
+      });
+    })();
+  </script>
+
+  <!-- Mise au diapason de la palette stricte (noir/blanc/darkpink, pas de gris)
+       et du thème sombre par défaut du site : sans ça, le texte d'Editor.js
+       (sombre par défaut) serait invisible sur fond noir. -->
+  <style is:global>
+    #editor .codex-editor,
+    #editor .ce-block__content,
+    #editor .cdx-block,
+    #editor .ce-paragraph,
+    #editor .ce-header,
+    #editor .cdx-list,
+    #editor .cdx-quote {
+      color: inherit;
+      font-family: "Scheherazade New", serif;
+    }
+    /* Icônes de la barre latérale (＋ et réglages) en couleur du texte. */
+    #editor .ce-toolbar__plus,
+    #editor .ce-toolbar__settings-btn {
+      color: currentColor;
+    }
+    #editor .ce-toolbar__plus:hover,
+    #editor .ce-toolbar__settings-btn:hover {
+      color: #e27ecc;
+      background: transparent;
+    }
+    /* Popover (menu « / » et réglages de bloc) : net, sans gris. */
+    .ce-popover {
+      --color-border: #000;
+      border: 1px solid #000;
+      border-radius: 0;
+    }
+    html.dark .ce-popover {
+      --color-border: #fff;
+      border-color: #fff;
+      background: #000;
+      color: #fff;
+    }
+    .ce-popover-item:hover,
+    .ce-popover-item--focused {
+      background: rgba(226, 126, 204, 0.15) !important;
+    }
+    /* Surligneur (marker) dans la teinte de marque. */
+    #editor mark,
+    #editor .cdx-marker {
+      background: rgba(226, 126, 204, 0.35);
+      color: inherit;
+    }
+    #editor .cdx-quote__caption,
+    #editor .ce-block a {
+      color: #e27ecc;
+    }
+  </style>
+</BaseLayout>
