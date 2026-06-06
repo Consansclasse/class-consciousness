@@ -13,9 +13,9 @@
     },
     "postgres": {
       "command": "uvx",
-      "args": ["postgres-mcp", "--access-mode=unrestricted"],
+      "args": ["postgres-mcp", "--access-mode=restricted"],
       "env": {
-        "DATABASE_URI": "postgresql://cc:changeme@localhost:5432/class_consciousness"
+        "DATABASE_URI": "postgresql://cc:${POSTGRES_PASSWORD:-changeme}@localhost:5432/class_consciousness"
       }
     },
     "github": {

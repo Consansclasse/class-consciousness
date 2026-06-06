@@ -62,3 +62,6 @@ backups/
 
 # Config Claude Code perso/locale (jamais publiée)
 .claude/settings.local.json
+# Index/cache de Serena (outillage agentique privé — jamais dans l'archive
+# publique : invariant « deux dépôts »).
+.serena/

@@ -110,6 +110,23 @@ jobs:
             --skip-git
             ./
 
+  no-private-leak:
+    # Invariant « deux dépôts » : aucun artefact de l'outillage agentique privé
+    # (repo consciencedeclasse-agents : skills, sous-agents, MCP, crawler) ne doit
+    # entrer dans l'archive publique. Déterministe, zéro LLM — complète gitleaks.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Vérifier l'absence de marqueurs d'outillage privé
+        run: |
+          # Marqueurs sans ambiguïté du privé. ci.yml lui-même est exclu (il les cite).
+          patterns='SPDX: privé|consciencedeclasse-agents|/home/yamamoto'
+          if git grep -nIE "$patterns" -- . ':!.github/workflows/ci.yml'; then
+            echo "::error::Marqueur d'outillage privé détecté dans le dépôt public (invariant 2 dépôts)."
+            exit 1
+          fi
+          echo "✓ Aucun marqueur d'outillage privé."
+
   docker-build:
     runs-on: ubuntu-latest
     steps:
