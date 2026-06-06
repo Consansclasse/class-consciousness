@@ -97,6 +97,12 @@ import BaseLayout from "../layouts/BaseLayout.astro";
         </button>
         <div class="relative ml-auto flex items-center gap-6">
           <a
+            href="/atelier"
+            class="font-Scheherazade text-xs uppercase tracking-[0.25em] text-black transition-colors hover:text-darkpink dark:text-white"
+          >
+            L'atelier
+          </a>
+          <a
             href="/corpus"
             class="font-Scheherazade text-xs uppercase tracking-[0.25em] text-black transition-colors hover:text-darkpink dark:text-white"
           >
@@ -517,8 +523,53 @@ import BaseLayout from "../layouts/BaseLayout.astro";
       });
     };
 
+    // ───────────────────── Envoyer vers l'atelier d'écriture ─────────────────
+    // Une réponse vérifiée peut être poussée vers /atelier (page blanche façon
+    // Notion) comme bloc « réponse sourcée » (lecture seule, citations intactes).
+    // On la dépose dans une file localStorage que /atelier vide à son ouverture.
+    const ATELIER_INBOX = "cc-atelier-inbox";
+    const attachSendToAtelier = (
+      slot: HTMLElement,
+      question: string,
+      data: QaResponse,
+    ) => {
+      const verified = (data.sentences ?? []).filter((s) => s.verified);
+      if (verified.length === 0) return;
+      const box = document.createElement("div");
+      box.className = "mt-4";
+      box.innerHTML = `<button type="button" data-send class="${FB_BTN}" aria-label="Envoyer cette réponse vers l'atelier d'écriture">→ Envoyer vers l'atelier</button>`;
+      slot.appendChild(box);
+      const sendBtn = box.querySelector("[data-send]") as HTMLButtonElement;
+      sendBtn.addEventListener("click", () => {
+        if (sendBtn.disabled) return; // anti double-clic (évite un doublon)
+        sendBtn.disabled = true;
+        let inbox: unknown[] = [];
+        try {
+          inbox = JSON.parse(localStorage.getItem(ATELIER_INBOX) ?? "[]");
+        } catch {
+          inbox = [];
+        }
+        if (!Array.isArray(inbox)) inbox = [];
+        inbox.push({
+          question,
+          sentences: verified,
+          citedChunks: data.citedChunks ?? [],
+        });
+        try {
+          localStorage.setItem(ATELIER_INBOX, JSON.stringify(inbox));
+        } catch {
+          /* stockage indisponible — non bloquant */
+        }
+        window.location.href = "/atelier";
+      });
+    };
+
     // Affiche la réponse finale (vérifiée) ou le message de refus adéquat.
-    const renderResult = (data: QaResponse, slot: HTMLElement) => {
+    const renderResult = (
+      data: QaResponse,
+      slot: HTMLElement,
+      question = "",
+    ) => {
       const sentences = data.sentences ?? [];
       const hasAnswer = !!data.answer && sentences.some((s) => s.verified);
       if (!hasAnswer) {
@@ -536,6 +587,7 @@ import BaseLayout from "../layouts/BaseLayout.astro";
         );
       }
       slot.innerHTML = html;
+      attachSendToAtelier(slot, question, data);
       if (data.interactionId != null) attachFeedback(slot, data.interactionId);
     };
 
@@ -713,10 +765,15 @@ import BaseLayout from "../layouts/BaseLayout.astro";
     const deleteConversation = async (id: number) => {
       if (!(await askConfirm())) return;
       try {
-        await fetch(`${API_BASE}/conversations/${id}`, {
+        const res = await fetch(`${API_BASE}/conversations/${id}`, {
           method: "DELETE",
           ...withCreds,
         });
+        if (res.status === 401) return void redirectToLogin();
+        // On ne retire la conversation de la liste que si l'API confirme la
+        // suppression (204/200). Sinon elle resterait visible alors qu'elle
+        // existe encore côté serveur — pas de faux succès.
+        if (!res.ok) return;
       } catch {
         return;
       }
@@ -737,7 +794,7 @@ import BaseLayout from "../layouts/BaseLayout.astro";
         list.innerHTML = "";
         for (const m of detail.messages) {
           const slot = addExchange(m.question);
-          renderResult(m, slot);
+          renderResult(m, slot, m.question);
         }
         renderConvList();
         closeSidebar();
@@ -824,7 +881,7 @@ import BaseLayout from "../layouts/BaseLayout.astro";
             } else if (event === "result") {
               waiter.stop();
               const payload = JSON.parse(data) as QaResponse;
-              renderResult(payload, slot);
+              renderResult(payload, slot, q);
               onAnswered(q, payload);
               finished = true;
             } else if (event === "error") {
@@ -903,6 +960,7 @@ import BaseLayout from "../layouts/BaseLayout.astro";
       .getElementById("sidebar-close")
       ?.addEventListener("click", closeSidebar);
     backdrop.addEventListener("click", closeSidebar);
+
     // Le bouton compte (icône + popover) et la déconnexion sont auto-câblés par
     // <AccountMenu/> (composant partagé avec le header global).
 
