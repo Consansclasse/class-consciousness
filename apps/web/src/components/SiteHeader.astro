@@ -1,4 +1,5 @@
 ---
+import AccountMenu from "./AccountMenu.astro";
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
 // En-tête unique du site — réplique fidèle du header artedusa
@@ -13,9 +14,13 @@ import ThemeToggle from "./ThemeToggle.astro";
 interface Props {
   /** "solid" : texte noir/blanc (défaut). "overlap" : texte blanc sur héro sombre. */
   variant?: "solid" | "overlap";
+  /** Mode « sans barre » : ne rend QUE l'overlay plein écran + son JS. Pour les
+      pages applicatives (/chat, /compte) qui ont leur propre chrome mais veulent
+      donner accès au menu principal via leur propre bouton `data-menu-open`. */
+  barless?: boolean;
 }
 
-const { variant = "solid" } = Astro.props;
+const { variant = "solid", barless = false } = Astro.props;
 
 const apiBase = import.meta.env.PUBLIC_API_BASE_URL ?? "http://localhost:8000";
 
@@ -70,8 +75,7 @@ const tabs = [
 ];
 
 // Couleur du texte de la barre selon le contexte de page.
-const textColor =
-  variant === "overlap" ? "text-white" : "text-black dark:text-white";
+const textColor = variant === "overlap" ? "text-white" : "text-black dark:text-white";
 
 // Classes de liens du contenu d'onglet (gris artedusa → darkpink ici).
 const linkClass =
@@ -90,6 +94,8 @@ const actionClass =
   data-state="top"
   class="fixed inset-x-0 top-0 z-[9999] transition-transform duration-300 ease-in-out"
 >
+  {!barless && (
+    <Fragment>
   {/* Desktop */}
   <div
     class={`${textColor} hidden lg:flex justify-between items-start px-8 w-full pt-8 font-Scheherazade`}
@@ -122,19 +128,14 @@ const actionClass =
     <div class="inline-flex items-center gap-8 justify-end uppercase">
       <a href="/corpus" class={actionClass}>Le corpus</a>
       <a href="/login" data-auth-link="anon" class={actionClass}>Connexion</a>
-      <a
-        href="/chat"
-        data-auth-link="user"
-        class={`${actionClass} hidden`}
-        data-account>Mon compte</a
-      >
-      <button
-        type="button"
-        data-auth-link="user"
-        data-logout
-        class={`${actionClass} hidden`}
-        aria-label="Se déconnecter">Déconnexion</button
-      >
+      {/* Menu compte (composant partagé) — visible une fois connecté. */}
+      <div data-auth-link="user" class="hidden">
+        <AccountMenu
+          triggerId="header-account-trigger"
+          menuId="header-account-menu"
+          logoutRedirect="/"
+        />
+      </div>
       <ThemeToggle />
     </div>
   </div>
@@ -184,7 +185,7 @@ const actionClass =
           </svg>
         </a>
         <a
-          href="/chat"
+          href="/compte"
           data-auth-link="user"
           class="hidden"
           aria-label="Mon compte"
@@ -209,6 +210,8 @@ const actionClass =
       </div>
     </div>
   </div>
+    </Fragment>
+  )}
 </div>
 
 {/* ════════════════════════════════════════════════════════════════════
@@ -247,7 +250,7 @@ const actionClass =
           >Connexion</a
         >
         <a
-          href="/chat"
+          href="/compte"
           data-auth-link="user"
           data-menu-close
           class={`${actionClass} hidden`}>Mon compte</a
@@ -521,6 +524,7 @@ const actionClass =
         .querySelectorAll<HTMLElement>('[data-auth-link="user"]')
         .forEach((el) => el.classList.toggle("hidden", !authed));
     };
+    // Les initiales du bouton compte sont gérées par <AccountMenu/>.
     fetch(`${API_BASE}/auth/me`, withCreds)
       .then((r) => setAuth(r.ok))
       .catch(() => setAuth(false));
@@ -538,5 +542,7 @@ const actionClass =
         window.location.href = "/";
       }),
     );
+
+    // Le popover du menu compte est auto-câblé par <AccountMenu/> (composant partagé).
   }
 </script>

@@ -1,6 +1,7 @@
 ---
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import BaseLayout from "../layouts/BaseLayout.astro";
+import { BTN_FULL_CLASS, INPUT_CLASS } from "../lib/styles";
 ---
 
 <BaseLayout title="Conscience de classe — Connexion" noindex>
@@ -22,7 +23,7 @@ import BaseLayout from "../layouts/BaseLayout.astro";
             autocomplete="email"
             aria-label="Adresse électronique"
             placeholder="vous@exemple.org"
-            class="w-full border border-black dark:border-white bg-transparent px-4 py-3 font-Scheherazade text-base text-black dark:text-white outline-none focus-visible:border-darkpink"
+            class={INPUT_CLASS}
           />
           <input
             type="password"
@@ -32,12 +33,12 @@ import BaseLayout from "../layouts/BaseLayout.astro";
             autocomplete="current-password"
             aria-label="Mot de passe"
             placeholder="Mot de passe"
-            class="w-full border border-black dark:border-white bg-transparent px-4 py-3 font-Scheherazade text-base text-black dark:text-white outline-none focus-visible:border-darkpink"
+            class={INPUT_CLASS}
           />
           <button
             type="submit"
             id="submit"
-            class="w-full bg-darkpink text-white font-Scheherazade text-sm uppercase tracking-[0.2em] py-3 transition-opacity hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed"
+            class={BTN_FULL_CLASS}
           >
             SE CONNECTER
           </button>
@@ -45,7 +46,7 @@ import BaseLayout from "../layouts/BaseLayout.astro";
 
         <div id="result" class="mt-6" role="alert" aria-live="assertive"></div>
 
-        <nav class="mt-8 flex flex-col gap-2 font-Scheherazade text-sm">
+        <nav class="mt-8 flex flex-col gap-2 font-Scheherazade text-sm uppercase tracking-[0.2em]">
           <a href="/register" class="text-darkpink underline decoration-1 underline-offset-2"
             >Créer un compte</a
           >
@@ -59,14 +60,12 @@ import BaseLayout from "../layouts/BaseLayout.astro";
   </div>
 
   <script>
+    import { API_BASE } from "../lib/auth-client";
     const form = document.getElementById("login-form") as HTMLFormElement;
     const email = document.getElementById("email") as HTMLInputElement;
     const password = document.getElementById("password") as HTMLInputElement;
     const submit = document.getElementById("submit") as HTMLButtonElement;
     const result = document.getElementById("result") as HTMLElement;
-    const API_BASE = (
-      import.meta.env.PUBLIC_API_BASE_URL ?? "http://localhost:8000"
-    ).replace(/\/$/, "");
 
     const note = (text: string) => {
       result.textContent = text;

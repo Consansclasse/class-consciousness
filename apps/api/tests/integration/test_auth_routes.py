@@ -216,3 +216,178 @@ async def test_reset_password_rejects_unknown_token(
         "/auth/reset-password", json={"token": "y" * 40, "password": "un-mot-de-passe"}
     )
     assert res.status_code == 401
+
+
+# ─────────────────────── Gestion de compte (profil, mdp, suppression) ──────────
+
+
+def _verified_session(client: Any, email: str, password: str = _PWD) -> None:
+    """Inscrit, vérifie l'email et laisse une session ouverte sur `client`."""
+    token = _register(client, email, password)
+    assert client.post("/auth/verify-email", json={"token": token}).status_code == 200
+
+
+async def test_me_exposes_email_verified_and_created_at(
+    auth_env: None, clean_db: None, client: Any
+) -> None:
+    """GET /auth/me expose emailVerifiedAt et createdAt (camelCase)."""
+    _verified_session(client, "champs@example.org")
+    body = client.get("/auth/me").json()
+    assert body["emailVerifiedAt"] is not None
+    assert body["createdAt"] is not None
+
+
+async def test_update_profile_sets_and_trims_display_name(
+    auth_env: None, clean_db: None, client: Any
+) -> None:
+    """POST /auth/profile met à jour le nom (trim) et persiste."""
+    _verified_session(client, "profil@example.org")
+    res = client.post("/auth/profile", json={"display_name": "  Camarade  "})
+    assert res.status_code == 200, res.text
+    assert res.json()["displayName"] == "Camarade"
+    assert client.get("/auth/me").json()["displayName"] == "Camarade"
+
+
+async def test_update_profile_requires_auth(
+    auth_env: None, clean_db: None, client: Any
+) -> None:
+    """POST /auth/profile sans session → 401."""
+    assert client.post("/auth/profile", json={"display_name": "X"}).status_code == 401
+
+
+async def test_update_profile_rejects_too_long(
+    auth_env: None, clean_db: None, client: Any
+) -> None:
+    """display_name > 255 → 422."""
+    _verified_session(client, "troplong@example.org")
+    res = client.post("/auth/profile", json={"display_name": "a" * 256})
+    assert res.status_code == 422
+
+
+async def test_change_password_full_cycle(
+    auth_env: None, clean_db: None, client: Any
+) -> None:
+    """change-password : succès → l'ancien mdp ne marche plus, le nouveau oui."""
+    _verified_session(client, "chgmdp@example.org")
+    new_pwd = "nouveau-mot-de-passe"
+    res = client.post(
+        "/auth/change-password",
+        json={"current_password": _PWD, "new_password": new_pwd},
+    )
+    assert res.status_code == 200, res.text
+    client.post("/auth/logout")
+    assert (
+        client.post(
+            "/auth/login", json={"email": "chgmdp@example.org", "password": _PWD}
+        ).status_code
+        == 401
+    )
+    assert (
+        client.post(
+            "/auth/login", json={"email": "chgmdp@example.org", "password": new_pwd}
+        ).status_code
+        == 200
+    )
+
+
+async def test_change_password_wrong_current(
+    auth_env: None, clean_db: None, client: Any
+) -> None:
+    """Mauvais mot de passe actuel → 401 ; l'ancien reste valide."""
+    _verified_session(client, "mauvais@example.org")
+    res = client.post(
+        "/auth/change-password",
+        json={"current_password": "FAUX", "new_password": "un-autre-mot-de-passe"},
+    )
+    assert res.status_code == 401
+    client.post("/auth/logout")
+    assert (
+        client.post(
+            "/auth/login", json={"email": "mauvais@example.org", "password": _PWD}
+        ).status_code
+        == 200
+    )
+
+
+async def test_change_password_rejects_same_as_current(
+    auth_env: None, clean_db: None, client: Any
+) -> None:
+    """Changer le mot de passe par lui-même → 401 (il doit différer de l'ancien)."""
+    _verified_session(client, "memememe@example.org")
+    res = client.post(
+        "/auth/change-password",
+        json={"current_password": _PWD, "new_password": _PWD},
+    )
+    assert res.status_code == 401
+
+
+async def test_change_password_too_short(
+    auth_env: None, clean_db: None, client: Any
+) -> None:
+    """Nouveau mot de passe < 10 caractères → 422."""
+    _verified_session(client, "court@example.org")
+    res = client.post(
+        "/auth/change-password",
+        json={"current_password": _PWD, "new_password": "court"},
+    )
+    assert res.status_code == 422
+
+
+async def test_change_password_requires_auth(
+    auth_env: None, clean_db: None, client: Any
+) -> None:
+    """change-password sans session → 401."""
+    res = client.post(
+        "/auth/change-password",
+        json={"current_password": _PWD, "new_password": "un-mot-de-passe"},
+    )
+    assert res.status_code == 401
+
+
+async def test_change_password_passwordless_account(
+    auth_env: None, clean_db: None, client: Any
+) -> None:
+    """Compte sans mot de passe (créé par don) → PasswordlessAccountError (403)."""
+    from datetime import UTC, datetime
+
+    from cc_api.clients.db import get_session_maker
+    from cc_api.models.user import User
+    from cc_api.services.auth import PasswordlessAccountError, change_password
+
+    async with get_session_maker()() as session:
+        user = User(
+            email="don@example.org",
+            password_hash=None,
+            email_verified_at=datetime.now(UTC),
+        )
+        session.add(user)
+        await session.commit()
+        uid = user.id
+
+    async with get_session_maker()() as session:
+        with pytest.raises(PasswordlessAccountError):
+            await change_password(
+                session, uid, current_password="x", new_password="un-mot-de-passe"
+            )
+
+
+async def test_delete_account_soft_deletes_and_blocks_login(
+    auth_env: None, clean_db: None, client: Any
+) -> None:
+    """delete-account → session fermée, /me 401, re-login impossible."""
+    _verified_session(client, "suppr@example.org")
+    assert client.post("/auth/delete-account", json={}).status_code == 200
+    assert client.get("/auth/me").status_code == 401
+    assert (
+        client.post(
+            "/auth/login", json={"email": "suppr@example.org", "password": _PWD}
+        ).status_code
+        == 401
+    )
+
+
+async def test_delete_account_requires_auth(
+    auth_env: None, clean_db: None, client: Any
+) -> None:
+    """delete-account sans session → 401."""
+    assert client.post("/auth/delete-account", json={}).status_code == 401

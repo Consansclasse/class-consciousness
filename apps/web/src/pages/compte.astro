@@ -1,0 +1,449 @@
+---
+import SiteHeader from "../components/SiteHeader.astro";
+import ThemeToggle from "../components/ThemeToggle.astro";
+// SPDX-License-Identifier: AGPL-3.0-or-later
+import BaseLayout from "../layouts/BaseLayout.astro";
+import { BTN_CLASS as BTN, H2_CLASS as H2, INPUT_CLASS as INPUT } from "../lib/styles";
+
+// Page « Mon compte » : gestion du profil, du mot de passe, de l'abonnement et
+// du compte. Le front étant statique (pas d'adapter SSR), la session n'est PAS
+// lisible côté serveur → la garde d'accès est CLIENT (re-fetch /auth/me), comme
+// chat.astro. Le shell reste masqué (#compte-root[hidden]) jusqu'à confirmation.
+// Chrome applicatif minimal (noHeader, comme /chat) : hamburger → menu principal
+// (overlay du <SiteHeader barless/>), accès chat/corpus, et thème + déconnexion
+// sobres en bas. Le mode barless ne rend AUCUN ThemeToggle → pas de conflit d'id
+// avec celui du pied de page.
+const ALERT = "mt-3 font-Scheherazade text-sm leading-relaxed text-black dark:text-white";
+---
+
+<BaseLayout title="Conscience de classe — Mon compte" noindex noHeader noFooter>
+  {/* Menu principal du site (overlay), ouvert par le hamburger ci-dessous. */}
+  <SiteHeader barless />
+  <div id="compte-root" hidden class="flex min-h-dvh flex-col bg-white dark:bg-black">
+    <!-- Barre minimale : menu principal (hamburger) + accès chat/corpus. -->
+    <header
+      class="flex shrink-0 items-center justify-between gap-6 border-b border-black px-6 py-5 dark:border-white lg:px-10"
+    >
+      <button
+        type="button"
+        data-menu-open
+        aria-controls="site-menu"
+        aria-label="Ouvrir le menu de navigation"
+        class="font-Scheherazade text-xl leading-none text-black transition-colors hover:text-darkpink dark:text-white"
+      >
+        ☰
+      </button>
+      <div class="flex items-center gap-6">
+        <a
+          href="/chat"
+          class="font-Scheherazade text-xs uppercase tracking-[0.25em] text-black transition-colors hover:text-darkpink dark:text-white"
+          >Le chat</a
+        >
+        <a
+          href="/corpus"
+          class="font-Scheherazade text-xs uppercase tracking-[0.25em] text-black transition-colors hover:text-darkpink dark:text-white"
+          >Le corpus</a
+        >
+      </div>
+    </header>
+
+    <main class="mx-auto w-full max-w-2xl flex-1 px-6 py-12 lg:py-16">
+      <h1
+        class="font-Scheherazade text-2xl sm:text-3xl leading-snug text-black dark:text-white mb-12 uppercase"
+      >
+        Mon compte
+      </h1>
+
+      <!-- Identité -->
+      <section class="pb-8">
+        <h2 class={H2}>Identité</h2>
+        <p class="font-Scheherazade text-base text-black dark:text-white">
+          <span id="account-email"></span>
+          <span
+            id="verified-badge"
+            hidden
+            class="ml-3 font-Scheherazade text-xs uppercase tracking-[0.2em] text-darkpink"
+            >✓ Vérifié</span
+          >
+        </p>
+        <p
+          id="member-since"
+          class="mt-2 font-Scheherazade text-xs uppercase tracking-[0.2em] text-black dark:text-white"
+        >
+        </p>
+      </section>
+
+      <!-- Nom affiché -->
+      <section class="border-t border-black dark:border-white py-8">
+        <h2 class={H2}>Nom affiché</h2>
+        <form id="name-form" autocomplete="off" class="flex flex-col gap-4 sm:flex-row sm:items-end">
+          <input
+            type="text"
+            id="display-name"
+            maxlength="255"
+            aria-label="Nom affiché"
+            placeholder="Votre nom"
+            class={INPUT + " sm:flex-1"}
+          />
+          <button type="submit" id="name-submit" class={BTN}>Enregistrer</button>
+        </form>
+        <div id="name-result" class={ALERT} role="alert" aria-live="polite"></div>
+      </section>
+
+      <!-- Mot de passe -->
+      <section class="border-t border-black dark:border-white py-8">
+        <h2 class={H2}>Mot de passe</h2>
+        <form id="password-form" autocomplete="off" class="space-y-4">
+          <input
+            type="password"
+            id="current-password"
+            required
+            autocomplete="current-password"
+            aria-label="Mot de passe actuel"
+            placeholder="Mot de passe actuel"
+            class={INPUT}
+          />
+          <input
+            type="password"
+            id="new-password"
+            required
+            minlength="10"
+            autocomplete="new-password"
+            aria-label="Nouveau mot de passe"
+            placeholder="Nouveau mot de passe (10 caractères minimum)"
+            class={INPUT}
+          />
+          <input
+            type="password"
+            id="confirm-password"
+            required
+            autocomplete="new-password"
+            aria-label="Confirmer le nouveau mot de passe"
+            placeholder="Confirmer le nouveau mot de passe"
+            class={INPUT}
+          />
+          <button type="submit" id="password-submit" class={BTN}>Changer le mot de passe</button>
+        </form>
+        <div id="password-result" class={ALERT} role="alert" aria-live="assertive"></div>
+      </section>
+
+      <!-- Abonnement -->
+      <section class="border-t border-black dark:border-white py-8">
+        <h2 class={H2}>Abonnement</h2>
+        <p
+          id="sub-status"
+          class="font-Scheherazade text-base text-black dark:text-white"
+        >
+          Chargement…
+        </p>
+        <button type="button" id="sub-portal" hidden class={BTN + " mt-4"}
+          >Gérer l'abonnement</button
+        >
+        <div id="sub-result" class={ALERT} role="alert" aria-live="polite"></div>
+      </section>
+
+      <!-- Préférences & session : sobres, en pied de page (jamais dans le header). -->
+      <div
+        class="flex flex-wrap items-center justify-between gap-4 border-t border-black py-8 dark:border-white"
+      >
+        <div class="flex items-center gap-3">
+          <span
+            class="font-Scheherazade text-xs uppercase tracking-[0.25em] text-black dark:text-white"
+            >Thème</span
+          >
+          <ThemeToggle />
+        </div>
+        <button
+          type="button"
+          id="logout-btn"
+          class="font-Scheherazade text-xs uppercase tracking-[0.25em] text-black underline decoration-1 underline-offset-4 transition-colors hover:text-darkpink dark:text-white"
+        >
+          Se déconnecter
+        </button>
+      </div>
+
+      <!-- Suppression -->
+      <section class="border-t border-b border-black dark:border-white py-8">
+        <h2 class={H2}>Supprimer le compte</h2>
+        <p class="font-Scheherazade text-sm leading-relaxed text-black dark:text-white mb-4">
+          Cette action est définitive : votre compte est désactivé et vos
+          conversations ne sont plus accessibles. Pour confirmer, saisissez le
+          mot <span class="text-darkpink">SUPPRIMER</span> ci-dessous.
+        </p>
+        <div class="flex flex-col gap-4 sm:flex-row sm:items-end">
+          <input
+            type="text"
+            id="delete-confirm"
+            autocomplete="off"
+            aria-label="Saisir SUPPRIMER pour confirmer"
+            placeholder="SUPPRIMER"
+            class={INPUT + " sm:flex-1"}
+          />
+          <button
+            type="button"
+            id="delete-btn"
+            disabled
+            class="border border-darkpink text-darkpink font-Scheherazade text-sm uppercase tracking-[0.2em] px-6 py-3 transition-colors hover:bg-darkpink hover:text-white disabled:opacity-40 disabled:cursor-not-allowed"
+            >Supprimer mon compte</button
+          >
+        </div>
+        <div id="delete-result" class={ALERT} role="alert" aria-live="assertive"></div>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    import { API_BASE } from "../lib/auth-client";
+    // L'API porte le cookie de session (autre sous-domaine) : `include` requis.
+    // Le `Content-Type: application/json` force aussi un preflight CORS → c'est la
+    // protection CSRF du projet (origines autorisées vérifiées avant l'envoi).
+    const JSON_HEADERS = { "Content-Type": "application/json" };
+    const withCreds: RequestInit = { credentials: "include" };
+
+    type UserOut = {
+      id: number;
+      email: string;
+      displayName: string | null;
+      emailVerifiedAt: string | null;
+      createdAt: string | null;
+    };
+    type SubStatus = {
+      active: boolean;
+      status: string | null;
+      currentPeriodEnd: string | null;
+      cancelAtPeriodEnd: boolean;
+    };
+
+    const $ = (id: string) => document.getElementById(id);
+    const note = (el: HTMLElement | null, text: string) => {
+      if (el) el.textContent = text;
+    };
+
+    const redirectToLogin = () => {
+      window.location.href = "/login?next=/compte";
+    };
+
+    // ───────────────────────── Garde d'accès + pré-remplissage ──────────────
+    const fmtMonth = (iso: string | null): string => {
+      if (!iso) return "";
+      const d = new Date(iso);
+      return Number.isNaN(d.getTime())
+        ? ""
+        : d.toLocaleDateString("fr-FR", { year: "numeric", month: "long" });
+    };
+
+    const fillIdentity = (user: UserOut) => {
+      note($("account-email"), user.email); // textContent → pas d'XSS
+      if (user.emailVerifiedAt) $("verified-badge")?.removeAttribute("hidden");
+      const since = fmtMonth(user.createdAt);
+      note($("member-since"), since ? `Membre depuis ${since}` : "");
+      ($("display-name") as HTMLInputElement).value = user.displayName ?? "";
+    };
+
+    const requireAuth = async (): Promise<UserOut | null> => {
+      try {
+        const res = await fetch(`${API_BASE}/auth/me`, withCreds);
+        if (res.ok) return (await res.json()) as UserOut;
+      } catch {
+        /* réseau : traité comme non authentifié */
+      }
+      redirectToLogin();
+      return null;
+    };
+
+    // ───────────────────────────── Nom affiché ──────────────────────────────
+    const wireNameForm = () => {
+      const form = $("name-form") as HTMLFormElement;
+      const input = $("display-name") as HTMLInputElement;
+      const btn = $("name-submit") as HTMLButtonElement;
+      form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        btn.disabled = true;
+        note($("name-result"), "");
+        try {
+          const res = await fetch(`${API_BASE}/auth/profile`, {
+            method: "POST",
+            headers: JSON_HEADERS,
+            ...withCreds,
+            body: JSON.stringify({ display_name: input.value.trim() || null }),
+          });
+          if (res.status === 401) return redirectToLogin();
+          if (res.ok) {
+            const u = (await res.json()) as UserOut;
+            input.value = u.displayName ?? "";
+            note($("name-result"), "Nom enregistré.");
+          } else {
+            note($("name-result"), "Le nom n'a pas pu être enregistré.");
+          }
+        } catch {
+          note($("name-result"), "La requête a échoué.");
+        } finally {
+          btn.disabled = false;
+        }
+      });
+    };
+
+    // ───────────────────────────── Mot de passe ─────────────────────────────
+    const wirePasswordForm = () => {
+      const form = $("password-form") as HTMLFormElement;
+      const current = $("current-password") as HTMLInputElement;
+      const next = $("new-password") as HTMLInputElement;
+      const confirm = $("confirm-password") as HTMLInputElement;
+      const btn = $("password-submit") as HTMLButtonElement;
+      form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        note($("password-result"), "");
+        if (next.value !== confirm.value) {
+          note($("password-result"), "Les deux nouveaux mots de passe ne correspondent pas.");
+          return;
+        }
+        btn.disabled = true;
+        try {
+          const res = await fetch(`${API_BASE}/auth/change-password`, {
+            method: "POST",
+            headers: JSON_HEADERS,
+            ...withCreds,
+            body: JSON.stringify({
+              current_password: current.value,
+              new_password: next.value,
+            }),
+          });
+          if (res.ok) {
+            form.reset();
+            note($("password-result"), "Mot de passe modifié.");
+          } else if (res.status === 401) {
+            note($("password-result"), "Mot de passe actuel incorrect.");
+          } else if (res.status === 403) {
+            note(
+              $("password-result"),
+              "Ce compte n'a pas de mot de passe. Utilisez « mot de passe oublié » pour en définir un.",
+            );
+          } else if (res.status === 422) {
+            note($("password-result"), "Le mot de passe doit faire au moins 10 caractères.");
+          } else {
+            note($("password-result"), "Le mot de passe n'a pas pu être modifié.");
+          }
+        } catch {
+          note($("password-result"), "La requête a échoué.");
+        } finally {
+          btn.disabled = false;
+        }
+      });
+    };
+
+    // ───────────────────────────── Abonnement ───────────────────────────────
+    const fmtDate = (iso: string | null): string => {
+      if (!iso) return "";
+      const d = new Date(iso);
+      return Number.isNaN(d.getTime())
+        ? ""
+        : d.toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" });
+    };
+
+    const loadSubscription = async () => {
+      const portal = $("sub-portal") as HTMLButtonElement;
+      try {
+        const res = await fetch(`${API_BASE}/abonnements/me`, withCreds);
+        if (res.status === 401) return redirectToLogin();
+        if (!res.ok) {
+          note($("sub-status"), "Statut de l'abonnement indisponible.");
+          return;
+        }
+        const s = (await res.json()) as SubStatus;
+        if (s.active) {
+          const end = fmtDate(s.currentPeriodEnd);
+          const tail = s.cancelAtPeriodEnd
+            ? end && ` — se termine le ${end}`
+            : end && ` — renouvellement le ${end}`;
+          note($("sub-status"), `Abonnement actif${tail || ""}.`);
+          portal.removeAttribute("hidden");
+        } else {
+          note($("sub-status"), "Aucun abonnement actif. La lecture du corpus reste libre.");
+        }
+      } catch {
+        note($("sub-status"), "Statut de l'abonnement indisponible.");
+      }
+    };
+
+    const wirePortal = () => {
+      const portal = $("sub-portal") as HTMLButtonElement;
+      portal.addEventListener("click", async () => {
+        portal.disabled = true;
+        try {
+          const res = await fetch(`${API_BASE}/abonnements/portal`, {
+            method: "POST",
+            headers: JSON_HEADERS,
+            ...withCreds,
+            body: JSON.stringify({}),
+          });
+          if (res.ok) {
+            const { portalUrl } = (await res.json()) as { portalUrl: string };
+            window.location.assign(portalUrl);
+            return;
+          }
+          note($("sub-result"), "Le portail de gestion est momentanément indisponible.");
+        } catch {
+          note($("sub-result"), "La requête a échoué.");
+        } finally {
+          portal.disabled = false;
+        }
+      });
+    };
+
+    // ───────────────────────────── Session ──────────────────────────────────
+    const wireLogout = () => {
+      $("logout-btn")?.addEventListener("click", async () => {
+        try {
+          await fetch(`${API_BASE}/auth/logout`, { method: "POST", ...withCreds });
+        } catch {
+          /* on redirige quand même */
+        }
+        window.location.href = "/login";
+      });
+    };
+
+    // ───────────────────────────── Suppression ──────────────────────────────
+    const wireDelete = () => {
+      const input = $("delete-confirm") as HTMLInputElement;
+      const btn = $("delete-btn") as HTMLButtonElement;
+      input.addEventListener("input", () => {
+        btn.disabled = input.value.trim() !== "SUPPRIMER";
+      });
+      btn.addEventListener("click", async () => {
+        btn.disabled = true;
+        try {
+          const res = await fetch(`${API_BASE}/auth/delete-account`, {
+            method: "POST",
+            headers: JSON_HEADERS,
+            ...withCreds,
+            body: JSON.stringify({}),
+          });
+          if (res.ok) {
+            window.location.href = "/";
+            return;
+          }
+          if (res.status === 401) return redirectToLogin();
+          note($("delete-result"), "La suppression a échoué.");
+          btn.disabled = false;
+        } catch {
+          note($("delete-result"), "La requête a échoué.");
+          btn.disabled = false;
+        }
+      });
+    };
+
+    // ───────────────────────────── Amorçage ─────────────────────────────────
+    void (async () => {
+      const user = await requireAuth();
+      if (!user) return;
+      fillIdentity(user);
+      wireNameForm();
+      wirePasswordForm();
+      wirePortal();
+      wireLogout();
+      wireDelete();
+      $("compte-root")?.removeAttribute("hidden");
+      await loadSubscription();
+    })();
+  </script>
+</BaseLayout>

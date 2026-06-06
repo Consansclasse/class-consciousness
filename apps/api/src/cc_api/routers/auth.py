@@ -24,19 +24,25 @@ from cc_api.core.logging import get_logger
 from cc_api.core.ratelimit import limiter
 from cc_api.models.user import User
 from cc_api.schemas.auth import (
+    ChangePasswordRequest,
     EmailVerifyRequest,
     ForgotPasswordRequest,
     LoginRequest,
     RegisterRequest,
     ResetPasswordRequest,
+    UpdateProfileRequest,
     UserOut,
 )
 from cc_api.services.auth import (
     AuthError,
+    PasswordlessAccountError,
     authenticate,
+    change_password,
+    delete_account,
     register,
     request_password_reset,
     reset_password,
+    update_profile,
     verify_email,
 )
 
@@ -45,7 +51,13 @@ log = get_logger(__name__)
 
 
 def _user_out(user: User) -> UserOut:
-    return UserOut(id=user.id, email=user.email, display_name=user.display_name)
+    return UserOut(
+        id=user.id,
+        email=user.email,
+        display_name=user.display_name,
+        email_verified_at=user.email_verified_at,
+        created_at=user.created_at,
+    )
 
 
 def _generic_sent(link: str | None) -> dict[str, str]:
@@ -141,3 +153,58 @@ async def logout(request: Request) -> dict[str, str]:
 async def me(user: Annotated[User, Depends(current_user)]) -> UserOut:
     """Renvoie l'utilisateur de la session — 401 si la requête n'est pas authentifiée."""
     return _user_out(user)
+
+
+@router.post("/profile", response_model=UserOut)
+@limiter.limit("10/minute")
+async def post_profile(
+    request: Request,
+    payload: UpdateProfileRequest,
+    user: Annotated[User, Depends(current_user)],
+) -> UserOut:
+    """Met à jour le profil de l'utilisateur connecté (nom affiché)."""
+    async with get_session_maker()() as session:
+        try:
+            updated = await update_profile(
+                session, user.id, display_name=payload.display_name
+            )
+        except AuthError as exc:
+            raise HTTPException(status_code=401, detail=str(exc)) from exc
+        return _user_out(updated)
+
+
+@router.post("/change-password", response_model=UserOut)
+@limiter.limit("5/minute")
+async def post_change_password(
+    request: Request,
+    payload: ChangePasswordRequest,
+    user: Annotated[User, Depends(current_user)],
+) -> UserOut:
+    """Change le mot de passe de l'utilisateur connecté (ré-authentification requise)."""
+    async with get_session_maker()() as session:
+        try:
+            updated = await change_password(
+                session,
+                user.id,
+                current_password=payload.current_password,
+                new_password=payload.new_password,
+            )
+        except PasswordlessAccountError as exc:
+            raise HTTPException(status_code=403, detail=str(exc)) from exc
+        except AuthError as exc:
+            raise HTTPException(status_code=401, detail=str(exc)) from exc
+        return _user_out(updated)
+
+
+@router.post("/delete-account")
+@limiter.limit("5/minute")
+async def post_delete_account(
+    request: Request,
+    user: Annotated[User, Depends(current_user)],
+) -> dict[str, str]:
+    """Supprime (soft-delete RGPD) le compte connecté et ferme la session."""
+    async with get_session_maker()() as session:
+        await delete_account(session, user.id)
+    request.session.clear()
+    log.info("auth.account_deleted", user_id=user.id)
+    return {"status": "deleted"}

@@ -1,6 +1,7 @@
 ---
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import BaseLayout from "../layouts/BaseLayout.astro";
+import { BTN_FULL_CLASS, INPUT_CLASS } from "../lib/styles";
 ---
 
 <BaseLayout title="Conscience de classe — Inscription" noindex>
@@ -26,7 +27,7 @@ import BaseLayout from "../layouts/BaseLayout.astro";
             autocomplete="email"
             aria-label="Adresse électronique"
             placeholder="vous@exemple.org"
-            class="w-full border border-black dark:border-white bg-transparent px-4 py-3 font-Scheherazade text-base text-black dark:text-white outline-none focus-visible:border-darkpink"
+            class={INPUT_CLASS}
           />
           <input
             type="password"
@@ -37,7 +38,7 @@ import BaseLayout from "../layouts/BaseLayout.astro";
             autocomplete="new-password"
             aria-label="Mot de passe"
             placeholder="Mot de passe (10 caractères minimum)"
-            class="w-full border border-black dark:border-white bg-transparent px-4 py-3 font-Scheherazade text-base text-black dark:text-white outline-none focus-visible:border-darkpink"
+            class={INPUT_CLASS}
           />
           <label class="flex items-start gap-3 font-Scheherazade text-sm text-black dark:text-white">
             <input type="checkbox" id="consent" required class="mt-1 accent-darkpink" />
@@ -49,7 +50,7 @@ import BaseLayout from "../layouts/BaseLayout.astro";
           <button
             type="submit"
             id="submit"
-            class="w-full bg-darkpink text-white font-Scheherazade text-sm uppercase tracking-[0.2em] py-3 transition-opacity hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed"
+            class={BTN_FULL_CLASS}
           >
             CRÉER LE COMPTE
           </button>
@@ -57,7 +58,7 @@ import BaseLayout from "../layouts/BaseLayout.astro";
 
         <div id="result" class="mt-6" role="alert" aria-live="assertive"></div>
 
-        <nav class="mt-8 font-Scheherazade text-sm">
+        <nav class="mt-8 font-Scheherazade text-sm uppercase tracking-[0.2em]">
           <a href="/login" class="text-darkpink underline decoration-1 underline-offset-2"
             >J'ai déjà un compte</a
           >
@@ -67,19 +68,13 @@ import BaseLayout from "../layouts/BaseLayout.astro";
   </div>
 
   <script>
+    import { API_BASE, escapeHtml } from "../lib/auth-client";
     const form = document.getElementById("register-form") as HTMLFormElement;
     const email = document.getElementById("email") as HTMLInputElement;
     const password = document.getElementById("password") as HTMLInputElement;
     const consent = document.getElementById("consent") as HTMLInputElement;
     const submit = document.getElementById("submit") as HTMLButtonElement;
     const result = document.getElementById("result") as HTMLElement;
-    const API_BASE = (
-      import.meta.env.PUBLIC_API_BASE_URL ?? "http://localhost:8000"
-    ).replace(/\/$/, "");
-
-    const escapeHtml = (s: string) =>
-      s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-
     form.addEventListener("submit", async (e) => {
       e.preventDefault();
       if (!consent.checked) return;
@@ -106,16 +101,20 @@ import BaseLayout from "../layouts/BaseLayout.astro";
           return;
         }
         const data = (await res.json()) as { devLink?: string };
-        let html =
-          "Compte créé. Vérifiez votre boîte de réception : un lien de confirmation vient d'être envoyé.";
-        if (data.devLink) {
-          html +=
-            `<br /><br /><span class="uppercase tracking-wide text-xs">dev</span> ` +
-            `<a href="${escapeHtml(data.devLink)}" class="text-darkpink underline decoration-1 underline-offset-2">confirmer maintenant</a>`;
-        }
         result.className =
           "mt-6 font-Scheherazade text-sm leading-relaxed text-black dark:text-white";
-        result.innerHTML = html;
+        if (data.devLink) {
+          // Local / sans SMTP : aucun email n'est envoyé. On ne ment pas avec un
+          // « vérifiez votre boîte » — on donne le lien de confirmation en clair,
+          // en évidence, pour finir l'inscription tout de suite.
+          result.innerHTML =
+            `Compte créé. <span class="uppercase tracking-[0.15em] text-xs text-darkpink">Local — aucun email envoyé.</span>` +
+            `<br /><br />` +
+            `<a href="${escapeHtml(data.devLink)}" class="inline-block border-b border-darkpink pb-1 font-Scheherazade text-base uppercase tracking-[0.2em] text-darkpink transition-opacity hover:opacity-80">Confirmer mon compte →</a>`;
+        } else {
+          result.textContent =
+            "Compte créé. Vérifiez votre boîte de réception : un lien de confirmation vient d'être envoyé.";
+        }
         form.style.display = "none";
       } catch {
         result.className =

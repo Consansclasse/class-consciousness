@@ -1,10 +1,12 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Router /abonnements — réception des webhooks Stripe Billing.
+"""Router /abonnements — paiement à l'usage (Stripe Billing).
 
-Pour l'instant un seul endpoint : le webhook de cycle de vie des abonnements.
-Les endpoints utilisateur (checkout, portail de gestion, statut) seront ajoutés
-avec l'intégration de l'authentification — ils requièrent un utilisateur
-identifié, ce que le projet n'expose pas encore.
+- `POST /abonnements/webhook/stripe` : webhook de cycle de vie (signé Stripe).
+- `POST /abonnements/checkout` : ouvre une session Stripe Checkout (utilisateur connecté).
+- `POST /abonnements/portal` : lien vers le portail client Stripe (utilisateur connecté).
+- `GET /abonnements/me` : statut d'abonnement de l'utilisateur courant.
+
+Les endpoints utilisateur exigent une session (`Depends(current_user)`).
 """
 
 from __future__ import annotations

@@ -47,6 +47,11 @@ class AuthError(Exception):
     """Échec d'authentification — identifiants invalides, token expiré, etc."""
 
 
+class PasswordlessAccountError(AuthError):
+    """Le compte n'a pas de mot de passe (créé par don) : impossible de le changer
+    ici — passer par « mot de passe oublié » pour en définir un."""
+
+
 def _hash_token(token: str) -> str:
     """SHA-256 hex du token brut — seul le hash est stocké en base."""
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
@@ -285,3 +290,60 @@ async def reset_password(session: AsyncSession, token: str, new_password: str) -
     await session.commit()
     log.info("auth.password_reset", user_id=user.id)
     return user
+
+
+async def update_profile(
+    session: AsyncSession, user_id: int, *, display_name: str | None
+) -> User:
+    """Met à jour le profil de l'utilisateur connecté (nom affiché).
+
+    `display_name` vide ou blanc est normalisé à `None`.
+    """
+    user = await session.get(User, user_id)
+    if user is None or user.deleted_at is not None:
+        raise AuthError("compte introuvable")
+    normalized = display_name.strip() if display_name else None
+    user.display_name = normalized or None
+    await session.commit()
+    log.info("auth.profile_updated", user_id=user.id)
+    return user
+
+
+async def change_password(
+    session: AsyncSession,
+    user_id: int,
+    *,
+    current_password: str,
+    new_password: str,
+) -> User:
+    """Change le mot de passe d'un utilisateur connecté, après ré-authentification.
+
+    Lève `PasswordlessAccountError` si le compte n'a pas de mot de passe (don),
+    `AuthError` si le mot de passe actuel est faux ou si le nouveau est identique.
+    """
+    user = await session.get(User, user_id)
+    if user is None or user.deleted_at is not None:
+        raise AuthError("compte introuvable")
+    if user.password_hash is None:
+        raise PasswordlessAccountError("ce compte n'a pas de mot de passe")
+    if not verify_password(user.password_hash, current_password):
+        raise AuthError("mot de passe actuel incorrect")
+    if verify_password(user.password_hash, new_password):
+        raise AuthError("le nouveau mot de passe doit différer de l'ancien")
+    user.password_hash = hash_password(new_password)
+    await session.commit()
+    log.info("auth.password_changed", user_id=user.id)
+    return user
+
+
+async def delete_account(session: AsyncSession, user_id: int) -> None:
+    """Supprime le compte de l'utilisateur connecté (soft-delete RGPD `deleted_at`).
+
+    Idempotent : un compte déjà supprimé ou introuvable est un no-op.
+    """
+    user = await session.get(User, user_id)
+    if user is None or user.deleted_at is not None:
+        return
+    user.deleted_at = datetime.now(UTC)
+    await session.commit()
+    log.info("auth.account_deleted", user_id=user_id)

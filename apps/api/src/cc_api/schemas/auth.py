@@ -7,6 +7,7 @@ connexion par mot de passe. Réinitialisation par email. Pas de magic-link.
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Literal
 
 from pydantic import BaseModel, EmailStr, Field
@@ -57,9 +58,28 @@ class ResetPasswordRequest(BaseModel):
     password: str = _Password
 
 
+class UpdateProfileRequest(BaseModel):
+    """Édition du profil de l'utilisateur connecté (POST /auth/profile)."""
+
+    display_name: str | None = Field(default=None, max_length=255)
+
+
+class ChangePasswordRequest(BaseModel):
+    """Changement de mot de passe d'un utilisateur connecté (POST /auth/change-password).
+
+    Exige le mot de passe actuel (ré-authentification) ; le nouveau respecte la
+    même politique que l'inscription.
+    """
+
+    current_password: str = Field(min_length=1, max_length=200)
+    new_password: str = _Password
+
+
 class UserOut(_CamelModel):
     """Utilisateur de la session — exposé par /auth/login, /auth/verify-email, /auth/me."""
 
     id: int
     email: str
     display_name: str | None
+    email_verified_at: datetime | None = None
+    created_at: datetime

@@ -1,0 +1,147 @@
+---
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Menu compte réutilisable : bouton à initiales + popover accessible (Mon compte,
+// thème optionnel, Déconnexion). Auto-câblé en vanilla JS (ouverture/fermeture,
+// Escape + refocus, clic-dehors, initiales depuis /auth/me, déconnexion).
+//
+// Utilisé par l'en-tête du chat (apps/web/src/pages/chat.astro) et par le header
+// global (SiteHeader.astro). Une seule source de vérité pour ce comportement.
+import ThemeToggle from "./ThemeToggle.astro";
+
+interface Props {
+  /** ids DOM uniques sur la page (un menu compte par page). */
+  triggerId: string;
+  menuId: string;
+  /** Affiche la ligne « Thème » + ThemeToggle dans le menu (défaut : non). */
+  showThemeToggle?: boolean;
+  /** Destination après déconnexion (défaut : accueil). */
+  logoutRedirect?: string;
+  /** Classes du bouton déclencheur (cercle à initiales). */
+  triggerClass?: string;
+}
+
+const {
+  triggerId,
+  menuId,
+  showThemeToggle = false,
+  logoutRedirect = "/",
+  triggerClass = "inline-flex h-8 w-8 items-center justify-center rounded-full border border-current font-Scheherazade text-[11px] uppercase tracking-[0.1em] transition-colors hover:border-darkpink hover:text-darkpink",
+} = Astro.props;
+
+const itemClass =
+  "block w-full px-4 py-3 text-left font-Scheherazade text-xs uppercase tracking-[0.2em] transition-colors hover:bg-darkpink hover:text-white";
+
+// Calculé en frontmatter puis passé via `define:vars` : un script `define:vars`
+// est INLINE (non-module), `import.meta.env` n'y est donc pas résolu par Vite.
+const apiBase = (import.meta.env.PUBLIC_API_BASE_URL ?? "http://localhost:8000").replace(/\/$/, "");
+---
+
+<div class="relative">
+  <button
+    type="button"
+    id={triggerId}
+    aria-label="Mon compte"
+    aria-haspopup="menu"
+    aria-expanded="false"
+    aria-controls={menuId}
+    class={triggerClass}
+  >
+    <span data-account-initials aria-hidden="true">·</span>
+  </button>
+  <div
+    id={menuId}
+    role="menu"
+    aria-labelledby={triggerId}
+    hidden
+    class="absolute right-0 top-full z-[10001] mt-2 w-52 border border-black bg-white text-black dark:border-white dark:bg-black dark:text-white"
+  >
+    <a
+      role="menuitem"
+      href="/compte"
+      class={`${itemClass} border-b border-black dark:border-white`}>Mon compte</a
+    >
+    {
+      showThemeToggle && (
+        <div class="flex items-center justify-between border-b border-black px-4 py-3 dark:border-white">
+          <span class="font-Scheherazade text-xs uppercase tracking-[0.2em]">Thème</span>
+          <ThemeToggle />
+        </div>
+      )
+    }
+    <button type="button" role="menuitem" data-account-logout class={itemClass}
+      >Déconnexion</button
+    >
+  </div>
+</div>
+
+<script define:vars={{ triggerId, menuId, logoutRedirect, apiBase }}>
+  const withCreds = { credentials: "include" };
+
+  const trigger = document.getElementById(triggerId);
+  const menu = document.getElementById(menuId);
+  if (trigger && menu) {
+    // Initiales depuis le nom affiché (sinon l'email).
+    const initialsEl = trigger.querySelector("[data-account-initials]");
+    fetch(`${apiBase}/auth/me`, withCreds)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((user) => {
+        if (!user || !initialsEl) return;
+        const src = (user.displayName?.trim() || user.email || "").trim();
+        const initials = src
+          .split(/\s+/)
+          .filter(Boolean)
+          .slice(0, 2)
+          .map((w) => w[0])
+          .join("")
+          .toUpperCase();
+        initialsEl.textContent = initials || "·";
+      })
+      .catch(() => {});
+
+    // Popover : Escape ferme + refocus, clic-dehors ferme.
+    const close = (refocus = false) => {
+      menu.setAttribute("hidden", "");
+      trigger.setAttribute("aria-expanded", "false");
+      if (refocus) trigger.focus();
+    };
+    trigger.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (menu.hasAttribute("hidden")) {
+        menu.removeAttribute("hidden");
+        trigger.setAttribute("aria-expanded", "true");
+        menu.querySelector('[role="menuitem"]')?.focus();
+      } else {
+        close();
+      }
+    });
+    const onEsc = (e) => {
+      if (e.key === "Escape" && !menu.hasAttribute("hidden")) {
+        e.stopPropagation();
+        close(true);
+      }
+    };
+    trigger.addEventListener("keydown", onEsc);
+    menu.addEventListener("keydown", onEsc);
+    document.addEventListener("click", (e) => {
+      if (
+        !menu.hasAttribute("hidden") &&
+        !menu.contains(e.target) &&
+        !trigger.contains(e.target)
+      ) {
+        close();
+      }
+    });
+
+    // Déconnexion.
+    menu
+      .querySelector("[data-account-logout]")
+      ?.addEventListener("click", async () => {
+        try {
+          await fetch(`${apiBase}/auth/logout`, { method: "POST", ...withCreds });
+        } catch {
+          /* on redirige quand même */
+        }
+        window.location.href = logoutRedirect;
+      });
+  }
+</script>
