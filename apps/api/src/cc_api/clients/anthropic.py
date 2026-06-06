@@ -268,15 +268,16 @@ class AnthropicClient:
         max_retries: int = 2,
     ) -> None:
         # Deux modes d'authentification, exclusifs :
-        # - `api_key` → en-tête `x-api-key` (clé API Anthropic, mode prod) ;
-        # - `auth_token` → `Authorization: Bearer` (token OAuth d'un abonnement
-        #   Claude Code, `claude setup-token`, pour le dev local sans clé).
-        # `auth_token` est prioritaire s'il est fourni ; au moins l'un des deux
-        # est requis.
+        # - `api_key` → en-tête `x-api-key` (clé API Anthropic console, prod + éval) ;
+        # - `auth_token` → `Authorization: Bearer`, pour router via un LLM
+        #   gateway/proxy qui authentifie par bearer token. NE JAMAIS y placer un
+        #   token OAuth d'abonnement Claude Code (`claude setup-token`) : usage hors
+        #   CGU Anthropic. `auth_token` prime s'il est fourni ; au moins l'un des
+        #   deux est requis.
         if not api_key and not auth_token:
             raise RuntimeError(
                 "Authentification Anthropic manquante : définir ANTHROPIC_API_KEY "
-                "ou ANTHROPIC_AUTH_TOKEN (token OAuth Claude Code)."
+                "(clé API console) ou ANTHROPIC_AUTH_TOKEN (bearer pour LLM gateway)."
             )
         self.api_key: str | None = api_key
         self.auth_token: str | None = auth_token
@@ -472,8 +473,9 @@ class AnthropicClient:
 def get_anthropic_client() -> AnthropicClient:
     """Singleton Anthropic construit depuis les settings.
 
-    En présence de `ANTHROPIC_AUTH_TOKEN` (token OAuth Claude Code, dev local),
-    l'authentification Bearer prime sur la clé API — voir `AnthropicClient`.
+    `ANTHROPIC_AUTH_TOKEN` (bearer pour un LLM gateway/proxy) prime sur la clé API
+    quand il est défini — voir `AnthropicClient`. La prod et l'éval RAG en dev
+    doivent fournir une vraie `ANTHROPIC_API_KEY` (jamais un token d'abonnement).
     """
     return AnthropicClient(
         api_key=settings.anthropic_api_key,
