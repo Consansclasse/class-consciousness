@@ -19,9 +19,7 @@ from cc_api.models import Conversation, RagInteraction, User
 
 
 @pytest_asyncio.fixture
-async def conv_env(
-    monkeypatch: pytest.MonkeyPatch, migrated_db: str
-) -> AsyncIterator[str]:
+async def conv_env(monkeypatch: pytest.MonkeyPatch, migrated_db: str) -> AsyncIterator[str]:
     """Pointe la DB applicative vers le testcontainer et purge les caches."""
     from cc_api.clients import db as db_module
     from cc_api.core.settings import settings
@@ -39,9 +37,7 @@ async def conv_env(
     db_module.get_session_maker.cache_clear()
 
 
-async def _seed_conversation(
-    session: Any, user_id: int, title: str = "Fil semé"
-) -> int:
+async def _seed_conversation(session: Any, user_id: int, title: str = "Fil semé") -> int:
     conv = Conversation(user_id=user_id, title=title)
     session.add(conv)
     await session.flush()
@@ -113,16 +109,12 @@ async def _uid(session: Any, email: str) -> int:
     return uid
 
 
-def test_list_requires_authentication(
-    conv_env: str, clean_db: None, client: Any
-) -> None:
+def test_list_requires_authentication(conv_env: str, clean_db: None, client: Any) -> None:
     """GET /conversations sans session → 401."""
     assert client.get("/conversations").status_code == 401
 
 
-async def test_create_then_list(
-    conv_env: str, clean_db: None, client: Any, login: Any
-) -> None:
+async def test_create_then_list(conv_env: str, clean_db: None, client: Any, login: Any) -> None:
     """Un fil créé apparaît dans la liste de l'utilisateur."""
     login(client, "creatrice@example.org")
     created = client.post("/conversations")
@@ -154,9 +146,7 @@ async def test_get_detail_replays_messages(
     assert msg["citedChunks"][0]["articleTitle"] == "Sur l'État"
 
 
-async def test_rename_conversation(
-    conv_env: str, clean_db: None, client: Any, login: Any
-) -> None:
+async def test_rename_conversation(conv_env: str, clean_db: None, client: Any, login: Any) -> None:
     """PATCH renomme un fil possédé."""
     login(client, "renomme@example.org")
     cid = client.post("/conversations").json()["id"]

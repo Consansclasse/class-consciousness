@@ -45,6 +45,4 @@ class Conversation(Base):
     )
     # Soft-delete : un fil supprimé disparaît de la liste sans perdre ses
     # interactions (analytics, closed-loop).
-    deleted_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

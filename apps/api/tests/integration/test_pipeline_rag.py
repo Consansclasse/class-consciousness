@@ -93,9 +93,7 @@ def _make_mock_anthropic(
             # Schéma plat : liste de phrases, chacune tagguée par `paragraphe`.
             tool_input: dict[str, Any] = {
                 "phrases": [
-                    {**ph, "paragraphe": pi}
-                    for pi, para in enumerate(paragraphes)
-                    for ph in para
+                    {**ph, "paragraphe": pi} for pi, para in enumerate(paragraphes) for ph in para
                 ]
             }
         elif tool_name == "decomposer_question":
@@ -107,8 +105,7 @@ def _make_mock_anthropic(
             indices = [int(n) for n in re.findall(r"### Phrase (\d+)", payload)]
             tool_input = {
                 "verdicts": [
-                    {"index": i, "verdict": judge_verdict, "justification": "test"}
-                    for i in indices
+                    {"index": i, "verdict": judge_verdict, "justification": "test"} for i in indices
                 ]
             }
         return httpx.Response(

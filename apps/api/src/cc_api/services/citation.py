@@ -132,10 +132,14 @@ class CitationReport:
 # Repli typographique : guillemets/apostrophes/tirets courbes → forme ASCII.
 _TYPO_FOLD = str.maketrans(
     {
-        0x00AB: '"', 0x00BB: '"',  # guillemets français
-        0x201C: '"', 0x201D: '"',  # guillemets-virgules doubles
-        0x2018: "'", 0x2019: "'",  # apostrophes courbes
-        0x2013: "-", 0x2014: "-",  # tirets demi/cadratin
+        0x00AB: '"',
+        0x00BB: '"',  # guillemets français
+        0x201C: '"',
+        0x201D: '"',  # guillemets-virgules doubles
+        0x2018: "'",
+        0x2019: "'",  # apostrophes courbes
+        0x2013: "-",
+        0x2014: "-",  # tirets demi/cadratin
         0x2026: "...",  # points de suspension
     }
 )
@@ -196,19 +200,28 @@ def _classify(
     citations = phrase.citations
     if not citations:
         return SentenceVerdict(
-            phrase, paragraphe, CitationVerdict.UNSOURCED, 0.0,
+            phrase,
+            paragraphe,
+            CitationVerdict.UNSOURCED,
+            0.0,
             "aucune citation : phrase non ancrée",
         )
     real = [c for c in citations if c != REFUSAL_CITATION]
     if not real:
         return SentenceVerdict(
-            phrase, paragraphe, CitationVerdict.REFUSED_BY_LLM, 0.0,
+            phrase,
+            paragraphe,
+            CitationVerdict.REFUSED_BY_LLM,
+            0.0,
             "refus explicite du LLM (citations=['none'])",
         )
     cited_texts = [chunks[c] for c in real if c in chunks]
     if not cited_texts:
         return SentenceVerdict(
-            phrase, paragraphe, CitationVerdict.NOT_SUPPORTED, 0.0,
+            phrase,
+            paragraphe,
+            CitationVerdict.NOT_SUPPORTED,
+            0.0,
             f"aucun chunk cité ({real}) n'est présent dans le contexte fourni",
         )
 
@@ -219,14 +232,15 @@ def _classify(
         best_quote = max(best_quote, score)
         if score < threshold:
             return SentenceVerdict(
-                phrase, paragraphe, CitationVerdict.QUOTE_UNVERIFIED, score,
+                phrase,
+                paragraphe,
+                CitationVerdict.QUOTE_UNVERIFIED,
+                score,
                 f"citation directe « {fragment} » : meilleur match {score:.1f}% "
                 f"< {threshold}% — non retrouvée mot pour mot dans {real}",
             )
 
-    return SentenceVerdict(
-        phrase, paragraphe, CitationVerdict.NOT_SUPPORTED, best_quote, _PENDING
-    )
+    return SentenceVerdict(phrase, paragraphe, CitationVerdict.NOT_SUPPORTED, best_quote, _PENDING)
 
 
 # --- Juge sémantique d'entailment -------------------------------------------
@@ -258,8 +272,7 @@ def _judge_payload(items: list[tuple[int, SentenceVerdict, list[str]]]) -> str:
             f"--- {sid} ---\n{text}" for sid, text in zip(real, cited_texts, strict=False)
         )
         blocks.append(
-            f"### Phrase {idx}\nAffirmation : {sv.text}\n"
-            f"Passage(s) cité(s) :\n{passages}\n"
+            f"### Phrase {idx}\nAffirmation : {sv.text}\nPassage(s) cité(s) :\n{passages}\n"
         )
     return "\n".join(blocks)
 
@@ -283,9 +296,7 @@ async def verify_response(
        refusées par précaution (`NOT_SUPPORTED`) — jamais approuvées sans juge.
     """
     flat: list[tuple[int, GeneratedPhrase]] = [
-        (para_idx, phrase)
-        for para_idx, para in enumerate(answer.paragraphes)
-        for phrase in para
+        (para_idx, phrase) for para_idx, para in enumerate(answer.paragraphes) for phrase in para
     ]
     verdicts = [_classify(ph, pi, chunks, fuzzy_threshold) for pi, ph in flat]
     pending = [i for i, v in enumerate(verdicts) if v.reason == _PENDING]
@@ -295,7 +306,10 @@ async def verify_response(
         for i in pending:
             v = verdicts[i]
             verdicts[i] = SentenceVerdict(
-                v.phrase, v.paragraphe, CitationVerdict.NOT_SUPPORTED, v.best_score,
+                v.phrase,
+                v.paragraphe,
+                CitationVerdict.NOT_SUPPORTED,
+                v.best_score,
                 "juge sémantique désactivé (kill-switch) — phrase refusée par précaution",
             )
     elif pending:
@@ -314,13 +328,19 @@ async def verify_response(
             jv = judged.get(i)
             if jv is None:
                 verdicts[i] = SentenceVerdict(
-                    v.phrase, v.paragraphe, CitationVerdict.NOT_SUPPORTED, v.best_score,
+                    v.phrase,
+                    v.paragraphe,
+                    CitationVerdict.NOT_SUPPORTED,
+                    v.best_score,
                     "juge sémantique : phrase non évaluée — rejetée par précaution",
                 )
                 continue
             new_verdict = _JUDGE_MAP.get(jv.verdict, CitationVerdict.NOT_SUPPORTED)
             verdicts[i] = SentenceVerdict(
-                v.phrase, v.paragraphe, new_verdict, v.best_score,
+                v.phrase,
+                v.paragraphe,
+                new_verdict,
+                v.best_score,
                 f"juge sémantique : {jv.verdict} — {jv.justification}",
             )
 
@@ -362,6 +382,4 @@ def assemble_answer(verdicts: list[SentenceVerdict], *, only_verified: bool) -> 
         if only_verified and not v.verified:
             continue
         paragraphs.setdefault(v.paragraphe, []).append(v.text)
-    return "\n\n".join(
-        " ".join(textes) for _, textes in sorted(paragraphs.items()) if textes
-    )
+    return "\n\n".join(" ".join(textes) for _, textes in sorted(paragraphs.items()) if textes)

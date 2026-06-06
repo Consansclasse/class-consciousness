@@ -64,9 +64,7 @@ async def _issue_token(
 
     Purge opportuniste des tokens expirés (pas de cron) avant émission.
     """
-    await session.execute(
-        delete(AuthToken).where(AuthToken.expires_at < datetime.now(UTC))
-    )
+    await session.execute(delete(AuthToken).where(AuthToken.expires_at < datetime.now(UTC)))
     raw = secrets.token_urlsafe(32)
     session.add(
         AuthToken(
@@ -79,9 +77,7 @@ async def _issue_token(
     return raw
 
 
-async def _consume_token(
-    session: AsyncSession, token: str, purpose: TokenPurpose
-) -> int | None:
+async def _consume_token(session: AsyncSession, token: str, purpose: TokenPurpose) -> int | None:
     """Consomme atomiquement un token du `purpose` attendu → renvoie le user_id.
 
     `UPDATE … WHERE used_at IS NULL AND expires_at > now() AND purpose = :p` ne
@@ -165,9 +161,7 @@ async def register(
     Renvoie le lien de vérification en dev uniquement, sinon None.
     """
     now = datetime.now(UTC)
-    user = (
-        await session.execute(select(User).where(User.email == email))
-    ).scalar_one_or_none()
+    user = (await session.execute(select(User).where(User.email == email))).scalar_one_or_none()
 
     if user is not None and user.email_verified_at is not None:
         await session.commit()
@@ -229,9 +223,7 @@ async def authenticate(session: AsyncSession, email: str, password: str) -> User
     passe). Un compte sans mot de passe (créé par don) ou non vérifié est
     refusé. Le temps de réponse est égalisé même si l'email est inconnu.
     """
-    user = (
-        await session.execute(select(User).where(User.email == email))
-    ).scalar_one_or_none()
+    user = (await session.execute(select(User).where(User.email == email))).scalar_one_or_none()
     if user is None or user.password_hash is None or user.deleted_at is not None:
         verify_password(_DUMMY_HASH, password)  # égalise le timing
         raise AuthError("identifiants invalides")
@@ -248,9 +240,7 @@ async def request_password_reset(session: AsyncSession, email: str) -> str | Non
     Réponse toujours générique côté router (pas d'oracle). Renvoie le lien en
     dev uniquement, sinon None.
     """
-    user = (
-        await session.execute(select(User).where(User.email == email))
-    ).scalar_one_or_none()
+    user = (await session.execute(select(User).where(User.email == email))).scalar_one_or_none()
     if (
         user is None
         or user.password_hash is None
@@ -292,9 +282,7 @@ async def reset_password(session: AsyncSession, token: str, new_password: str) -
     return user
 
 
-async def update_profile(
-    session: AsyncSession, user_id: int, *, display_name: str | None
-) -> User:
+async def update_profile(session: AsyncSession, user_id: int, *, display_name: str | None) -> User:
     """Met à jour le profil de l'utilisateur connecté (nom affiché).
 
     `display_name` vide ou blanc est normalisé à `None`.

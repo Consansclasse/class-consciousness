@@ -59,8 +59,6 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_index(
-        op.f("ix_rag_feedback_rag_interaction_id"), table_name="rag_feedback"
-    )
+    op.drop_index(op.f("ix_rag_feedback_rag_interaction_id"), table_name="rag_feedback")
     op.drop_table("rag_feedback")
     sa.Enum(name="rag_feedback_kind").drop(op.get_bind(), checkfirst=True)

@@ -223,14 +223,10 @@ async def _persist_interaction(
                 conv = await conv_service.resolve_for_message(
                     session, user_id, conversation_id_in, result.question
                 )
-                interaction = _build_interaction(
-                    result, request, user_id, conv.id, cited_chunks
-                )
+                interaction = _build_interaction(result, request, user_id, conv.id, cited_chunks)
                 session.add(interaction)
                 await conv_service.touch(session, conv.id)
-                cutoff = datetime.now(UTC) - timedelta(
-                    days=settings.rag_interaction_retention_days
-                )
+                cutoff = datetime.now(UTC) - timedelta(days=settings.rag_interaction_retention_days)
                 await session.execute(
                     delete(RagInteraction).where(
                         RagInteraction.conversation_id.is_(None),
@@ -240,9 +236,7 @@ async def _persist_interaction(
                 await session.commit()
                 return interaction.id, conv.id
     except Exception as exc:
-        log.warning(
-            "qa.persist_failed", error=str(exc), error_type=type(exc).__name__
-        )
+        log.warning("qa.persist_failed", error=str(exc), error_type=type(exc).__name__)
         return None, None
 
 
@@ -394,8 +388,7 @@ async def post_qa(
         raise HTTPException(
             status_code=503,
             detail=(
-                "Le service d'embedding est momentanément indisponible. "
-                "Réessaie dans un instant."
+                "Le service d'embedding est momentanément indisponible. Réessaie dans un instant."
             ),
         ) from exc
     except (APIError, AnthropicError) as exc:
@@ -407,8 +400,7 @@ async def post_qa(
         raise HTTPException(
             status_code=503,
             detail=(
-                "Le service de génération est momentanément indisponible. "
-                "Réessaie dans un instant."
+                "Le service de génération est momentanément indisponible. Réessaie dans un instant."
             ),
         ) from exc
     if result.refused_reason not in _PRE_GENERATION_REFUSALS:
@@ -499,17 +491,21 @@ async def post_qa_stream(
             except EmbedServerError as exc:
                 rag_requests_total.labels(outcome="error").inc()
                 log.warning("qa.stream_embed_unavailable", error=str(exc))
-                await queue.put((
-                    "error",
-                    "Le service d'embedding est momentanément indisponible.",
-                ))
+                await queue.put(
+                    (
+                        "error",
+                        "Le service d'embedding est momentanément indisponible.",
+                    )
+                )
             except (APIError, AnthropicError) as exc:
                 rag_requests_total.labels(outcome="error").inc()
                 log.warning("qa.stream_llm_unavailable", error=str(exc))
-                await queue.put((
-                    "error",
-                    "Le service de génération est momentanément indisponible.",
-                ))
+                await queue.put(
+                    (
+                        "error",
+                        "Le service de génération est momentanément indisponible.",
+                    )
+                )
             except Exception as exc:  # garde-fou : jamais de 500 nu dans le flux
                 log.warning("qa.stream_error", error=str(exc))
                 await queue.put(("error", "Une erreur interne est survenue."))
@@ -534,9 +530,7 @@ async def post_qa_stream(
                     yield _sse("stage", {"label": value})
                 elif kind == "result":
                     rag_result, interaction_id, conversation_id, cited = value
-                    response = _build_response(
-                        rag_result, interaction_id, conversation_id, cited
-                    )
+                    response = _build_response(rag_result, interaction_id, conversation_id, cited)
                     log.info(
                         "qa.stream_answered",
                         question=payload.question[:80],

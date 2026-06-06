@@ -148,9 +148,7 @@ async def metrics(request: Request) -> Response:
     """
     expected = settings.metrics_token
     if expected and request.headers.get("authorization", "") != f"Bearer {expected}":
-        return JSONResponse(
-            status_code=401, content={"detail": "metrics : jeton requis"}
-        )
+        return JSONResponse(status_code=401, content={"detail": "metrics : jeton requis"})
     return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 

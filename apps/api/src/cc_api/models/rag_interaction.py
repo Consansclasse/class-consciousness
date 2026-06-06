@@ -54,9 +54,7 @@ class RagInteraction(Base):
     # Question posée et issue de la requête.
     question: Mapped[str] = mapped_column(Text, nullable=False)
     answer: Mapped[str | None] = mapped_column(Text, nullable=True)
-    incomplete: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, server_default="false"
-    )
+    incomplete: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
     # None si la réponse a abouti ; sinon la clé canonique du refus
     # (no_chunks_retrieved | no_relevant_chunks | unverified_citations).
     refused_reason: Mapped[str | None] = mapped_column(String(64), nullable=True)
@@ -93,13 +91,9 @@ class RagInteraction(Base):
     # (routage désactivé) | NULL (interaction antérieure à cette colonne).
     route: Mapped[str | None] = mapped_column(String(16), nullable=True)
     # Itérations de récupération (boucle bornée G5). 1 = passe unique.
-    n_iterations: Mapped[int] = mapped_column(
-        Integer, nullable=False, server_default="1"
-    )
+    n_iterations: Mapped[int] = mapped_column(Integer, nullable=False, server_default="1")
     # Verdict de couverture des passages (CRAG G4) : "suffisant" | "ambigu" |
     # "insuffisant" | NULL (CRAG non exécuté).
     crag_verdict: Mapped[str | None] = mapped_column(String(16), nullable=True)
     # Réponse servie depuis le cache sémantique (G2) au lieu d'être recalculée.
-    cache_hit: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, server_default="false"
-    )
+    cache_hit: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")

@@ -36,9 +36,7 @@ if _ENV_PATH.exists():
         os.environ.setdefault(key, value)
 
 
-async def _ingest_one(
-    path: Path, embed: object, qdrant: object
-) -> tuple[str, dict[str, object]]:
+async def _ingest_one(path: Path, embed: object, qdrant: object) -> tuple[str, dict[str, object]]:
     """Ingère un fichier en réutilisant les clients partagés. Retourne (status, payload)."""
     from cc_api.services.ingest import ingest_issue
 
@@ -113,8 +111,7 @@ async def main(patterns: list[str]) -> int:
             else:
                 n_error += 1
                 print(
-                    f"{prefix} ✗ {payload['error_type']}: "
-                    f"{str(payload['message'])[:120]}",
+                    f"{prefix} ✗ {payload['error_type']}: {str(payload['message'])[:120]}",
                     file=sys.stderr,
                 )
     finally:

@@ -65,9 +65,7 @@ class RerankClient(Protocol):
 class LocalEmbedClient:
     """Client HTTP du endpoint `/embed` du serveur cc-embed (Qwen3-Embedding)."""
 
-    def __init__(
-        self, base_url: str, *, client: httpx.AsyncClient | None = None
-    ) -> None:
+    def __init__(self, base_url: str, *, client: httpx.AsyncClient | None = None) -> None:
         self.base_url: str = base_url.rstrip("/")
         self._client: httpx.AsyncClient = client or httpx.AsyncClient(timeout=EMBED_TIMEOUT_S)
         self._owns_client: bool = client is None
@@ -105,9 +103,7 @@ class LocalEmbedClient:
 class LocalRerankClient:
     """Client HTTP du endpoint `/rerank` du serveur cc-embed (Qwen3-Reranker)."""
 
-    def __init__(
-        self, base_url: str, *, client: httpx.AsyncClient | None = None
-    ) -> None:
+    def __init__(self, base_url: str, *, client: httpx.AsyncClient | None = None) -> None:
         self.base_url: str = base_url.rstrip("/")
         self._client: httpx.AsyncClient = client or httpx.AsyncClient(timeout=EMBED_TIMEOUT_S)
         self._owns_client: bool = client is None
@@ -122,9 +118,7 @@ class LocalRerankClient:
     async def __aexit__(self, *exc: object) -> None:
         await self.aclose()
 
-    async def rerank(
-        self, *, query: str, documents: list[str], top_k: int = 5
-    ) -> list[RerankHit]:
+    async def rerank(self, *, query: str, documents: list[str], top_k: int = 5) -> list[RerankHit]:
         """Retourne les `top_k` documents triés par pertinence descendante.
 
         L'`index` retourné réfère à la position dans `documents` original.
@@ -147,8 +141,7 @@ class LocalRerankClient:
                 f"cc-embed /rerank a renvoyé {resp.status_code} : {resp.text[:200]}"
             )
         return [
-            RerankHit(index=item["index"], score=item["score"])
-            for item in resp.json()["results"]
+            RerankHit(index=item["index"], score=item["score"]) for item in resp.json()["results"]
         ]
 
 

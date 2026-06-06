@@ -115,9 +115,7 @@ _DECOMPOSER_TOOL: dict[str, Any] = {
 
 _VERDICT_TOOL: dict[str, Any] = {
     "name": "rendre_verdicts",
-    "description": (
-        "Rend un verdict d'ancrage sémantique pour chaque phrase soumise."
-    ),
+    "description": ("Rend un verdict d'ancrage sémantique pour chaque phrase soumise."),
     "input_schema": {
         "type": "object",
         "properties": {
@@ -172,8 +170,7 @@ class GenerationUsage:
             output_tokens=self.output_tokens + other.output_tokens,
             cache_creation_input_tokens=self.cache_creation_input_tokens
             + other.cache_creation_input_tokens,
-            cache_read_input_tokens=self.cache_read_input_tokens
-            + other.cache_read_input_tokens,
+            cache_read_input_tokens=self.cache_read_input_tokens + other.cache_read_input_tokens,
         )
 
     @property
@@ -181,11 +178,7 @@ class GenerationUsage:
         """Tokens refacturés en pay-as-you-go : entrée + sortie + création de
         cache. Les `cache_read_input_tokens` sont exclus : Anthropic les facture
         ~10 fois moins cher, les compter au plein tarif surfacturerait l'usager."""
-        return (
-            self.input_tokens
-            + self.output_tokens
-            + self.cache_creation_input_tokens
-        )
+        return self.input_tokens + self.output_tokens + self.cache_creation_input_tokens
 
 
 @dataclass(frozen=True)
@@ -320,9 +313,7 @@ class AnthropicClient:
         params: dict[str, Any] = {
             "model": self.model,
             "max_tokens": max_tokens,
-            "system": [
-                {"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}
-            ],
+            "system": [{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}],
             "tools": [_REDIGER_TOOL],
             "tool_choice": {"type": "tool", "name": "rediger_reponse"},
             "messages": [
@@ -378,9 +369,7 @@ class AnthropicClient:
                 "anthropic.generate_empty",
                 data_type=type(data).__name__,
                 keys=list(data.keys()) if isinstance(data, dict) else None,
-                phrases_type=type(data.get("phrases")).__name__
-                if isinstance(data, dict)
-                else None,
+                phrases_type=type(data.get("phrases")).__name__ if isinstance(data, dict) else None,
                 raw_sample=str(data)[:800],
             )
             hint = (
@@ -388,9 +377,7 @@ class AnthropicClient:
                 if response.stop_reason == "max_tokens"
                 else ""
             )
-            raise AnthropicError(
-                f"`rediger_reponse` n'a produit aucune phrase exploitable{hint}"
-            )
+            raise AnthropicError(f"`rediger_reponse` n'a produit aucune phrase exploitable{hint}")
         return GeneratedAnswer(paragraphes=paragraphes, model=self.model, usage=usage)
 
     async def decompose(
@@ -438,9 +425,7 @@ class AnthropicClient:
         params: dict[str, Any] = {
             "model": judge_model,
             "max_tokens": max_tokens,
-            "system": [
-                {"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}
-            ],
+            "system": [{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}],
             "tools": [_VERDICT_TOOL],
             "tool_choice": {"type": "tool", "name": "rendre_verdicts"},
             "messages": [{"role": "user", "content": [{"type": "text", "text": payload}]}],

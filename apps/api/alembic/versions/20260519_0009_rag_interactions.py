@@ -61,17 +61,11 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="SET NULL"),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.create_index(
-        op.f("ix_rag_interactions_created_at"), "rag_interactions", ["created_at"]
-    )
-    op.create_index(
-        op.f("ix_rag_interactions_user_id"), "rag_interactions", ["user_id"]
-    )
+    op.create_index(op.f("ix_rag_interactions_created_at"), "rag_interactions", ["created_at"])
+    op.create_index(op.f("ix_rag_interactions_user_id"), "rag_interactions", ["user_id"])
 
 
 def downgrade() -> None:
     op.drop_index(op.f("ix_rag_interactions_user_id"), table_name="rag_interactions")
-    op.drop_index(
-        op.f("ix_rag_interactions_created_at"), table_name="rag_interactions"
-    )
+    op.drop_index(op.f("ix_rag_interactions_created_at"), table_name="rag_interactions")
     op.drop_table("rag_interactions")

@@ -31,11 +31,15 @@ QUESTIONS: list[dict[str, str]] = [
     {"id": "U2", "question": "Qu'est-il arrive au proletariat espagnol pendant la guerre civile ?"},
     {"id": "U3", "question": "Bilan defendait-il l'URSS comme un Etat ouvrier ?"},
     {"id": "U4", "question": "Quelle etait la position de Bilan sur le Front populaire ?"},
-    {"id": "U5",
-     "question": "Pourquoi Bilan s'opposait-il a la creation d'une IVe Internationale ?"},
+    {
+        "id": "U5",
+        "question": "Pourquoi Bilan s'opposait-il a la creation d'une IVe Internationale ?",
+    },
     {"id": "U6", "question": "Qu'est-ce qu'une fraction et quel est son role selon Bilan ?"},
-    {"id": "U7", "question": "Que reproche-t-on a la these de l'Etat proletarien defendue par "
-                              "Bilan ?"},
+    {
+        "id": "U7",
+        "question": "Que reproche-t-on a la these de l'Etat proletarien defendue par Bilan ?",
+    },
     {"id": "U8", "question": "Le fascisme et la democratie sont-ils deux formes opposees ?"},
     {"id": "U9", "question": "Quelles lecons Bilan tire-t-il des defaites du proletariat ?"},
 ]

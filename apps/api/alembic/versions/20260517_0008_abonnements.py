@@ -78,9 +78,7 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.drop_index(op.f("ix_abonnements_status"), table_name="abonnements")
-    op.drop_index(
-        op.f("ix_abonnements_stripe_subscription_id"), table_name="abonnements"
-    )
+    op.drop_index(op.f("ix_abonnements_stripe_subscription_id"), table_name="abonnements")
     op.drop_index(op.f("ix_abonnements_user_id"), table_name="abonnements")
     op.drop_table("abonnements")
     sa.Enum(name="abonnement_status").drop(op.get_bind(), checkfirst=True)

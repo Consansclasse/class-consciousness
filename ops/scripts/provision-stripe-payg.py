@@ -78,12 +78,15 @@ def _create_price(meter_id: str, currency: str, price_cents: int) -> stripe.Pric
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "--price-cents", type=int, required=True,
+        "--price-cents",
+        type=int,
+        required=True,
         help="prix HT en centimes pour 1000 tokens facturables",
     )
     parser.add_argument("--currency", default="eur")
     parser.add_argument(
-        "--event-name", default=os.environ.get("STRIPE_METER_EVENT_NAME", "rag_tokens"),
+        "--event-name",
+        default=os.environ.get("STRIPE_METER_EVENT_NAME", "rag_tokens"),
     )
     args = parser.parse_args()
 

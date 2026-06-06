@@ -69,7 +69,7 @@ def _run_alembic_upgrade_head() -> str:
         return "migrated to head"
     except subprocess.CalledProcessError as exc:
         return f"migration error: {exc.stderr.decode(errors='replace')[-300:]}"
-    except Exception as exc:  # noqa: BLE001 — dev endpoint, on remonte le message
+    except Exception as exc:
         return f"migration error: {exc}"
 
 

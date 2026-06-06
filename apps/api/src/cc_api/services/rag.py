@@ -243,9 +243,7 @@ _KEYWORD_SQL = sql_text(
 )
 
 
-async def keyword_search(
-    session: AsyncSession, query: str, limit: int
-) -> list[tuple[str, float]]:
+async def keyword_search(session: AsyncSession, query: str, limit: int) -> list[tuple[str, float]]:
     """Recherche plein-texte par mots-clés sur `chunks.text` (Postgres FTS FR).
 
     Renvoie `(qdrant_point_id, ts_rank)` triés par pertinence décroissante.
@@ -327,10 +325,26 @@ def _build_context(reranked: list[RerankedChunk]) -> str:
 # routage vers « complexe ». On exclut « et »/« ou », trop fréquents pour
 # discriminer quoi que ce soit.
 _COMPLEXITY_MARKERS: tuple[str, ...] = (
-    " vs ", " versus ", "différence", "diffère", "diverge", "oppose",
-    "opposition", "compare", "comparer", "comparaison", "confronte",
-    "évolution", "évolue", "par rapport", "tandis que", "alors que",
-    "rapport entre", "lien entre", "distinction", "contraste",
+    " vs ",
+    " versus ",
+    "différence",
+    "diffère",
+    "diverge",
+    "oppose",
+    "opposition",
+    "compare",
+    "comparer",
+    "comparaison",
+    "confronte",
+    "évolution",
+    "évolue",
+    "par rapport",
+    "tandis que",
+    "alors que",
+    "rapport entre",
+    "lien entre",
+    "distinction",
+    "contraste",
 )
 
 
@@ -352,9 +366,7 @@ def _classify_complexity(question: str) -> str:
     return "simple"
 
 
-async def _decompose(
-    question: str, *, anthropic: AnthropicClient
-) -> tuple[list[str], int, str]:
+async def _decompose(question: str, *, anthropic: AnthropicClient) -> tuple[list[str], int, str]:
     """Étape 0 — décompose la question en sous-questions de recherche.
 
     Renvoie `[question] + sous-questions`, la latence (ms) et la `route` de
@@ -376,9 +388,7 @@ async def _decompose(
         should_decompose = settings.rag_decomposition_enabled
     if should_decompose:
         try:
-            subs = await anthropic.decompose(
-                system=DECOMPOSITION_PROMPT, question=question
-            )
+            subs = await anthropic.decompose(system=DECOMPOSITION_PROMPT, question=question)
             search_queries.extend(s for s in subs if s != question)
         except AnthropicError as exc:
             log.warning("rag.decompose_failed", error=str(exc))

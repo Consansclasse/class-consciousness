@@ -57,9 +57,7 @@ def _notion_detail(resp: httpx.Response) -> str:
             msg = body.get("message")
     except ValueError:
         msg = None
-    prefix = (
-        "Notion a refusé la requête" if resp.status_code < 500 else "Notion en erreur"
-    )
+    prefix = "Notion a refusé la requête" if resp.status_code < 500 else "Notion en erreur"
     return f"{prefix} ({resp.status_code})" + (f" : {str(msg)[:300]}" if msg else "")
 
 
@@ -94,9 +92,7 @@ async def export_to_notion(
 
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
-            resp = await client.post(
-                f"{_NOTION_BASE}/pages", json=create_body, headers=headers
-            )
+            resp = await client.post(f"{_NOTION_BASE}/pages", json=create_body, headers=headers)
             if resp.status_code >= 400:
                 log.warning(
                     "atelier.notion_error",

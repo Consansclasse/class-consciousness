@@ -144,9 +144,7 @@ class Embedder:
         current: list[int] = []
         for i in order:
             length = len(token_ids[i])
-            if current and (
-                (len(current) + 1) * length > budget or len(current) >= max_count
-            ):
+            if current and ((len(current) + 1) * length > budget or len(current) >= max_count):
                 batches.append(current)
                 current = []
             current.append(i)
@@ -164,7 +162,7 @@ class Reranker:
 
     _PREFIX = (
         "<|im_start|>system\nJudge whether the Document meets the requirements "
-        'based on the Query and the Instruct provided. Note that the answer '
+        "based on the Query and the Instruct provided. Note that the answer "
         'can only be "yes" or "no".<|im_end|>\n<|im_start|>user\n'
     )
     _SUFFIX = "<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n"

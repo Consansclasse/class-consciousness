@@ -65,9 +65,7 @@ def test_select_from_tarball_empty_when_nothing_matches(tmp_path: Path) -> None:
 
 
 @pytest_asyncio.fixture
-async def patched_db(
-    migrated_db: str, monkeypatch: pytest.MonkeyPatch
-) -> AsyncIterator[None]:
+async def patched_db(migrated_db: str, monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[None]:
     """Pointe le `get_session_maker` interne de `ingest_issue` vers le testcontainer.
 
     `sync_once` appelle `ingest_issue(session=None)` → chaque fichier possède SA
@@ -96,15 +94,11 @@ async def test_sync_once_ingests_then_dedupes(
     mock_embed_client: Any,
 ) -> None:
     """1ʳᵉ passe ingère ; 2ᵉ passe sur le même fichier = doublon (idempotence)."""
-    first = await sync_once(
-        [canonical_tei_path], embed=mock_embed_client, qdrant=qdrant_client
-    )
+    first = await sync_once([canonical_tei_path], embed=mock_embed_client, qdrant=qdrant_client)
     assert (first.ingested, first.duplicates, first.errors) == (1, 0, 0)
     assert first.ok
 
-    second = await sync_once(
-        [canonical_tei_path], embed=mock_embed_client, qdrant=qdrant_client
-    )
+    second = await sync_once([canonical_tei_path], embed=mock_embed_client, qdrant=qdrant_client)
     assert (second.ingested, second.duplicates, second.errors) == (0, 1, 0)
 
 

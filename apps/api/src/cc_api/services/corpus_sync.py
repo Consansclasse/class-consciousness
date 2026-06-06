@@ -120,9 +120,7 @@ class GitHubTarballSource:
         self.repo = repo
         self.ref = ref
         self._token = token
-        self._client = client or httpx.AsyncClient(
-            timeout=_HTTP_TIMEOUT_S, follow_redirects=True
-        )
+        self._client = client or httpx.AsyncClient(timeout=_HTTP_TIMEOUT_S, follow_redirects=True)
         self._owns_client = client is None
 
     def _headers(self, accept: str) -> dict[str, str]:
@@ -134,9 +132,7 @@ class GitHubTarballSource:
     async def current_revision(self) -> str:
         """SHA du commit de tête de `ref` (texte brut via `Accept: vnd.github.sha`)."""
         url = f"{_GITHUB_API}/repos/{self.repo}/commits/{self.ref}"
-        resp = await self._client.get(
-            url, headers=self._headers("application/vnd.github.sha")
-        )
+        resp = await self._client.get(url, headers=self._headers("application/vnd.github.sha"))
         resp.raise_for_status()
         return resp.text.strip()
 
@@ -288,9 +284,7 @@ def _main() -> int:
     async def _run() -> int:
         if args.local:
             docs = sorted(
-                p
-                for raw in globlib.glob(args.local, recursive=True)
-                if (p := Path(raw)).is_file()
+                p for raw in globlib.glob(args.local, recursive=True) if (p := Path(raw)).is_file()
             )
             if not docs:
                 log.error("corpus_sync.no_local_files", glob=args.local)

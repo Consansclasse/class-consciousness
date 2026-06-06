@@ -32,9 +32,7 @@ depends_on: Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    op.add_column(
-        "rag_interactions", sa.Column("route", sa.String(length=16), nullable=True)
-    )
+    op.add_column("rag_interactions", sa.Column("route", sa.String(length=16), nullable=True))
     op.add_column(
         "rag_interactions",
         sa.Column(

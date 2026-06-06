@@ -38,9 +38,7 @@ async def webhook_env(
     from cc_api.core.settings import settings
 
     monkeypatch.setattr(settings, "stripe_secret_key", "sk_test_unit", raising=False)
-    monkeypatch.setattr(
-        settings, "stripe_webhook_secret", _WEBHOOK_SECRET, raising=False
-    )
+    monkeypatch.setattr(settings, "stripe_webhook_secret", _WEBHOOK_SECRET, raising=False)
 
     parsed = urlparse(migrated_db)
     monkeypatch.setattr(settings, "postgres_host", parsed.hostname or "localhost")
@@ -246,9 +244,7 @@ async def test_webhook_idempotent_on_replay(
     engine = create_async_engine(db_session.bind.url, echo=False)  # type: ignore[union-attr]
     try:
         async with async_sessionmaker(engine, expire_on_commit=False)() as fresh:
-            count = (
-                await fresh.execute(select(func.count()).select_from(Abonnement))
-            ).scalar_one()
+            count = (await fresh.execute(select(func.count()).select_from(Abonnement))).scalar_one()
     finally:
         await engine.dispose()
     assert count == 1

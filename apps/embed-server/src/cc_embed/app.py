@@ -64,9 +64,7 @@ app = FastAPI(title="cc-embed", version="0.0.1", lifespan=lifespan)
 @app.get("/health")
 async def health() -> dict[str, object]:
     embedder = get_embedder()
-    vram_mb = (
-        round(torch.cuda.memory_allocated() / 2**20, 1) if torch.cuda.is_available() else None
-    )
+    vram_mb = round(torch.cuda.memory_allocated() / 2**20, 1) if torch.cuda.is_available() else None
     return {
         "status": "ok",
         "device": settings.device,

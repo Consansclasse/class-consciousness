@@ -61,9 +61,7 @@ class Abonnement(Base):
     status: Mapped[AbonnementStatus] = mapped_column(
         Enum(AbonnementStatus, name="abonnement_status"), nullable=False, index=True
     )
-    current_period_end: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False
-    )
+    current_period_end: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     cancel_at_period_end: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default="false"
     )
@@ -73,8 +71,6 @@ class Abonnement(Base):
     canceled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     # `created` du dernier event Stripe appliqué — sert à ignorer les webhooks
     # arrivés dans le désordre (Stripe ne garantit pas l'ordre de livraison).
-    last_event_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    last_event_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     user: Mapped[User] = relationship()

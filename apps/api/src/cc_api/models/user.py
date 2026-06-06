@@ -41,9 +41,7 @@ class User(Base):
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     # Horodatage du consentement RGPD obligatoire pour l'adhésion — preuve
     # exigée par la CNIL en cas de contrôle (cf. guide RGPD associations).
-    consent_data_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    consent_data_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     # Consentement newsletter séparé — opt-in non pré-coché obligatoire.
     consent_newsletter_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True

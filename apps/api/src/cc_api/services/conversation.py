@@ -77,9 +77,7 @@ async def touch(session: AsyncSession, conversation_id: int) -> None:
     )
 
 
-async def list_for_user(
-    session: AsyncSession, user_id: int
-) -> list[Conversation]:
+async def list_for_user(session: AsyncSession, user_id: int) -> list[Conversation]:
     """Fils non supprimés de l'utilisateur, du plus récemment actif au plus ancien."""
     result = await session.execute(
         select(Conversation)
@@ -89,9 +87,7 @@ async def list_for_user(
     return list(result.scalars().all())
 
 
-async def messages_for(
-    session: AsyncSession, conversation_id: int
-) -> list[RagInteraction]:
+async def messages_for(session: AsyncSession, conversation_id: int) -> list[RagInteraction]:
     """Interactions d'un fil, ordonnées chronologiquement (réaffichage)."""
     result = await session.execute(
         select(RagInteraction)
@@ -113,9 +109,7 @@ async def rename(
     return conv
 
 
-async def soft_delete(
-    session: AsyncSession, conversation_id: int, user_id: int
-) -> bool:
+async def soft_delete(session: AsyncSession, conversation_id: int, user_id: int) -> bool:
     """Marque un fil possédé comme supprimé. False si introuvable/non possédé."""
     conv = await get_owned(session, conversation_id, user_id)
     if conv is None:

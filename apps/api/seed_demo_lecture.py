@@ -22,10 +22,9 @@ import sys
 import uuid
 from datetime import date
 
-from sqlalchemy import delete, func, select
-
 from cc_api.clients.db import get_session_maker
 from cc_api.models import Article, Author, Chunk, Issue
+from sqlalchemy import delete, func, select
 
 SLUG = "bilan-demo"
 ARTICLE_SLUG = "note-de-demonstration"
@@ -57,7 +56,9 @@ async def main(reset: bool) -> None:
     Session = get_session_maker()
     async with Session() as s:
         if reset:
-            existing = (await s.execute(select(Issue).where(Issue.slug == SLUG))).scalar_one_or_none()
+            existing = (
+                await s.execute(select(Issue).where(Issue.slug == SLUG))
+            ).scalar_one_or_none()
             if existing is not None:
                 await s.execute(delete(Issue).where(Issue.id == existing.id))
                 await s.commit()
@@ -113,7 +114,9 @@ async def main(reset: bool) -> None:
                     )
                 )
             await s.commit()
-            print(f"[ok] inséré issue_id={issue.id} article_id={article.id} paragraphes={len(PARAS)}")
+            print(
+                f"[ok] inséré issue_id={issue.id} article_id={article.id} paragraphes={len(PARAS)}"
+            )
 
         # Vérification dans le même process (pas de course possible).
         n_issues = (await s.execute(select(func.count()).select_from(Issue))).scalar_one()

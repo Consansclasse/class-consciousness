@@ -89,9 +89,7 @@ def _extract_price_id(sub: Any) -> str | None:
         return None
 
 
-async def handle_stripe_event(
-    session: AsyncSession, *, event: stripe.Event
-) -> int | None:
+async def handle_stripe_event(session: AsyncSession, *, event: stripe.Event) -> int | None:
     """Traite un event d'abonnement Stripe — idempotent et résistant au désordre.
 
     L'upsert `INSERT … ON CONFLICT … DO UPDATE … WHERE` est atomique : il crée
@@ -196,18 +194,14 @@ async def handle_stripe_event(
     return abonnement_id
 
 
-async def create_subscription_checkout(
-    *, user: User, stripe_client: StripeClient
-) -> str:
+async def create_subscription_checkout(*, user: User, stripe_client: StripeClient) -> str:
     """Ouvre une Checkout Session d'abonnement et renvoie l'URL de redirection.
 
     Le `user_id` est propagé en metadata jusqu'à la Subscription : le webhook
     `customer.subscription.created` le relit pour créer la ligne `Abonnement`.
     """
     if not settings.stripe_price_payg:
-        raise AbonnementError(
-            "pay-as-you-go non configuré (STRIPE_PRICE_PAYG absent)"
-        )
+        raise AbonnementError("pay-as-you-go non configuré (STRIPE_PRICE_PAYG absent)")
     created = await stripe_client.create_subscription_checkout_session(
         email=user.email,
         price_id=settings.stripe_price_payg,
@@ -219,9 +213,7 @@ async def create_subscription_checkout(
     return created.url
 
 
-async def get_active_abonnement(
-    session: AsyncSession, user_id: int
-) -> Abonnement | None:
+async def get_active_abonnement(session: AsyncSession, user_id: int) -> Abonnement | None:
     """Renvoie l'abonnement qui ouvre l'accès aujourd'hui : statut ACTIVE ou
     TRIALING et période courante non échue. None si aucun."""
     now = datetime.now(UTC)
@@ -229,9 +221,7 @@ async def get_active_abonnement(
         select(Abonnement)
         .where(
             Abonnement.user_id == user_id,
-            Abonnement.status.in_(
-                [AbonnementStatus.ACTIVE, AbonnementStatus.TRIALING]
-            ),
+            Abonnement.status.in_([AbonnementStatus.ACTIVE, AbonnementStatus.TRIALING]),
             Abonnement.current_period_end >= now,
         )
         .order_by(Abonnement.current_period_end.desc())
@@ -239,9 +229,7 @@ async def get_active_abonnement(
     return result.scalars().first()
 
 
-async def get_latest_abonnement(
-    session: AsyncSession, user_id: int
-) -> Abonnement | None:
+async def get_latest_abonnement(session: AsyncSession, user_id: int) -> Abonnement | None:
     """Renvoie le dernier abonnement connu de l'utilisateur, quel que soit son
     statut — pour afficher l'état courant (y compris PAST_DUE, CANCELED)."""
     result = await session.execute(

@@ -69,9 +69,7 @@ async def post_stripe_webhook(
         raise HTTPException(status_code=400, detail="signature invalide") from exc
     except RuntimeError as exc:
         log.error("abonnements.webhook.stripe_unconfigured", error=str(exc))
-        raise HTTPException(
-            status_code=503, detail="webhook Stripe non configuré"
-        ) from exc
+        raise HTTPException(status_code=503, detail="webhook Stripe non configuré") from exc
 
     try:
         async with get_session_maker()() as session:
@@ -96,9 +94,7 @@ async def checkout(
 ) -> AbonnementCheckoutOut:
     """Ouvre un Stripe Checkout d'abonnement pour l'utilisateur connecté."""
     try:
-        url = await create_subscription_checkout(
-            user=user, stripe_client=get_stripe_client()
-        )
+        url = await create_subscription_checkout(user=user, stripe_client=get_stripe_client())
     except (AbonnementError, RuntimeError, stripe.StripeError) as exc:
         # Stripe non configuré (clé/price absents) ou en échec : service
         # d'abonnement indisponible — un 503, pas une erreur serveur nue.
@@ -124,9 +120,7 @@ async def portal(
 
 
 @router.get("/me", response_model=AbonnementStatusOut)
-async def me(
-    request: Request, user: Annotated[User, Depends(current_user)]
-) -> AbonnementStatusOut:
+async def me(request: Request, user: Annotated[User, Depends(current_user)]) -> AbonnementStatusOut:
     """État de l'abonnement de l'utilisateur connecté."""
     async with get_session_maker()() as session:
         latest = await get_latest_abonnement(session, user.id)

@@ -116,9 +116,7 @@ async def post_login(request: Request, payload: LoginRequest) -> UserOut:
 
 @router.post("/forgot-password")
 @limiter.limit("5/minute")
-async def post_forgot_password(
-    request: Request, payload: ForgotPasswordRequest
-) -> dict[str, str]:
+async def post_forgot_password(request: Request, payload: ForgotPasswordRequest) -> dict[str, str]:
     """Envoie un email de réinitialisation si le compte existe (réponse générique)."""
     try:
         async with get_session_maker()() as session:
@@ -130,9 +128,7 @@ async def post_forgot_password(
 
 @router.post("/reset-password")
 @limiter.limit("10/minute")
-async def post_reset_password(
-    request: Request, payload: ResetPasswordRequest
-) -> dict[str, str]:
+async def post_reset_password(request: Request, payload: ResetPasswordRequest) -> dict[str, str]:
     """Choisit un nouveau mot de passe à partir d'un token de réinitialisation."""
     async with get_session_maker()() as session:
         try:
@@ -165,9 +161,7 @@ async def post_profile(
     """Met à jour le profil de l'utilisateur connecté (nom affiché)."""
     async with get_session_maker()() as session:
         try:
-            updated = await update_profile(
-                session, user.id, display_name=payload.display_name
-            )
+            updated = await update_profile(session, user.id, display_name=payload.display_name)
         except AuthError as exc:
             raise HTTPException(status_code=401, detail=str(exc)) from exc
         return _user_out(updated)

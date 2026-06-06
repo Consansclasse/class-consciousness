@@ -15,9 +15,7 @@ from cc_api.clients.db import get_session_maker
 from cc_api.core.security import require_dev
 from cc_api.schemas.stats import CitedSource, RagStatsResponse
 
-admin_router = APIRouter(
-    prefix="/admin", tags=["admin"], dependencies=[Depends(require_dev)]
-)
+admin_router = APIRouter(prefix="/admin", tags=["admin"], dependencies=[Depends(require_dev)])
 
 
 # Volume, refus, réponses partielles et latences en une passe.
@@ -87,7 +85,5 @@ async def rag_stats() -> RagStatsResponse:
         latency_p50_ms=int(summary.p50) if summary.p50 is not None else None,
         latency_p95_ms=int(summary.p95) if summary.p95 is not None else None,
         total_tokens=int(total_tokens),
-        top_cited=[
-            CitedSource(source_id=row.source_id, count=int(row.n)) for row in top_cited
-        ],
+        top_cited=[CitedSource(source_id=row.source_id, count=int(row.n)) for row in top_cited],
     )

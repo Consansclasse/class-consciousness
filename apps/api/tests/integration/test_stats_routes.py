@@ -17,9 +17,7 @@ from cc_api.models import RagInteraction
 
 
 @pytest_asyncio.fixture
-async def stats_env(
-    monkeypatch: pytest.MonkeyPatch, migrated_db: str
-) -> AsyncIterator[None]:
+async def stats_env(monkeypatch: pytest.MonkeyPatch, migrated_db: str) -> AsyncIterator[None]:
     """Pointe la DB applicative vers le testcontainer et purge les caches."""
     from cc_api.clients import db as db_module
     from cc_api.core.settings import settings
@@ -84,9 +82,7 @@ async def test_rag_stats_aggregates_interactions(
     """GET /admin/rag/stats agrège fidèlement les lignes rag_interactions."""
     db_session.add_all(
         [
-            _interaction(
-                latency_ms=1000, cited=["bilan-1/a:0"], gen_input=500, gen_output=200
-            ),
+            _interaction(latency_ms=1000, cited=["bilan-1/a:0"], gen_input=500, gen_output=200),
             _interaction(latency_ms=3000, cited=["bilan-1/a:0", "bilan-1/b:1"]),
             _interaction(refused_reason="no_relevant_chunks", latency_ms=200),
         ]

@@ -19,9 +19,7 @@ _PWD = "motdepasse-de-test"
 
 
 @pytest_asyncio.fixture
-async def auth_env(
-    monkeypatch: pytest.MonkeyPatch, migrated_db: str
-) -> AsyncIterator[None]:
+async def auth_env(monkeypatch: pytest.MonkeyPatch, migrated_db: str) -> AsyncIterator[None]:
     """Pointe la DB applicative vers le testcontainer et purge les caches."""
     from cc_api.clients import db as db_module
     from cc_api.core.settings import settings
@@ -53,9 +51,7 @@ def _register(client: Any, email: str, password: str = _PWD) -> str:
     return _token(res.json()["devLink"])
 
 
-async def test_register_verify_login_full_flow(
-    auth_env: None, clean_db: None, client: Any
-) -> None:
+async def test_register_verify_login_full_flow(auth_env: None, clean_db: None, client: Any) -> None:
     """register → verify-email (ouvre session) → me → logout → login → me."""
     token = _register(client, "militante@example.org")
 
@@ -69,9 +65,7 @@ async def test_register_verify_login_full_flow(
     assert client.get("/auth/me").status_code == 401
 
     # Connexion par mot de passe après vérification.
-    logged = client.post(
-        "/auth/login", json={"email": "militante@example.org", "password": _PWD}
-    )
+    logged = client.post("/auth/login", json={"email": "militante@example.org", "password": _PWD})
     assert logged.status_code == 200, logged.text
     assert client.get("/auth/me").status_code == 200
 
@@ -81,15 +75,11 @@ async def test_login_refused_before_verification(
 ) -> None:
     """Tant que l'email n'est pas vérifié, la connexion est refusée."""
     _register(client, "pasverif@example.org")
-    res = client.post(
-        "/auth/login", json={"email": "pasverif@example.org", "password": _PWD}
-    )
+    res = client.post("/auth/login", json={"email": "pasverif@example.org", "password": _PWD})
     assert res.status_code == 401
 
 
-async def test_login_wrong_password(
-    auth_env: None, clean_db: None, client: Any
-) -> None:
+async def test_login_wrong_password(auth_env: None, clean_db: None, client: Any) -> None:
     """Mot de passe erroné → 401."""
     token = _register(client, "user@example.org")
     client.post("/auth/verify-email", json={"token": token})
@@ -100,19 +90,13 @@ async def test_login_wrong_password(
     assert res.status_code == 401
 
 
-async def test_login_unknown_email(
-    auth_env: None, clean_db: None, client: Any
-) -> None:
+async def test_login_unknown_email(auth_env: None, clean_db: None, client: Any) -> None:
     """Email inconnu → 401 (message générique, pas d'oracle)."""
-    res = client.post(
-        "/auth/login", json={"email": "inconnu@example.org", "password": _PWD}
-    )
+    res = client.post("/auth/login", json={"email": "inconnu@example.org", "password": _PWD})
     assert res.status_code == 401
 
 
-async def test_me_requires_authentication(
-    auth_env: None, clean_db: None, client: Any
-) -> None:
+async def test_me_requires_authentication(auth_env: None, clean_db: None, client: Any) -> None:
     """GET /auth/me sans session → 401."""
     assert client.get("/auth/me").status_code == 401
 
@@ -121,15 +105,11 @@ async def test_register_rejects_missing_consent(
     auth_env: None, clean_db: None, client: Any
 ) -> None:
     """Sans consent_data=True, Pydantic rejette → 422."""
-    res = client.post(
-        "/auth/register", json={"email": "noconsent@example.org", "password": _PWD}
-    )
+    res = client.post("/auth/register", json={"email": "noconsent@example.org", "password": _PWD})
     assert res.status_code == 422
 
 
-async def test_register_rejects_short_password(
-    auth_env: None, clean_db: None, client: Any
-) -> None:
+async def test_register_rejects_short_password(auth_env: None, clean_db: None, client: Any) -> None:
     """Mot de passe trop court (< 10) → 422."""
     res = client.post(
         "/auth/register",
@@ -158,23 +138,17 @@ async def test_verify_email_rejects_unknown_token(
     auth_env: None, clean_db: None, client: Any
 ) -> None:
     """Token de vérification inconnu → 401."""
-    assert (
-        client.post("/auth/verify-email", json={"token": "x" * 40}).status_code == 401
-    )
+    assert client.post("/auth/verify-email", json={"token": "x" * 40}).status_code == 401
 
 
-async def test_verify_email_rejects_reuse(
-    auth_env: None, clean_db: None, client: Any
-) -> None:
+async def test_verify_email_rejects_reuse(auth_env: None, clean_db: None, client: Any) -> None:
     """Un token de vérification est à usage unique."""
     token = _register(client, "unique@example.org")
     assert client.post("/auth/verify-email", json={"token": token}).status_code == 200
     assert client.post("/auth/verify-email", json={"token": token}).status_code == 401
 
 
-async def test_forgot_and_reset_password(
-    auth_env: None, clean_db: None, client: Any
-) -> None:
+async def test_forgot_and_reset_password(auth_env: None, clean_db: None, client: Any) -> None:
     """forgot-password → reset-password → connexion avec le nouveau mot de passe."""
     token = _register(client, "reset@example.org")
     client.post("/auth/verify-email", json={"token": token})
@@ -185,18 +159,22 @@ async def test_forgot_and_reset_password(
     reset_token = _token(forgot.json()["devLink"])
 
     new_pwd = "nouveau-mot-de-passe"
-    reset = client.post(
-        "/auth/reset-password", json={"token": reset_token, "password": new_pwd}
-    )
+    reset = client.post("/auth/reset-password", json={"token": reset_token, "password": new_pwd})
     assert reset.status_code == 200
 
     # L'ancien mot de passe ne marche plus, le nouveau oui.
-    assert client.post(
-        "/auth/login", json={"email": "reset@example.org", "password": _PWD}
-    ).status_code == 401
-    assert client.post(
-        "/auth/login", json={"email": "reset@example.org", "password": new_pwd}
-    ).status_code == 200
+    assert (
+        client.post(
+            "/auth/login", json={"email": "reset@example.org", "password": _PWD}
+        ).status_code
+        == 401
+    )
+    assert (
+        client.post(
+            "/auth/login", json={"email": "reset@example.org", "password": new_pwd}
+        ).status_code
+        == 200
+    )
 
 
 async def test_forgot_password_unknown_email_is_generic(
@@ -248,25 +226,19 @@ async def test_update_profile_sets_and_trims_display_name(
     assert client.get("/auth/me").json()["displayName"] == "Camarade"
 
 
-async def test_update_profile_requires_auth(
-    auth_env: None, clean_db: None, client: Any
-) -> None:
+async def test_update_profile_requires_auth(auth_env: None, clean_db: None, client: Any) -> None:
     """POST /auth/profile sans session → 401."""
     assert client.post("/auth/profile", json={"display_name": "X"}).status_code == 401
 
 
-async def test_update_profile_rejects_too_long(
-    auth_env: None, clean_db: None, client: Any
-) -> None:
+async def test_update_profile_rejects_too_long(auth_env: None, clean_db: None, client: Any) -> None:
     """display_name > 255 → 422."""
     _verified_session(client, "troplong@example.org")
     res = client.post("/auth/profile", json={"display_name": "a" * 256})
     assert res.status_code == 422
 
 
-async def test_change_password_full_cycle(
-    auth_env: None, clean_db: None, client: Any
-) -> None:
+async def test_change_password_full_cycle(auth_env: None, clean_db: None, client: Any) -> None:
     """change-password : succès → l'ancien mdp ne marche plus, le nouveau oui."""
     _verified_session(client, "chgmdp@example.org")
     new_pwd = "nouveau-mot-de-passe"
@@ -290,9 +262,7 @@ async def test_change_password_full_cycle(
     )
 
 
-async def test_change_password_wrong_current(
-    auth_env: None, clean_db: None, client: Any
-) -> None:
+async def test_change_password_wrong_current(auth_env: None, clean_db: None, client: Any) -> None:
     """Mauvais mot de passe actuel → 401 ; l'ancien reste valide."""
     _verified_session(client, "mauvais@example.org")
     res = client.post(
@@ -321,9 +291,7 @@ async def test_change_password_rejects_same_as_current(
     assert res.status_code == 401
 
 
-async def test_change_password_too_short(
-    auth_env: None, clean_db: None, client: Any
-) -> None:
+async def test_change_password_too_short(auth_env: None, clean_db: None, client: Any) -> None:
     """Nouveau mot de passe < 10 caractères → 422."""
     _verified_session(client, "court@example.org")
     res = client.post(
@@ -333,9 +301,7 @@ async def test_change_password_too_short(
     assert res.status_code == 422
 
 
-async def test_change_password_requires_auth(
-    auth_env: None, clean_db: None, client: Any
-) -> None:
+async def test_change_password_requires_auth(auth_env: None, clean_db: None, client: Any) -> None:
     """change-password sans session → 401."""
     res = client.post(
         "/auth/change-password",
@@ -386,8 +352,6 @@ async def test_delete_account_soft_deletes_and_blocks_login(
     )
 
 
-async def test_delete_account_requires_auth(
-    auth_env: None, clean_db: None, client: Any
-) -> None:
+async def test_delete_account_requires_auth(auth_env: None, clean_db: None, client: Any) -> None:
     """delete-account sans session → 401."""
     assert client.post("/auth/delete-account", json={}).status_code == 401

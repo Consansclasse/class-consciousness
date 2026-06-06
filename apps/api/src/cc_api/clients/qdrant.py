@@ -12,6 +12,4 @@ def get_qdrant() -> AsyncQdrantClient:
     # plusieurs dizaines de secondes (serveur cc-embed). Avec un timeout client
     # par défaut de 5s, la connexion HTTP keep-alive vers Qdrant serait
     # considérée morte et la requête suivante lèverait ResponseHandlingException.
-    return AsyncQdrantClient(
-        url=settings.qdrant_url, api_key=settings.qdrant_api_key, timeout=120
-    )
+    return AsyncQdrantClient(url=settings.qdrant_url, api_key=settings.qdrant_api_key, timeout=120)

@@ -244,9 +244,7 @@ async def ingest_issue(
             chunks = split(article_data.paragraphs)
             if not chunks:
                 raise ValueError(f"article '{article_data.slug}' produit 0 chunks")
-            embeddings = await embed.embed_batch(
-                [c.text for c in chunks], input_type="document"
-            )
+            embeddings = await embed.embed_batch([c.text for c in chunks], input_type="document")
             if len(embeddings) != len(chunks):
                 raise RuntimeError(
                     f"le backend d'embedding a renvoyé {len(embeddings)} vecteurs "

@@ -54,8 +54,7 @@ _CASES: list[tuple[str, str, str]] = [
 
 def _payload(cases: list[tuple[str, str, str]]) -> str:
     blocks = [
-        f"### Phrase {i}\nAffirmation : {claim}\n"
-        f"Passage(s) cité(s) :\n--- src-{i} ---\n{source}\n"
+        f"### Phrase {i}\nAffirmation : {claim}\nPassage(s) cité(s) :\n--- src-{i} ---\n{source}\n"
         for i, (claim, source, _) in enumerate(cases)
     ]
     return "\n".join(blocks)

@@ -47,8 +47,18 @@ RATE_LIMIT_SECONDS = 1.5
 
 # Mois français → mois numérique (pour date_iso).
 MONTHS_FR = {
-    "janvier": 1, "février": 2, "mars": 3, "avril": 4, "mai": 5, "juin": 6,
-    "juillet": 7, "août": 8, "septembre": 9, "octobre": 10, "novembre": 11, "décembre": 12,
+    "janvier": 1,
+    "février": 2,
+    "mars": 3,
+    "avril": 4,
+    "mai": 5,
+    "juin": 6,
+    "juillet": 7,
+    "août": 8,
+    "septembre": 9,
+    "octobre": 10,
+    "novembre": 11,
+    "décembre": 12,
 }
 
 
@@ -168,7 +178,9 @@ def parse_index(html_text: str) -> list[IssueRef]:
 
 _TITLE_RE = re.compile(r'<div id="titre-article"[^>]*>(.*?)</div>', re.DOTALL)
 _SOUSTITLE_RE = re.compile(r'<div id="soustitre-article"[^>]*>(.*?)</div>', re.DOTALL)
-_CADRE_ARTICLE_RE = re.compile(r'<div id="cadre-article">(.*?)</div><!-- Fin cadre-article', re.DOTALL)
+_CADRE_ARTICLE_RE = re.compile(
+    r'<div id="cadre-article">(.*?)</div><!-- Fin cadre-article', re.DOTALL
+)
 _ASIDE_RE = re.compile(r"<aside.*?</aside>", re.DOTALL)
 _BOUTONS_RE = re.compile(r'<div id="outils-article".*?</div>\s*</aside>', re.DOTALL)
 _HTML_TAG_RE = re.compile(r"<[^>]+>")
@@ -381,7 +393,9 @@ def build_tei(issue: IssueRef, contents: Iterable[ArticleContent]) -> str:
 def cmd_list(issues: list[IssueRef]) -> None:
     print(f"Bilan : {len(issues)} numéros indexés")
     for issue in issues:
-        print(f"  n°{issue.issue_number:2d} — {issue.date_label:30s} ({len(issue.articles):2d} articles)")
+        print(
+            f"  n°{issue.issue_number:2d} — {issue.date_label:30s} ({len(issue.articles):2d} articles)"
+        )
 
 
 def cmd_issue(issues: list[IssueRef], issue_number: int) -> Path:
@@ -395,7 +409,7 @@ def cmd_issue(issues: list[IssueRef], issue_number: int) -> Path:
         try:
             raw = fetch_article(art_ref.article_id)
             content = parse_article(art_ref.article_id, raw)
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             print(f"  ⚠ art{art_ref.article_id} ({art_ref.title[:50]}…) : {exc}")
             continue
         print(

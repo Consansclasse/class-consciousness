@@ -49,9 +49,7 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.create_index(
-        op.f("ix_conversations_user_id"), "conversations", ["user_id"]
-    )
+    op.create_index(op.f("ix_conversations_user_id"), "conversations", ["user_id"])
 
     op.add_column(
         "rag_interactions",
@@ -83,9 +81,7 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.drop_column("rag_interactions", "cited_chunks")
-    op.drop_index(
-        op.f("ix_rag_interactions_conversation_id"), table_name="rag_interactions"
-    )
+    op.drop_index(op.f("ix_rag_interactions_conversation_id"), table_name="rag_interactions")
     op.drop_constraint(
         "fk_rag_interactions_conversation_id",
         "rag_interactions",

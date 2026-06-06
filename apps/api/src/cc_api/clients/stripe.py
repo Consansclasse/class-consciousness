@@ -150,9 +150,7 @@ class StripeClient:
             expires_at=session.expires_at,
         )
 
-    async def create_billing_portal_session(
-        self, *, customer_id: str, return_url: str
-    ) -> str:
+    async def create_billing_portal_session(self, *, customer_id: str, return_url: str) -> str:
         """Crée une session du Customer Portal Stripe et renvoie son URL.
 
         Le portail gère côté Stripe la résiliation et le moyen de paiement —

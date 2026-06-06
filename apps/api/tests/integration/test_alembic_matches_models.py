@@ -132,9 +132,7 @@ def alembic_pg() -> Iterator[str]:
     )
     container.start()
     try:
-        yield container.get_connection_url().replace(
-            "postgresql+psycopg2", "postgresql+asyncpg"
-        )
+        yield container.get_connection_url().replace("postgresql+psycopg2", "postgresql+asyncpg")
     finally:
         container.stop()
 

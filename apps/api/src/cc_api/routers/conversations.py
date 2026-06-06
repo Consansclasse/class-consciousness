@@ -56,10 +56,7 @@ async def list_conversations(
     """Liste des fils de l'utilisateur, du plus récemment actif au plus ancien."""
     async with get_session_maker()() as session:
         convs = await conv_service.list_for_user(session, user.id)
-    return [
-        ConversationSummary(id=c.id, title=c.title, updated_at=c.updated_at)
-        for c in convs
-    ]
+    return [ConversationSummary(id=c.id, title=c.title, updated_at=c.updated_at) for c in convs]
 
 
 @router.post("", response_model=ConversationSummary, status_code=201)
@@ -69,9 +66,7 @@ async def create_conversation(
     """Crée un fil vide et renvoie son résumé."""
     async with get_session_maker()() as session:
         conv = await conv_service.create_empty(session, user.id)
-        return ConversationSummary(
-            id=conv.id, title=conv.title, updated_at=conv.updated_at
-        )
+        return ConversationSummary(id=conv.id, title=conv.title, updated_at=conv.updated_at)
 
 
 @router.get("/{conversation_id}", response_model=ConversationDetail)
@@ -101,14 +96,10 @@ async def rename_conversation(
 ) -> ConversationSummary:
     """Renomme un fil possédé. 404 si le fil n'appartient pas à l'utilisateur."""
     async with get_session_maker()() as session:
-        conv = await conv_service.rename(
-            session, conversation_id, user.id, payload.title
-        )
+        conv = await conv_service.rename(session, conversation_id, user.id, payload.title)
         if conv is None:
             raise HTTPException(status_code=404, detail="conversation introuvable")
-        return ConversationSummary(
-            id=conv.id, title=conv.title, updated_at=conv.updated_at
-        )
+        return ConversationSummary(id=conv.id, title=conv.title, updated_at=conv.updated_at)
 
 
 @router.delete("/{conversation_id}", status_code=204)

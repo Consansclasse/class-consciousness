@@ -183,9 +183,7 @@ async def admin_ingest(payload: IngestRequest) -> IngestResult:
     except (ValueError, etree.XMLSyntaxError) as exc:
         # XML/TEI malformé (chemin pointant vers un fichier non-TEI) ou
         # structure invalide : faute de requête (422), pas erreur serveur.
-        raise HTTPException(
-            status_code=422, detail=f"fichier TEI invalide : {exc}"
-        ) from exc
+        raise HTTPException(status_code=422, detail=f"fichier TEI invalide : {exc}") from exc
 
     return IngestResult(
         issue_id=ref.issue_id,

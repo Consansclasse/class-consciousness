@@ -79,9 +79,5 @@ def record_rag_result(result: RagResult) -> None:
     if result.citation_report is not None:
         judge = result.citation_report.judge_usage
         judge_model = settings.anthropic_judge_model
-        rag_tokens_total.labels(model=judge_model, direction="input").inc(
-            judge.input_tokens
-        )
-        rag_tokens_total.labels(model=judge_model, direction="output").inc(
-            judge.output_tokens
-        )
+        rag_tokens_total.labels(model=judge_model, direction="input").inc(judge.input_tokens)
+        rag_tokens_total.labels(model=judge_model, direction="output").inc(judge.output_tokens)

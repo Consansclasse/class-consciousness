@@ -117,9 +117,7 @@ def downgrade() -> None:
     op.drop_column("users", "consent_newsletter_at")
     op.drop_column("users", "consent_data_at")
 
-    op.drop_index(
-        op.f("ix_adhesion_intents_stripe_session_id"), table_name="adhesion_intents"
-    )
+    op.drop_index(op.f("ix_adhesion_intents_stripe_session_id"), table_name="adhesion_intents")
     op.drop_index(op.f("ix_adhesion_intents_status"), table_name="adhesion_intents")
     op.drop_index(op.f("ix_adhesion_intents_email"), table_name="adhesion_intents")
     op.drop_index(op.f("ix_adhesion_intents_user_id"), table_name="adhesion_intents")

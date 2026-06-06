@@ -34,13 +34,9 @@ class Settings(BaseSettings):
     # apps/embed-server et docs/adr/0008-architecture-embedding-vps-cpu.md).
     # Les vecteurs du corpus sont en dimension `embed_dim` ; changer de modèle
     # d'embedding impose une ré-ingestion complète.
-    embed_server_url: str = Field(
-        default="http://127.0.0.1:8001", alias="CC_API_EMBED_SERVER_URL"
-    )
+    embed_server_url: str = Field(default="http://127.0.0.1:8001", alias="CC_API_EMBED_SERVER_URL")
     embed_dim: int = Field(default=1024, alias="CC_API_EMBED_DIM")
-    embed_model: str = Field(
-        default="Qwen/Qwen3-Embedding-0.6B", alias="CC_API_EMBED_MODEL"
-    )
+    embed_model: str = Field(default="Qwen/Qwen3-Embedding-0.6B", alias="CC_API_EMBED_MODEL")
 
     anthropic_api_key: str | None = Field(default=None, alias="ANTHROPIC_API_KEY")
     # Bearer alternatif pour router l'API Anthropic via un LLM GATEWAY/PROXY qui
@@ -58,9 +54,7 @@ class Settings(BaseSettings):
     # ENTAILED / NOT_ENTAILED / CONTRADICTED, bien dans ses cordes — il divise
     # nettement la latence du contrôle face à Sonnet. La rigueur du juge reste
     # à surveiller via /debug-rag (cf. .claude/rules/citation-honest-vs-literal.md).
-    anthropic_judge_model: str = Field(
-        default="claude-haiku-4-5", alias="ANTHROPIC_JUDGE_MODEL"
-    )
+    anthropic_judge_model: str = Field(default="claude-haiku-4-5", alias="ANTHROPIC_JUDGE_MODEL")
 
     # Stripe — paiement de la cotisation associative.
     # En dev : clés sk_test_… (sandbox Stripe) ou pointage vers stripe-mock.
@@ -77,9 +71,7 @@ class Settings(BaseSettings):
     stripe_price_payg: str | None = Field(default=None, alias="STRIPE_PRICE_PAYG")
     # Nom de l'évènement de meter (doit coïncider avec celui du Meter Stripe).
     # Chaque requête RAG facturable émet un `billing.meter_event` sous ce nom.
-    stripe_meter_event_name: str = Field(
-        default="rag_tokens", alias="STRIPE_METER_EVENT_NAME"
-    )
+    stripe_meter_event_name: str = Field(default="rag_tokens", alias="STRIPE_METER_EVENT_NAME")
     # Base URL publique du site web — pour construire success_url / cancel_url
     # transmises à Stripe Checkout.
     public_web_base: str = Field(default="http://localhost:3000", alias="PUBLIC_WEB_BASE")
@@ -89,17 +81,13 @@ class Settings(BaseSettings):
     # partager une page cible avec elle, puis renseigner le token + l'ID de page.
     # Le token reste côté serveur (jamais exposé au navigateur).
     notion_token: str | None = Field(default=None, alias="NOTION_TOKEN")
-    notion_parent_page_id: str | None = Field(
-        default=None, alias="NOTION_PARENT_PAGE_ID"
-    )
+    notion_parent_page_id: str | None = Field(default=None, alias="NOTION_PARENT_PAGE_ID")
     # Version d'API Notion — le contrat page-parent est stable ; surchargeable.
     notion_version: str = Field(default="2022-06-28", alias="NOTION_VERSION")
 
     # Authentification — sessions navigateur (cookie signé) + email/mot de passe.
     # `session_secret` signe le cookie : DOIT être surchargé en production.
-    session_secret: str = Field(
-        default=_DEFAULT_SESSION_SECRET, alias="CC_API_SESSION_SECRET"
-    )
+    session_secret: str = Field(default=_DEFAULT_SESSION_SECRET, alias="CC_API_SESSION_SECRET")
     # SMTP pour les emails transactionnels (vérification d'adresse, réinitialisation
     # de mot de passe). Sans `smtp_host`, le lien est seulement journalisé (mode
     # dev) au lieu d'être expédié — aucun envoi réel.
@@ -107,9 +95,7 @@ class Settings(BaseSettings):
     smtp_port: int = Field(default=587, alias="CC_API_SMTP_PORT")
     smtp_user: str | None = Field(default=None, alias="CC_API_SMTP_USER")
     smtp_password: str | None = Field(default=None, alias="CC_API_SMTP_PASSWORD")
-    smtp_from: str = Field(
-        default="noreply@class-consciousness.org", alias="CC_API_SMTP_FROM"
-    )
+    smtp_from: str = Field(default="noreply@class-consciousness.org", alias="CC_API_SMTP_FROM")
     smtp_starttls: bool = Field(default=True, alias="CC_API_SMTP_STARTTLS")
 
     # Pipeline RAG : seuils de la règle d'or « aucune phrase sans citation vérifiée ».
@@ -167,9 +153,7 @@ class Settings(BaseSettings):
     # Au-delà de ce quota, l'accès passe en pay-as-you-go : chaque requête est
     # refacturée à l'usage (cf. routers/qa.py `enforce_rag_quota`).
     rag_free_quota_per_window: int = Field(default=2, alias="CC_API_RAG_FREE_QUOTA")
-    rag_quota_window_hours: int = Field(
-        default=24, alias="CC_API_RAG_QUOTA_WINDOW_HOURS"
-    )
+    rag_quota_window_hours: int = Field(default=24, alias="CC_API_RAG_QUOTA_WINDOW_HOURS")
     # Plafond de sécurité anti-runaway en pay-as-you-go : nombre max de requêtes
     # facturables par fenêtre, MÊME pour un abonné. Ce n'est pas un palier
     # commercial mais un garde-fou (session volée, boucle client) bornant la
@@ -196,9 +180,7 @@ class Settings(BaseSettings):
     # mettent à jour seuls. La revue éditoriale se fait au merge dans le repo
     # corpus (source canonique de confiance).
     corpus_sync_enabled: bool = Field(default=False, alias="CC_API_CORPUS_SYNC_ENABLED")
-    corpus_sync_interval_hours: int = Field(
-        default=24, alias="CC_API_CORPUS_SYNC_INTERVAL_HOURS"
-    )
+    corpus_sync_interval_hours: int = Field(default=24, alias="CC_API_CORPUS_SYNC_INTERVAL_HOURS")
     corpus_sync_repo: str = Field(
         default="Consansclasse/class-consciousness-corpus",
         alias="CC_API_CORPUS_SYNC_REPO",
@@ -214,9 +196,7 @@ class Settings(BaseSettings):
     # Jeton GitHub optionnel : relève le quota API de 60→5000 req/h. Inutile au
     # rythme par défaut (1 requête SHA / cycle, le tarball passe par le CDN
     # codeload hors-quota).
-    corpus_sync_token: str | None = Field(
-        default=None, alias="CC_API_CORPUS_SYNC_TOKEN"
-    )
+    corpus_sync_token: str | None = Field(default=None, alias="CC_API_CORPUS_SYNC_TOKEN")
 
     @property
     def postgres_dsn(self) -> str:
@@ -244,9 +224,7 @@ class Settings(BaseSettings):
         """Hors dev, le secret de session ne doit jamais rester le défaut : il
         est public (dépôt AGPL) — un cookie de session serait alors forgeable."""
         if self.env != "dev" and self.session_secret == _DEFAULT_SESSION_SECRET:
-            raise ValueError(
-                "CC_API_SESSION_SECRET doit être défini lorsque CC_API_ENV != dev"
-            )
+            raise ValueError("CC_API_SESSION_SECRET doit être défini lorsque CC_API_ENV != dev")
         return self
 
 

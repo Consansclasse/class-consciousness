@@ -81,9 +81,7 @@ def _verdict(texte: str, citations: list[str], verdict: CitationVerdict) -> Sent
 def _success_result(question: str) -> RagResult:
     """RagResult abouti : une phrase SUPPORTED, génération + juge facturés."""
     report = CitationReport(
-        sentences=[
-            _verdict("Une phrase ancrée.", ["bilan-1/art:0"], CitationVerdict.SUPPORTED)
-        ],
+        sentences=[_verdict("Une phrase ancrée.", ["bilan-1/art:0"], CitationVerdict.SUPPORTED)],
         all_verified=True,
         n_supported=1,
         n_rejected=0,
@@ -125,9 +123,7 @@ async def _interactions(db_url: str) -> list[RagInteraction]:
     maker = async_sessionmaker(engine, expire_on_commit=False)
     try:
         async with maker() as session:
-            rows = await session.execute(
-                select(RagInteraction).order_by(RagInteraction.id)
-            )
+            rows = await session.execute(select(RagInteraction).order_by(RagInteraction.id))
             return list(rows.scalars().all())
     finally:
         await engine.dispose()
@@ -340,9 +336,7 @@ async def test_feedback_up_is_recorded(
     uid = await _user_id(qa_env, "pouce@example.org")
     interaction_id = await _seed_interaction(db_session, user_id=uid)
 
-    res = client.post(
-        f"/qa/interactions/{interaction_id}/feedback", json={"kind": "UP"}
-    )
+    res = client.post(f"/qa/interactions/{interaction_id}/feedback", json={"kind": "UP"})
     assert res.status_code == 201, res.text
 
     rows = await _feedbacks(qa_env)
@@ -378,9 +372,7 @@ async def test_feedback_requires_authentication(
 ) -> None:
     """Un feedback sans session est refusé (401)."""
     interaction_id = await _seed_interaction(db_session)
-    res = client.post(
-        f"/qa/interactions/{interaction_id}/feedback", json={"kind": "UP"}
-    )
+    res = client.post(f"/qa/interactions/{interaction_id}/feedback", json={"kind": "UP"})
     assert res.status_code == 401
     assert await _feedbacks(qa_env) == []
 
@@ -396,9 +388,7 @@ async def test_feedback_on_other_users_interaction_returns_404(
     interaction_id = await _seed_interaction(db_session, user_id=other.id)
 
     login(client, "intrus@example.org")
-    res = client.post(
-        f"/qa/interactions/{interaction_id}/feedback", json={"kind": "DOWN"}
-    )
+    res = client.post(f"/qa/interactions/{interaction_id}/feedback", json={"kind": "DOWN"})
     assert res.status_code == 404
     assert await _feedbacks(qa_env) == []
 

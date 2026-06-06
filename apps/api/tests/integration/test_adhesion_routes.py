@@ -51,12 +51,8 @@ async def stripe_env(
 
     # Configuration Stripe pour les tests.
     monkeypatch.setattr(settings, "stripe_secret_key", "sk_test_unit", raising=False)
-    monkeypatch.setattr(
-        settings, "stripe_publishable_key", "pk_test_unit", raising=False
-    )
-    monkeypatch.setattr(
-        settings, "stripe_webhook_secret", _WEBHOOK_SECRET, raising=False
-    )
+    monkeypatch.setattr(settings, "stripe_publishable_key", "pk_test_unit", raising=False)
+    monkeypatch.setattr(settings, "stripe_webhook_secret", _WEBHOOK_SECRET, raising=False)
     monkeypatch.setattr(settings, "stripe_api_base", stripe_mock_url, raising=False)
     monkeypatch.setattr(settings, "public_web_base", "http://test.local", raising=False)
 
@@ -68,9 +64,7 @@ async def stripe_env(
     monkeypatch.setattr(settings, "postgres_port", parsed.port or 5432)
     monkeypatch.setattr(settings, "postgres_user", parsed.username or "cc")
     monkeypatch.setattr(settings, "postgres_password", parsed.password or "cc")
-    monkeypatch.setattr(
-        settings, "postgres_db", (parsed.path or "/cc_test").lstrip("/")
-    )
+    monkeypatch.setattr(settings, "postgres_db", (parsed.path or "/cc_test").lstrip("/"))
 
     # Vider les caches lru_cache pour que les singletons se reconstruisent.
     stripe_client_module.get_stripe_client.cache_clear()
@@ -154,9 +148,7 @@ async def test_checkout_standard_creates_intent_and_user(
     # AdhesionIntent en PENDING.
     intent = (
         await db_session.execute(
-            select(AdhesionIntent).where(
-                AdhesionIntent.public_token == body["public_token"]
-            )
+            select(AdhesionIntent).where(AdhesionIntent.public_token == body["public_token"])
         )
     ).scalar_one()
     assert intent.status == AdhesionIntentStatus.PENDING
@@ -203,9 +195,7 @@ async def test_checkout_solidaire_creates_membership_immediately(
 
     intent = (
         await db_session.execute(
-            select(AdhesionIntent).where(
-                AdhesionIntent.public_token == body["public_token"]
-            )
+            select(AdhesionIntent).where(AdhesionIntent.public_token == body["public_token"])
         )
     ).scalar_one()
     assert intent.status == AdhesionIntentStatus.COMPLETED
@@ -256,9 +246,7 @@ async def test_webhook_completed_creates_membership(
     token = res.json()["public_token"]
 
     intent = (
-        await db_session.execute(
-            select(AdhesionIntent).where(AdhesionIntent.public_token == token)
-        )
+        await db_session.execute(select(AdhesionIntent).where(AdhesionIntent.public_token == token))
     ).scalar_one()
     session_id = intent.stripe_session_id
 
@@ -276,23 +264,26 @@ async def test_webhook_completed_creates_membership(
 
     # Étape 3 : nouvelle session DB (le webhook a commité dans une session séparée).
     fresh_engine = create_async_engine(
-        db_session.bind.url, echo=False  # type: ignore[union-attr]
+        db_session.bind.url,
+        echo=False,  # type: ignore[union-attr]
     )
     maker = async_sessionmaker(fresh_engine, expire_on_commit=False)
     async with maker() as fresh:
         intent_after = (
-            await fresh.execute(
-                select(AdhesionIntent).where(AdhesionIntent.public_token == token)
-            )
+            await fresh.execute(select(AdhesionIntent).where(AdhesionIntent.public_token == token))
         ).scalar_one()
         assert intent_after.status == AdhesionIntentStatus.COMPLETED
         assert intent_after.paid_at is not None
 
         memberships = (
-            await fresh.execute(
-                select(Membership).where(Membership.user_id == intent_after.user_id)
+            (
+                await fresh.execute(
+                    select(Membership).where(Membership.user_id == intent_after.user_id)
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         assert len(memberships) == 1
         assert memberships[0].amount_eur_cents == 9900
         assert memberships[0].external_reference == session_id
@@ -316,9 +307,7 @@ async def test_webhook_idempotent_on_replay(
     res = client.post("/adhesions/checkout", json=payload)
     token = res.json()["public_token"]
     intent = (
-        await db_session.execute(
-            select(AdhesionIntent).where(AdhesionIntent.public_token == token)
-        )
+        await db_session.execute(select(AdhesionIntent).where(AdhesionIntent.public_token == token))
     ).scalar_one()
     session_id = intent.stripe_session_id
 
@@ -337,13 +326,12 @@ async def test_webhook_idempotent_on_replay(
         assert res.status_code == 200, res.text
 
     fresh_engine = create_async_engine(
-        db_session.bind.url, echo=False  # type: ignore[union-attr]
+        db_session.bind.url,
+        echo=False,  # type: ignore[union-attr]
     )
     maker = async_sessionmaker(fresh_engine, expire_on_commit=False)
     async with maker() as fresh:
-        mem_count = (
-            await fresh.execute(select(func.count()).select_from(Membership))
-        ).scalar_one()
+        mem_count = (await fresh.execute(select(func.count()).select_from(Membership))).scalar_one()
         assert mem_count == 1
     await fresh_engine.dispose()
 
@@ -403,9 +391,7 @@ async def test_get_intent_rejects_sequential_id_enumeration(
 
     # L'intent existe bien — on récupère son id séquentiel réel en base.
     intent = (
-        await db_session.execute(
-            select(AdhesionIntent).where(AdhesionIntent.public_token == token)
-        )
+        await db_session.execute(select(AdhesionIntent).where(AdhesionIntent.public_token == token))
     ).scalar_one()
 
     # Énumérer l'entier séquentiel ne résout plus rien.

@@ -50,9 +50,7 @@ async def _session() -> AsyncSession:
     },
 )
 @limiter.limit("20/minute")
-async def post_checkout(
-    request: Request, payload: AdhesionCheckoutIn
-) -> AdhesionCheckoutOut:
+async def post_checkout(request: Request, payload: AdhesionCheckoutIn) -> AdhesionCheckoutOut:
     """Crée une intention d'adhésion + Stripe Checkout Session.
 
     Endpoint anonyme : chaque appel insère un User/AdhesionIntent et crée une
@@ -63,9 +61,7 @@ async def post_checkout(
     stripe_client = get_stripe_client()
     async with await _session() as session:
         try:
-            intent = await create_checkout(
-                session, payload=payload, stripe_client=stripe_client
-            )
+            intent = await create_checkout(session, payload=payload, stripe_client=stripe_client)
         except AdhesionError as exc:
             log.warning("adhesions.checkout.error", error=str(exc))
             raise HTTPException(status_code=502, detail=str(exc)) from exc
@@ -109,9 +105,7 @@ async def post_stripe_webhook(
         # signature. Faute de configuration serveur, pas du client : 503
         # explicite et journalisé plutôt qu'un 500 nu.
         log.error("adhesions.webhook.stripe_unconfigured", error=str(exc))
-        raise HTTPException(
-            status_code=503, detail="webhook Stripe non configuré"
-        ) from exc
+        raise HTTPException(status_code=503, detail="webhook Stripe non configuré") from exc
 
     async with await _session() as session:
         intent = await handle_stripe_event(session, event=event)
