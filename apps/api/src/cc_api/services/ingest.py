@@ -163,7 +163,6 @@ async def ingest_issue(
     )
 
     owns_session = session is None
-    owns_embed = embed is None
     if session is None:
         session = get_session_maker()()
     if qdrant is None:
@@ -365,5 +364,10 @@ async def ingest_issue(
     finally:
         if owns_session:
             await session.close()
-        if owns_embed:
-            await embed.aclose()
+        # NE PAS fermer `embed` même si owns_embed : sans client passé, on tire le
+        # SINGLETON `@lru_cache` (get_embed_client) partagé par tout le process. Le
+        # fermer ici le rend inutilisable pour toutes les requêtes suivantes
+        # (RuntimeError: client has been closed) — c'était la cause des 500 sur
+        # /admin/ingest après le premier appel réussi. Le singleton vit le temps du
+        # process. Un client passé explicitement (owns_embed=False) reste à la
+        # charge de l'appelant (cf. scripts/ingest_corpus.py).

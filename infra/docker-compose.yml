@@ -58,6 +58,30 @@ services:
       timeout: 3s
       retries: 10
 
+  # Serveur d'embeddings/reranking (Qwen3-0.6B) sur CPU — identique à la prod
+  # (ADR-0008). En dev, l'API le joint via http://cc-embed:8001. Au 1er démarrage,
+  # il télécharge les poids 0.6B (~1,2 Go) dans le volume cc_embed_models : long,
+  # puis instantané ensuite. Device CPU par défaut : aucun besoin de GPU/CUDA.
+  cc-embed:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.embed
+      target: prod
+    restart: unless-stopped
+    logging: *default-logging
+    environment:
+      CC_EMBED_DEVICE: cpu
+      CC_EMBED_RERANK_DEVICE: cpu
+    volumes:
+      - cc_embed_models:/app/hf-cache
+    healthcheck:
+      test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:8001/health\").read()'"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      # start_period long : 1er démarrage = téléchargement des modèles 0.6B.
+      start_period: 600s
+
   api:
     build:
       context: ..
@@ -82,14 +106,21 @@ services:
       # par le client. Les plages privées RFC1918 couvrent le réseau Docker de
       # Caddy ; uvicorn retient alors la vraie IP client.
       FORWARDED_ALLOW_IPS: "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
+      # Embeddings via le service cc-embed sur le réseau Docker (et non 127.0.0.1,
+      # qui dans le conteneur api ne pointe que sur lui-même).
+      CC_API_EMBED_SERVER_URL: http://cc-embed:8001
     ports: ["8000:8000"]
     depends_on:
       postgres: { condition: service_healthy }
       qdrant: { condition: service_started }
       redis: { condition: service_healthy }
+      cc-embed: { condition: service_started }
     volumes:
       - ../apps/api:/app/apps/api
       - ../packages/corpus-tools:/app/packages/corpus-tools
+      # Corpus TEI réel (repo public cloné en sibling) monté en lecture seule.
+      # /admin/ingest lit le chemin DANS le conteneur → le corpus doit y être visible.
+      - ../../class-consciousness-corpus:/app/corpus-prod:ro
 
   web:
     build:
@@ -169,3 +200,4 @@ volumes:
   caddy_config:
   prometheus_data:
   grafana_data:
+  cc_embed_models:
