@@ -43,11 +43,13 @@ class Settings(BaseSettings):
     )
 
     anthropic_api_key: str | None = Field(default=None, alias="ANTHROPIC_API_KEY")
-    # Auth alternative pour le DEV LOCAL : token OAuth d'un abonnement Claude Code
-    # (`claude setup-token`), envoyé en `Authorization: Bearer` au lieu de la clé
-    # API (`x-api-key`). Prioritaire sur `anthropic_api_key` quand il est défini —
-    # permet de bosser le RAG en local sans consommer la clé. Usage perso/local :
-    # un backend de prod doit rester sur une vraie clé API (ANTHROPIC_API_KEY).
+    # Bearer alternatif pour router l'API Anthropic via un LLM GATEWAY/PROXY qui
+    # s'authentifie par `Authorization: Bearer` (cf. doc Claude Code,
+    # `ANTHROPIC_AUTH_TOKEN`). Prioritaire sur `anthropic_api_key` s'il est défini.
+    # ⚠️ NE JAMAIS y placer un token OAuth d'abonnement Claude Code (`claude
+    # setup-token`) : les identifiants OAuth sont réservés à Claude Code/claude.ai
+    # (CGU Anthropic) — l'employer dans ce backend serait hors conditions. La prod
+    # et l'éval RAG en dev utilisent une vraie clé API (ANTHROPIC_API_KEY).
     anthropic_auth_token: str | None = Field(default=None, alias="ANTHROPIC_AUTH_TOKEN")
     # Sonnet 4.6 par défaut — Opus 4.7 est trop coûteux pour le volume RAG.
     anthropic_model: str = Field(default="claude-sonnet-4-6", alias="ANTHROPIC_MODEL")
@@ -81,6 +83,17 @@ class Settings(BaseSettings):
     # Base URL publique du site web — pour construire success_url / cancel_url
     # transmises à Stripe Checkout.
     public_web_base: str = Field(default="http://localhost:3000", alias="PUBLIC_WEB_BASE")
+
+    # ── Notion — export « 1-clic » d'un document d'atelier vers une page Notion.
+    # Intégration INTERNE : créer une intégration sur notion.so/my-integrations,
+    # partager une page cible avec elle, puis renseigner le token + l'ID de page.
+    # Le token reste côté serveur (jamais exposé au navigateur).
+    notion_token: str | None = Field(default=None, alias="NOTION_TOKEN")
+    notion_parent_page_id: str | None = Field(
+        default=None, alias="NOTION_PARENT_PAGE_ID"
+    )
+    # Version d'API Notion — le contrat page-parent est stable ; surchargeable.
+    notion_version: str = Field(default="2022-06-28", alias="NOTION_VERSION")
 
     # Authentification — sessions navigateur (cookie signé) + email/mot de passe.
     # `session_secret` signe le cookie : DOIT être surchargé en production.

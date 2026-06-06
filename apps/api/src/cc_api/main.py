@@ -18,6 +18,7 @@ from cc_api.core.settings import settings
 from cc_api.routers import (
     abonnements,
     adhesions,
+    atelier,
     auth,
     conversations,
     corpus,
@@ -123,7 +124,11 @@ if settings.cors_origin_list:
         # session cross-site. Sans cela le navigateur bloque la réponse et
         # n'envoie pas le cookie — l'auth ne peut pas fonctionner.
         allow_credentials=True,
-        allow_methods=["GET", "POST"],
+        # PATCH (renommage) et DELETE (suppression) de conversation déclenchent
+        # un préflight CORS OPTIONS (méthodes non « simples ») : sans eux dans la
+        # liste blanche, le navigateur reçoit 400 « Disallowed CORS method » et
+        # n'envoie jamais la vraie requête.
+        allow_methods=["GET", "POST", "PATCH", "DELETE"],
         allow_headers=["Content-Type"],
     )
 
@@ -152,6 +157,7 @@ async def metrics(request: Request) -> Response:
 app.include_router(corpus.router)
 app.include_router(qa.router)
 app.include_router(conversations.router)
+app.include_router(atelier.router)
 app.include_router(adhesions.router)
 app.include_router(abonnements.router)
 app.include_router(auth.router)
