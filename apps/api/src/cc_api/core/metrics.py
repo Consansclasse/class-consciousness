@@ -27,6 +27,11 @@ rag_sentence_verdicts_total = Counter(
     "Verdicts d'ancrage produits, par type.",
     ["verdict"],
 )
+rag_route_total = Counter(
+    "cc_rag_route_total",
+    "Décisions de routage de complexité (G3), par route (simple | complexe).",
+    ["route"],
+)
 rag_latency_seconds = Histogram(
     "cc_rag_latency_seconds",
     "Latence bout-en-bout du pipeline RAG.",
@@ -59,6 +64,11 @@ def record_rag_result(result: RagResult) -> None:
         outcome = "answered"
     rag_requests_total.labels(outcome=outcome).inc()
     rag_latency_seconds.observe(result.latency_ms / 1000)
+
+    # Routage de complexité (G3) — n'instrumente que les routes réelles, pas
+    # "off" (routage désactivé) ni None (non déterminée).
+    if result.route and result.route != "off":
+        rag_route_total.labels(route=result.route).inc()
 
     for sentence in result.sentences:
         rag_sentence_verdicts_total.labels(verdict=sentence.verdict.value).inc()

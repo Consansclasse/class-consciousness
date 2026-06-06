@@ -84,3 +84,22 @@ class RagInteraction(Base):
     )
     retrieval_count: Mapped[int] = mapped_column(Integer, nullable=False)
     rerank_count: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    # ── Observabilité agentique (G6) — colonnes ADDITIVES, peuplées au fil des
+    # lots du pipeline. Le routage de complexité (G3) est déjà actif ; CRAG (G4),
+    # boucle itérative (G5) et cache sémantique (G2) restent à venir → leurs
+    # colonnes existent dès maintenant pour mesurer sans nouvelle migration.
+    # Route de complexité décidée à l'étape 0 : "simple" | "complexe" | "off"
+    # (routage désactivé) | NULL (interaction antérieure à cette colonne).
+    route: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    # Itérations de récupération (boucle bornée G5). 1 = passe unique.
+    n_iterations: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default="1"
+    )
+    # Verdict de couverture des passages (CRAG G4) : "suffisant" | "ambigu" |
+    # "insuffisant" | NULL (CRAG non exécuté).
+    crag_verdict: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    # Réponse servie depuis le cache sémantique (G2) au lieu d'être recalculée.
+    cache_hit: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="false"
+    )

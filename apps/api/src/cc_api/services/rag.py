@@ -196,6 +196,9 @@ class RagResult:
     dropped_sentences: list[str] = field(default_factory=list)
     # Tokens de la génération seule ; le juge est dans `citation_report.judge_usage`.
     generation_usage: GenerationUsage = field(default_factory=GenerationUsage.zero)
+    # Route de complexité décidée à l'étape 0 (observabilité G6) : "simple" |
+    # "complexe" | "off" (routage désactivé). None si non déterminée.
+    route: str | None = None
 
     @property
     def sentences(self) -> list[SentenceVerdict]:
@@ -351,11 +354,13 @@ def _classify_complexity(question: str) -> str:
 
 async def _decompose(
     question: str, *, anthropic: AnthropicClient
-) -> tuple[list[str], int]:
+) -> tuple[list[str], int, str]:
     """Étape 0 — décompose la question en sous-questions de recherche.
 
-    Renvoie `[question] + sous-questions` et la latence (ms). Échec gracieux
-    (décomposition désactivée ou LLM indisponible) → la seule question.
+    Renvoie `[question] + sous-questions`, la latence (ms) et la `route` de
+    complexité décidée ("simple"/"complexe"/"off") — cette dernière persistée
+    pour l'observabilité (G6). Échec gracieux (décomposition désactivée ou LLM
+    indisponible) → la seule question.
     """
     t0 = time.monotonic()
     search_queries = [question]
@@ -379,7 +384,7 @@ async def _decompose(
             log.warning("rag.decompose_failed", error=str(exc))
     decompose_ms = int((time.monotonic() - t0) * 1000)
     log.info("rag.decompose", n_queries=len(search_queries), route=route)
-    return search_queries, decompose_ms
+    return search_queries, decompose_ms, route
 
 
 async def _retrieve(
@@ -590,7 +595,7 @@ async def answer_question(
     await _stage("Analyse de la question…")
 
     # 0. Décomposition de la question en sous-questions de recherche.
-    search_queries, latencies["decompose_ms"] = await _decompose(
+    search_queries, latencies["decompose_ms"], route = await _decompose(
         question, anthropic=anthropic
     )
 
@@ -616,6 +621,7 @@ async def answer_question(
             model=anthropic.model,
             latency_ms=int((time.monotonic() - started_at) * 1000),
             latencies=latencies,
+            route=route,
         )
 
     # 3. Reranking (optionnel) + sélection diversifiée (MMR par article).
@@ -633,6 +639,7 @@ async def answer_question(
             model=anthropic.model,
             latency_ms=int((time.monotonic() - started_at) * 1000),
             latencies=latencies,
+            route=route,
         )
 
     # 4. Assemblage contexte.
@@ -713,6 +720,7 @@ async def answer_question(
                 incomplete=True,
                 dropped_sentences=list(citation_report.refused_sentences),
                 generation_usage=generation.usage,
+                route=route,
             )
         log.warning(
             "rag.refused",
@@ -731,6 +739,7 @@ async def answer_question(
             latency_ms=total_ms,
             latencies=latencies,
             generation_usage=generation.usage,
+            route=route,
         )
 
     log.info("rag.answered", latency_ms=total_ms, n_sentences=len(citation_report.sentences))
@@ -745,4 +754,5 @@ async def answer_question(
         latency_ms=total_ms,
         latencies=latencies,
         generation_usage=generation.usage,
+        route=route,
     )

@@ -185,6 +185,10 @@ def _build_interaction(
         cited_chunks=[c.model_dump(mode="json") for c in cited_chunks],
         retrieval_count=len(result.retrieved),
         rerank_count=len(result.reranked),
+        # Observabilité G6 — route de complexité (G3, déjà active). Les colonnes
+        # n_iterations / crag_verdict / cache_hit prennent leur défaut serveur
+        # tant que les lots G5 / G4 / G2 ne sont pas livrés.
+        route=result.route,
     )
 
 
