@@ -30,6 +30,11 @@ ignore = ["S101", "ASYNC240"]
 "apps/api/src/cc_api/core/settings.py" = ["S104"]
 # Debug router : routes dev-only, subprocess docker/git/alembic + tail logs assumés
 "apps/api/src/cc_api/routers/debug.py" = ["S603", "S607", "ASYNC221", "B904"]
+# Scraper one-shot : urllib sur URLs Gallica connues (S310), cache /tmp local
+# (S108), espaces insécables FRANÇAIS intentionnels (RUF001), lignes longues.
+"scripts/scrape_bilan.py" = ["S310", "S108", "RUF001", "E501"]
+# Script de seed démo local : factory SQLAlchemy nommée `Session` (N806).
+"apps/api/seed_demo_lecture.py" = ["N806"]
 
 [tool.mypy]
 python_version = "3.12"
