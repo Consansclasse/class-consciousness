@@ -263,19 +263,30 @@ class AnthropicClient:
         api_key: str | None,
         model: str,
         *,
+        auth_token: str | None = None,
         client: AsyncAnthropic | None = None,
         max_retries: int = 2,
     ) -> None:
-        if not api_key:
+        # Deux modes d'authentification, exclusifs :
+        # - `api_key` → en-tête `x-api-key` (clé API Anthropic, mode prod) ;
+        # - `auth_token` → `Authorization: Bearer` (token OAuth d'un abonnement
+        #   Claude Code, `claude setup-token`, pour le dev local sans clé).
+        # `auth_token` est prioritaire s'il est fourni ; au moins l'un des deux
+        # est requis.
+        if not api_key and not auth_token:
             raise RuntimeError(
-                "ANTHROPIC_API_KEY manquant : exporter la variable d'env "
-                "ou la passer à AnthropicClient"
+                "Authentification Anthropic manquante : définir ANTHROPIC_API_KEY "
+                "ou ANTHROPIC_AUTH_TOKEN (token OAuth Claude Code)."
             )
-        self.api_key: str = api_key
+        self.api_key: str | None = api_key
+        self.auth_token: str | None = auth_token
         self.model: str = model
-        self._client: AsyncAnthropic = client or AsyncAnthropic(
-            api_key=api_key, max_retries=max_retries
-        )
+        if client is not None:
+            self._client: AsyncAnthropic = client
+        elif auth_token:
+            self._client = AsyncAnthropic(auth_token=auth_token, max_retries=max_retries)
+        else:
+            self._client = AsyncAnthropic(api_key=api_key, max_retries=max_retries)
         self._owns_client: bool = client is None
 
     async def aclose(self) -> None:
@@ -459,5 +470,13 @@ class AnthropicClient:
 
 @lru_cache(maxsize=1)
 def get_anthropic_client() -> AnthropicClient:
-    """Singleton Anthropic construit depuis les settings."""
-    return AnthropicClient(api_key=settings.anthropic_api_key, model=settings.anthropic_model)
+    """Singleton Anthropic construit depuis les settings.
+
+    En présence de `ANTHROPIC_AUTH_TOKEN` (token OAuth Claude Code, dev local),
+    l'authentification Bearer prime sur la clé API — voir `AnthropicClient`.
+    """
+    return AnthropicClient(
+        api_key=settings.anthropic_api_key,
+        auth_token=settings.anthropic_auth_token,
+        model=settings.anthropic_model,
+    )

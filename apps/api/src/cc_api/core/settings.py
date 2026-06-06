@@ -43,6 +43,12 @@ class Settings(BaseSettings):
     )
 
     anthropic_api_key: str | None = Field(default=None, alias="ANTHROPIC_API_KEY")
+    # Auth alternative pour le DEV LOCAL : token OAuth d'un abonnement Claude Code
+    # (`claude setup-token`), envoyé en `Authorization: Bearer` au lieu de la clé
+    # API (`x-api-key`). Prioritaire sur `anthropic_api_key` quand il est défini —
+    # permet de bosser le RAG en local sans consommer la clé. Usage perso/local :
+    # un backend de prod doit rester sur une vraie clé API (ANTHROPIC_API_KEY).
+    anthropic_auth_token: str | None = Field(default=None, alias="ANTHROPIC_AUTH_TOKEN")
     # Sonnet 4.6 par défaut — Opus 4.7 est trop coûteux pour le volume RAG.
     anthropic_model: str = Field(default="claude-sonnet-4-6", alias="ANTHROPIC_MODEL")
     # Modèle du 2ᵉ passage « juge » qui vérifie l'ancrage sémantique (entailment)
