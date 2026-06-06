@@ -18,7 +18,7 @@
 ## Étape 2 — exécuter le script
 
 ```sh
-cd /home/yamamoto/class-consciousness
+cd /path/to/class-consciousness
 GITHUB_TOKEN=github_pat_xxxxxxxxxxxx ./ops/scripts/lock-down-repo.sh
 ```
 

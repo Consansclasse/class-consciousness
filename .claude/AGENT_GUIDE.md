@@ -1,6 +1,6 @@
 # AGENT_GUIDE — Contexte agentique repo-scope
 
-Ce fichier est la **source de vérité repo** pour Claude Code. Tout ce qui est ici doit être vrai et à jour. L'auto-memory utilisateur (`/home/yamamoto/.claude/.../memory/`) peut compléter mais ne remplace pas ce guide.
+Ce fichier est la **source de vérité repo** pour Claude Code. Tout ce qui est ici doit être vrai et à jour. L'auto-memory utilisateur (`~/.claude/.../memory/`) peut compléter mais ne remplace pas ce guide.
 
 ## Identité du projet
 

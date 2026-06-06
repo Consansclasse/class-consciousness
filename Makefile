@@ -1,5 +1,6 @@
 .PHONY: help install dev test test-e2e test-eval test-eval-deepeval test-eval-ragas \
         smoke lint typecheck build migrate seed ingest reset clean \
+        restart-web restart-api \
         logs logs-api logs-web logs-db logs-qdrant logs-redis \
         agent-status agent-bootstrap agent-preflight api-check web-check \
         db-snapshot db-restore \
@@ -132,6 +133,15 @@ reset:
 	@curl -sf -X POST http://localhost:8000/__debug/reset || \
 		(echo "API down or endpoint not available. Falling back to compose reset."; \
 		 $(COMPOSE) down -v && $(COMPOSE) up -d)
+
+# Sous Colima/macOS, inotify ne traverse pas le bind mount → `astro dev` et
+# `uvicorn --reload` ne rechargent PAS sur édition hôte. Forcer le rechargement
+# du code en redémarrant le conteneur concerné (~1-2 s).
+restart-web:
+	$(COMPOSE) restart web
+
+restart-api:
+	$(COMPOSE) restart api
 
 logs:
 	$(COMPOSE) logs -f --tail=200

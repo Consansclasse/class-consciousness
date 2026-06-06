@@ -54,7 +54,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "f=$(jq -r '.tool_input.file_path // empty' 2>/dev/null); if [ -z \"$f\" ]; then exit 0; fi; case \"$f\" in *apps/api/*.py) cd /home/yamamoto/class-consciousness && uv run ruff check --quiet \"$f\" || true ;; *apps/web/*.ts|*apps/web/*.tsx|*apps/web/*.astro|*apps/web/*.mjs|*apps/web/*.js) cd /home/yamamoto/class-consciousness && pnpm exec biome check \"$f\" --no-errors-on-unmatched 2>/dev/null || true ;; esac"
+            "command": "f=$(jq -r '.tool_input.file_path // empty' 2>/dev/null); if [ -z \"$f\" ]; then exit 0; fi; case \"$f\" in *apps/api/*.py) cd \"$CLAUDE_PROJECT_DIR\" && uv run ruff check --quiet \"$f\" || true ;; *apps/web/*.ts|*apps/web/*.tsx|*apps/web/*.astro|*apps/web/*.mjs|*apps/web/*.js) cd \"$CLAUDE_PROJECT_DIR\" && pnpm exec biome check \"$f\" --no-errors-on-unmatched 2>/dev/null || true ;; esac"
           }
         ]
       }
@@ -65,7 +65,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "cd /home/yamamoto/class-consciousness && timeout 10 make smoke 2>&1 | tail -10 || true"
+            "command": "cd \"$CLAUDE_PROJECT_DIR\" && timeout 10 make smoke 2>&1 | tail -10 || true"
           }
         ]
       }
