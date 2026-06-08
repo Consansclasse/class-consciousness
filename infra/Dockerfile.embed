@@ -2,7 +2,7 @@
 # Image du serveur cc-embed (Qwen3-Embedding-0.6B + Qwen3-Reranker-0.6B, CPU).
 # torch est résolu depuis l'index CPU (cf. pyproject.toml racine) — pas de CUDA.
 
-FROM python:3.12-slim AS base
+FROM python:3.14-slim AS base
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     UV_LINK_MODE=copy \
