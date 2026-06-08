@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.7
 
-FROM node:20-alpine AS base
+FROM node:26-alpine AS base
 WORKDIR /app
 RUN corepack enable && corepack prepare pnpm@9.0.0 --activate
 
@@ -26,6 +26,6 @@ ENV PUBLIC_API_BASE_URL=$PUBLIC_API_BASE_URL \
 COPY apps/web /app/apps/web
 RUN pnpm --filter web build
 
-FROM nginx:1.27-alpine AS prod
+FROM nginx:1.31-alpine AS prod
 COPY --from=build /app/apps/web/dist /usr/share/nginx/html
 EXPOSE 80
